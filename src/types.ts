@@ -1,0 +1,74 @@
+// 領域模型：之後接真後端（Spring Boot / Node）時，這些型別就是 API 契約的起點
+
+export type CategoryId =
+  | 'women' | 'men' | 'beauty' | '3c' | 'home' | 'food' | 'sports' | 'baby';
+
+export interface Category {
+  id: CategoryId;
+  name: string;
+  icon: string;
+}
+
+export interface Shop {
+  id: string;
+  name: string;
+  avatar: string;       // emoji
+  description: string;
+  location: string;
+  rating: number;
+  joinedAt: string;
+}
+
+export interface Variant {
+  id: string;
+  name: string;         // 例：黑色 / L
+  price: number;
+  stock: number;
+}
+
+export interface Product {
+  id: string;
+  shopId: string;
+  title: string;
+  description: string;
+  categoryId: CategoryId;
+  images: string[];     // http(s) URL、data URL，或 "art:🎧:#hex:#hex" 示範插圖
+  variants: Variant[];
+  originalPrice?: number;
+  sold: number;
+  rating: number;
+  location: string;
+  freeShipping: boolean;
+  status: 'active' | 'hidden';
+  createdAt: string;
+}
+
+export interface CartItem {
+  productId: string;
+  variantId: string;
+  qty: number;
+}
+
+export type OrderStatus = 'to_ship' | 'shipping' | 'completed' | 'cancelled';
+
+export interface OrderLine {
+  productId: string;
+  variantId: string;
+  title: string;
+  variantName: string;
+  image: string;
+  price: number;
+  qty: number;
+}
+
+export interface Order {
+  id: string;
+  shopId: string;
+  lines: OrderLine[];
+  shippingFee: number;
+  total: number;
+  status: OrderStatus;
+  buyer: { name: string; phone: string; address: string };
+  payment: 'cod' | 'card' | 'transfer';
+  createdAt: string;
+}
