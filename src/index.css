@@ -1,13 +1,44 @@
 @import "tailwindcss";
 
+/* Design tokens — 與 Figma 設計檔（GoodShop）的 Variables 一一對應。
+   改色請兩邊一起改：https://www.figma.com/design/mZQGGpGnwijMNRP2rkYr2S/GoodShop */
 @theme {
+  /* brand */
   --color-brand: #f2582a;
   --color-brand-dark: #d8431a;
   --color-brand-soft: #fff2ec;
+
+  /* text / surface */
   --color-ink: #1f2328;
   --color-muted: #6b7280;
+  --color-disabled: #d1d5db;
   --color-line: #ececec;
   --color-canvas: #f5f5f5;
+  --color-subtle: #fafafa;
+
+  /* 語意色：成功（免運、已完成）、警告（庫存、折扣）、錯誤、資訊（運送中） */
+  --color-success: #0d9488;
+  --color-success-soft: #f0fdfa;
+  --color-success-text: #0f766e;
+  --color-warning: #fcd34d;
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-warning-text: #92400e;
+  --color-error: #ef4444;
+  --color-error-bg: #fef2f2;
+  --color-error-border: #f87171;
+  --color-error-text: #dc2626;
+  --color-info: #0ea5e9;
+  --color-info-bg: #f0f9ff;
+  --color-info-text: #0369a1;
+  --color-star: #fbbf24;
+
+  /* 陰影：card-hover 卡片浮起、sheet 底部抽屜、popover 對話框、bar-top 固定底欄 */
+  --shadow-card-hover: 0 4px 16px rgb(0 0 0 / 0.08);
+  --shadow-sheet: 0 -2px 8px rgb(0 0 0 / 0.06);
+  --shadow-popover: 0 8px 24px -4px rgb(0 0 0 / 0.12);
+  --shadow-bar-top: 0 -4px 12px rgb(0 0 0 / 0.05);
+
   --font-sans: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
 }
 

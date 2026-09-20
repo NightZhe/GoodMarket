@@ -73,7 +73,7 @@ function Form({ existing, shopId, location, onSave }: {
       ? '原價要高於售價，否則請留空' : '',
   };
   const hasError = Object.values(errors).some(Boolean);
-  const err = (k: keyof typeof errors) => touched && errors[k] ? <p className="mt-1 text-xs text-red-500">{errors[k]}</p> : null;
+  const err = (k: keyof typeof errors) => touched && errors[k] ? <p className="mt-1 text-xs text-error">{errors[k]}</p> : null;
 
   const addFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -128,7 +128,7 @@ function Form({ existing, shopId, location, onSave }: {
       <h1 className="text-xl font-bold">{existing ? '編輯商品' : '新增商品'}</h1>
 
       {touched && hasError && (
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">還有欄位沒填好，請檢查標紅的地方。</p>
+        <p className="rounded-md bg-error-bg px-4 py-3 text-sm text-error-text">還有欄位沒填好，請檢查標紅的地方。</p>
       )}
 
       <section className={card}>
@@ -205,7 +205,7 @@ function Form({ existing, shopId, location, onSave }: {
               <input aria-label={`規格 ${i + 1} 售價`} value={v.price} inputMode="numeric" onChange={e => patch({ price: e.target.value.replace(/\D/g, '') })} placeholder="$ 售價" className={`bg-white ${input}`} />
               <input aria-label={`規格 ${i + 1} 庫存`} value={v.stock} inputMode="numeric" onChange={e => patch({ stock: e.target.value.replace(/\D/g, '') })} placeholder="庫存" className={`bg-white ${input}`} />
               <button type="button" aria-label="刪除規格" disabled={variants.length === 1} onClick={() => setVariants(rows => rows.filter(r => r.id !== v.id))}
-                className="flex items-center justify-center text-muted hover:text-red-500 disabled:opacity-30"><Trash2 size={17} /></button>
+                className="flex items-center justify-center text-muted hover:text-error disabled:opacity-30"><Trash2 size={17} /></button>
             </div>
           );
         })}

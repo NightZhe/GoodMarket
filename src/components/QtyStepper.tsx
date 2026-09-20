@@ -7,7 +7,7 @@ interface Props {
 }
 
 export default function QtyStepper({ value, max, onChange }: Props) {
-  const btn = 'flex h-8 w-8 items-center justify-center text-ink transition hover:bg-canvas disabled:text-gray-300';
+  const btn = 'flex h-8 w-8 items-center justify-center text-ink transition hover:bg-canvas disabled:text-disabled';
   return (
     <div className="inline-flex items-center rounded-sm border border-line">
       <button type="button" aria-label="減少" className={btn} disabled={value <= 1} onClick={() => onChange(value - 1)}>

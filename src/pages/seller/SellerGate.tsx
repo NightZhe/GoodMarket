@@ -43,8 +43,8 @@ export default function SellerGate() {
             <label className="mt-4 block text-sm">
               商店名稱
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} maxLength={20} placeholder="例如：小花手作雜貨"
-                className={`mt-1 w-full rounded-sm border px-3 py-2.5 outline-none focus:border-ink ${touched && form.name.trim().length < 2 ? 'border-red-400' : 'border-line'}`} />
-              {touched && form.name.trim().length < 2 && <span className="text-xs text-red-500">商店名稱至少 2 個字</span>}
+                className={`mt-1 w-full rounded-sm border px-3 py-2.5 outline-none focus:border-ink ${touched && form.name.trim().length < 2 ? 'border-error-border' : 'border-line'}`} />
+              {touched && form.name.trim().length < 2 && <span className="text-xs text-error">商店名稱至少 2 個字</span>}
             </label>
             <div className="mt-3 text-sm">
               商店頭像

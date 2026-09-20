@@ -46,7 +46,7 @@ export default function Checkout() {
     return (
       <div className="mx-auto max-w-lg p-3 md:py-12">
         <div className="flex flex-col items-center gap-3 rounded-md bg-white px-6 py-12 text-center">
-          <CheckCircle2 size={64} className="text-teal-500" strokeWidth={1.5} />
+          <CheckCircle2 size={64} className="text-success" strokeWidth={1.5} />
           <h1 className="text-xl font-bold">訂單成立！</h1>
           <p className="text-sm text-muted">共 {done.length} 筆訂單（依商店分開出貨），賣家會盡快為你出貨。</p>
           <div className="mt-4 flex gap-3">
@@ -85,14 +85,25 @@ export default function Checkout() {
         value={buyer[key]}
         onChange={e => setBuyer(b => ({ ...b, [key]: e.target.value }))}
         placeholder={placeholder}
-        className={`mt-1 w-full rounded-sm border px-3 py-2.5 text-sm outline-none focus:border-ink ${touched && bad ? 'border-red-400' : 'border-line'}`}
+        className={`mt-1 w-full rounded-sm border px-3 py-2.5 text-sm outline-none focus:border-ink ${touched && bad ? 'border-error-border' : 'border-line'}`}
       />
-      {touched && bad && <span className="mt-1 block text-xs text-red-500">{hint}</span>}
+      {touched && bad && <span className="mt-1 block text-xs text-error">{hint}</span>}
     </label>
   );
 
+  // 金額三列：手機顯示在付款方式下面，桌機顯示在右側摘要卡
+  const summaryRows = (
+    <>
+      <div className="flex justify-between"><dt className="text-muted">商品總金額</dt><dd>{money(subtotal)}</dd></div>
+      <div className="flex justify-between"><dt className="text-muted">運費總金額</dt><dd>{money(shipping)}</dd></div>
+      <div className="flex items-center justify-between border-t border-line pt-3"><dt className="text-muted">總付款金額</dt><dd className="text-2xl text-brand">{money(subtotal + shipping)}</dd></div>
+    </>
+  );
+
   return (
-    <div className="mx-auto max-w-6xl space-y-2 pb-28 md:space-y-4 md:px-4 md:pt-6">
+    <div className="mx-auto max-w-6xl pb-28 md:px-4 md:pt-6 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-4 lg:pb-10">
+      {/* 桌機：左內容 + 右側訂單摘要（手機用底部固定列） */}
+      <div className="min-w-0 space-y-2 md:space-y-4">
       <section className="bg-white p-4 md:rounded-md md:p-6">
         <div className="-mx-4 -mt-4 mb-4 h-1 bg-[repeating-linear-gradient(45deg,#6fa6d6_0,#6fa6d6_33px,transparent_0,transparent_41px,#f18d9b_0,#f18d9b_74px,transparent_0,transparent_82px)] md:-mx-6 md:-mt-6 md:rounded-t-md" />
         <h2 className="mb-4 flex items-center gap-1.5 text-brand"><MapPin size={18} /> 收件資訊</h2>
@@ -120,7 +131,7 @@ export default function Checkout() {
             </div>
           ))}
           <div className="flex justify-between border-t border-dashed border-line bg-[#fafdff] px-4 py-3 text-sm md:px-6">
-            <span className="text-muted">運費 {g.shipping === 0 && <span className="text-teal-600">（免運）</span>}</span>
+            <span className="text-muted">運費 {g.shipping === 0 && <span className="text-success">（免運）</span>}</span>
             <span>{money(g.shipping)}</span>
           </div>
         </section>
@@ -136,16 +147,25 @@ export default function Checkout() {
             </button>
           ))}
         </div>
-        <dl className="mt-6 ml-auto max-w-xs space-y-2 text-sm">
-          <div className="flex justify-between"><dt className="text-muted">商品總金額</dt><dd>{money(subtotal)}</dd></div>
-          <div className="flex justify-between"><dt className="text-muted">運費總金額</dt><dd>{money(shipping)}</dd></div>
-          <div className="flex items-center justify-between pt-2"><dt className="text-muted">總付款金額</dt><dd className="text-2xl text-brand">{money(subtotal + shipping)}</dd></div>
+        <dl className="mt-6 ml-auto max-w-xs space-y-2 text-sm lg:hidden">
+          {summaryRows}
         </dl>
       </section>
+      </div>
 
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-line bg-white md:static md:justify-end md:rounded-md md:border-0 md:px-6 md:py-5">
-        <p className="flex-1 px-4 text-sm md:flex-none">總付款 <span className="text-lg text-brand">{money(subtotal + shipping)}</span></p>
-        <button onClick={submit} className="h-12 min-w-32 bg-brand px-6 text-white transition hover:bg-brand-dark md:min-w-52 md:rounded-sm">
+      {/* 桌機：右側訂單摘要卡 */}
+      <aside className="sticky top-28 hidden rounded-md bg-white p-5 lg:block">
+        <h2 className="font-medium">訂單摘要</h2>
+        <dl className="mt-4 space-y-3 text-sm">{summaryRows}</dl>
+        <button onClick={submit} className="mt-4 h-11 w-full rounded-sm bg-brand text-white transition hover:bg-brand-dark">
+          下訂單
+        </button>
+      </aside>
+
+      {/* 手機：底部固定下單列 */}
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-line bg-white lg:hidden">
+        <p className="flex-1 px-4 text-sm">總付款 <span className="text-lg text-brand">{money(subtotal + shipping)}</span></p>
+        <button onClick={submit} className="h-12 min-w-32 bg-brand px-6 text-white transition hover:bg-brand-dark">
           下訂單
         </button>
       </div>

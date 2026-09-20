@@ -12,12 +12,12 @@ export default function ProductCard({ product }: { product: Product }) {
   return (
     <Link
       to={`/product/${product.id}`}
-      className="group flex flex-col overflow-hidden rounded-md border border-transparent bg-white transition hover:-translate-y-0.5 hover:border-brand hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
+      className="group flex flex-col overflow-hidden rounded-md border border-transparent bg-white transition hover:-translate-y-0.5 hover:border-brand hover:shadow-card-hover"
     >
       <div className="relative">
         <ProductImage src={product.images[0]} alt={product.title} className="w-full" />
         {discount >= 10 && (
-          <span className="absolute right-0 top-0 rounded-bl-md bg-amber-300/95 px-1.5 py-0.5 text-[11px] font-semibold text-brand-dark">
+          <span className="absolute right-0 top-0 rounded-bl-md bg-warning/95 px-1.5 py-0.5 text-[11px] font-semibold text-brand-dark">
             -{discount}%
           </span>
         )}
@@ -30,7 +30,7 @@ export default function ProductCard({ product }: { product: Product }) {
       <div className="flex flex-1 flex-col gap-1.5 p-2">
         <h3 className="line-clamp-2 text-[13px] leading-[1.35] text-ink">{product.title}</h3>
         {product.freeShipping && (
-          <span className="w-fit rounded-sm border border-teal-500 px-1 text-[10px] leading-4 text-teal-600">免運</span>
+          <span className="w-fit rounded-sm border border-success px-1 text-[10px] leading-4 text-success">免運</span>
         )}
         <div className="mt-auto flex items-end justify-between gap-1">
           <span className="text-base font-medium text-brand">{money(min)}</span>
@@ -38,7 +38,7 @@ export default function ProductCard({ product }: { product: Product }) {
         </div>
         <div className="flex items-center justify-between text-[11px] text-muted">
           <span className="flex items-center gap-0.5">
-            <Star size={11} className="fill-amber-400 text-amber-400" />
+            <Star size={11} className="fill-star text-star" />
             {product.rating.toFixed(1)}
           </span>
           <span className="flex items-center gap-0.5">

@@ -73,14 +73,14 @@ export default function SellerProducts() {
                     <div className="min-w-0">
                       <p className="line-clamp-2 text-sm">{p.title}</p>
                       <p className="mt-0.5 flex gap-1.5 text-xs">
-                        {p.status === 'hidden' && <span className="rounded-sm bg-gray-100 px-1 text-muted">已下架</span>}
-                        {stock === 0 && <span className="rounded-sm bg-red-50 px-1 text-red-500">售完</span>}
+                        {p.status === 'hidden' && <span className="rounded-sm bg-canvas px-1 text-muted">已下架</span>}
+                        {stock === 0 && <span className="rounded-sm bg-error-bg px-1 text-error">售完</span>}
                         <span className="text-muted">{p.variants.length} 種規格</span>
                       </p>
                     </div>
                   </div>
                   <span className="hidden text-sm md:block">{priceRange(p.variants.map(v => v.price))}</span>
-                  <span className={`hidden text-sm md:block ${stock <= 5 ? 'text-red-500' : ''}`}>{stock}</span>
+                  <span className={`hidden text-sm md:block ${stock <= 5 ? 'text-error' : ''}`}>{stock}</span>
                   <span className="hidden text-sm md:block">{soldText(p.sold)}</span>
                   <div className="flex justify-end gap-1">
                     <Link to={`/seller/products/${p.id}/edit`} aria-label="編輯" title="編輯" className="rounded-md p-2 text-muted hover:bg-canvas hover:text-brand"><Pencil size={17} /></Link>
@@ -90,11 +90,11 @@ export default function SellerProducts() {
                       className="rounded-md p-2 text-muted hover:bg-canvas hover:text-brand">
                       {p.status === 'active' ? <EyeOff size={17} /> : <Eye size={17} />}
                     </button>
-                    <button aria-label="刪除" title="刪除" onClick={() => setConfirmId(p.id)} className="rounded-md p-2 text-muted hover:bg-red-50 hover:text-red-500"><Trash2 size={17} /></button>
+                    <button aria-label="刪除" title="刪除" onClick={() => setConfirmId(p.id)} className="rounded-md p-2 text-muted hover:bg-error-bg hover:text-error"><Trash2 size={17} /></button>
                   </div>
                   <p className="col-span-2 flex gap-4 pl-[68px] text-xs text-muted md:hidden">
                     <span className="text-ink">{priceRange(p.variants.map(v => v.price))}</span>
-                    <span className={stock <= 5 ? 'text-red-500' : ''}>庫存 {stock}</span>
+                    <span className={stock <= 5 ? 'text-error' : ''}>庫存 {stock}</span>
                     <span>已售 {soldText(p.sold)}</span>
                   </p>
                 </li>
@@ -113,7 +113,7 @@ export default function SellerProducts() {
             <p className="mt-1 text-xs text-muted">刪除後無法復原。只是暫時不賣的話，建議改用「下架」。</p>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setConfirmId(null)} className="rounded-sm border border-line px-4 py-2 text-sm">取消</button>
-              <button onClick={() => { deleteProduct(target.id); setConfirmId(null); toast('已刪除'); }} className="rounded-sm bg-red-500 px-4 py-2 text-sm text-white">刪除</button>
+              <button onClick={() => { deleteProduct(target.id); setConfirmId(null); toast('已刪除'); }} className="rounded-sm bg-error px-4 py-2 text-sm text-white">刪除</button>
             </div>
           </div>
         </div>

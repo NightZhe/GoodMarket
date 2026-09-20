@@ -48,7 +48,7 @@ export default function BuyerLayout() {
               onChange={e => setQ(e.target.value)}
               placeholder="搜尋商品、店家"
               aria-label="搜尋"
-              className="min-w-0 flex-1 px-2.5 text-sm text-ink outline-none placeholder:text-gray-400"
+              className="min-w-0 flex-1 px-2.5 text-sm text-ink outline-none placeholder:text-muted"
             />
             <button type="submit" aria-label="搜尋" className="flex h-8 items-center rounded-sm bg-brand px-4 text-white transition hover:bg-brand-dark md:h-9 md:px-6">
               <SearchIcon size={18} />

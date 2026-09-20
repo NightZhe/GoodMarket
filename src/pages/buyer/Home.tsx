@@ -86,7 +86,7 @@ export default function Home() {
               <Link key={p.id} to={`/product/${p.id}`} className="w-32 shrink-0 text-center md:w-auto">
                 <div className="relative overflow-hidden rounded-sm">
                   <ProductImage src={p.images[0]} alt={p.title} className="w-full" />
-                  <span className="absolute right-0 top-0 bg-amber-300 px-1 text-[11px] font-semibold text-brand-dark">
+                  <span className="absolute right-0 top-0 bg-warning px-1 text-[11px] font-semibold text-brand-dark">
                     -{discountOf(p)}%
                   </span>
                 </div>

@@ -17,7 +17,7 @@
 | 搜尋 / 分類 | `/search?q=&cat=&sort=` | 關鍵字、分類、免運篩選；綜合／最新／熱銷／價格排序 |
 | 商品頁 | `/product/:id` | 多圖、規格選擇、庫存、加入購物車／直接購買（手機為底部抽屜） |
 | 賣場 | `/shop/:id` | 商店資訊與全部商品 |
-| 購物車 | `/cart` | 依商店分組、勾選結帳、改數量 |
+| 購物車 | `/cart` | 依商店分組、勾選結帳、改數量；`lg` 以上為右側訂單摘要卡，以下為底部固定列 |
 | 結帳 | `/checkout` | 收件資訊驗證、付款方式、**依商店拆單**、同店滿 $499 免運 |
 | 我的訂單 | `/orders` | 狀態分頁、取消／完成訂單 |
 
@@ -30,6 +30,24 @@
 | 我的商品 | `/seller/products` | 分頁（架上／售完／下架）、搜尋、上下架、刪除 |
 | 新增 / 編輯商品 | `/seller/products/new`、`/:id/edit` | 上傳照片（瀏覽器端壓縮）或貼網址、多規格價格庫存、原價、免運 |
 | 訂單管理 | `/seller/orders` | 安排出貨、取消訂單 |
+
+## 設計系統
+
+設計檔：[Figma — GoodShop](https://www.figma.com/design/mZQGGpGnwijMNRP2rkYr2S/GoodShop)
+
+`src/index.css` 的 `@theme` token 與 Figma 的 Variables 一一對應，名稱相同：
+
+| 類別 | token | 用途 |
+|------|-------|------|
+| brand | `brand` / `brand-dark` / `brand-soft` | 主色、hover、淺底 |
+| 文字與表面 | `ink` / `muted` / `disabled` / `line` / `canvas` / `subtle` | 文字階層、分隔線、底色 |
+| success | `success` / `success-soft` / `success-text` | 免運、已完成 |
+| warning | `warning` / `warning-bg` / `warning-border` / `warning-text` | 折扣角標、庫存提醒 |
+| error | `error` / `error-bg` / `error-border` / `error-text` | 表單錯誤、售完、刪除 |
+| info | `info` / `info-bg` / `info-text` | 運送中 |
+| 陰影 | `shadow-card-hover` / `shadow-sheet` / `shadow-popover` / `shadow-bar-top` | 卡片浮起、抽屜、對話框、固定底欄 |
+
+改色請兩邊一起改，不要在元件裡直接寫色碼或 Tailwind 原色（`text-red-500` 這類）。
 
 ## 技術棧
 

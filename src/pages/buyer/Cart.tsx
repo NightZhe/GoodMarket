@@ -34,6 +34,9 @@ export default function Cart() {
   const total = chosen.reduce((s, r) => s + r.price * r.item.qty, 0);
   const count = chosen.reduce((s, r) => s + r.item.qty, 0);
 
+  const goCheckout = () =>
+    navigate('/checkout', { state: { items: chosen.map(r => r.item), fromCart: true } });
+
   const toggle = (keys: string[], on: boolean) =>
     setSelected(prev => {
       const next = new Set(prev);
@@ -55,9 +58,12 @@ export default function Cart() {
   const allOn = allKeys.every(k => selected.has(k));
 
   return (
-    <div className="mx-auto max-w-6xl pb-28 md:px-4 md:pt-6">
+    <div className="mx-auto max-w-6xl pb-28 md:px-4 md:pt-6 lg:pb-10">
       <h1 className="hidden text-xl font-medium md:block">購物車</h1>
-      <div className="space-y-2 md:mt-4 md:space-y-4">
+
+      {/* 桌機：左清單 + 右側訂單摘要（手機用底部固定列） */}
+      <div className="md:mt-4 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-4">
+      <div className="min-w-0 space-y-2 md:space-y-4">
         {groups.map(([shopId, rows]) => {
           const shop = getShop(shopId);
           const keys = rows.map(r => keyOf(r.item));
@@ -80,7 +86,7 @@ export default function Cart() {
                     <div className="min-w-0">
                       <p className="line-clamp-2 text-sm">{r.title}</p>
                       <p className="mt-1 w-fit rounded-sm bg-canvas px-1.5 text-xs text-muted">規格：{r.variantName}</p>
-                      {r.stock === 0 && <p className="mt-1 text-xs text-red-500">此規格已售完</p>}
+                      {r.stock === 0 && <p className="mt-1 text-xs text-error">此規格已售完</p>}
                     </div>
                     <p className="mt-1 text-brand md:mt-0 md:text-center md:text-ink">{money(r.price)}</p>
                     <div className="mt-2 flex items-center justify-between md:mt-0 md:justify-center">
@@ -97,26 +103,56 @@ export default function Cart() {
         })}
       </div>
 
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white md:sticky md:mt-4 md:rounded-md md:shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 py-2 pl-4 md:py-4 md:pl-6">
+        {/* 桌機：右側訂單摘要卡 */}
+        <aside className="sticky top-28 hidden rounded-md bg-white p-5 lg:block">
+          <h2 className="font-medium">訂單摘要</h2>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <dt className="text-muted">已選 {count} 件商品</dt>
+              <dd>{money(total)}</dd>
+            </div>
+            <div className="flex items-center justify-between border-t border-line pt-3">
+              <dt className="text-muted">總金額</dt>
+              <dd className="text-2xl text-brand">{money(total)}</dd>
+            </div>
+          </dl>
+          <button
+            disabled={!count}
+            onClick={goCheckout}
+            className="mt-4 h-11 w-full rounded-sm bg-brand text-white transition hover:bg-brand-dark disabled:bg-disabled"
+          >
+            去買單 ({count})
+          </button>
+          <div className="mt-3 flex items-center justify-between text-sm">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" className="h-4 w-4 accent-brand" checked={allOn} onChange={e => toggle(allKeys, e.target.checked)} />
+              全選
+            </label>
+            <button
+              onClick={() => removeFromCart(chosen.map(r => r.item))}
+              disabled={!chosen.length}
+              className="text-muted hover:text-brand disabled:text-disabled"
+            >
+              刪除選取
+            </button>
+          </div>
+        </aside>
+      </div>
+
+      {/* 手機：底部固定結帳列 */}
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white lg:hidden">
+        <div className="flex items-center gap-3 py-2 pl-4">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="h-4 w-4 accent-brand" checked={allOn} onChange={e => toggle(allKeys, e.target.checked)} />
             全選
           </label>
-          <button
-            onClick={() => { removeFromCart(chosen.map(r => r.item)); }}
-            disabled={!chosen.length}
-            className="hidden text-sm hover:text-brand disabled:text-gray-300 md:block"
-          >
-            刪除選取
-          </button>
           <div className="ml-auto text-right">
-            <p className="text-sm">總金額 <span className="text-lg text-brand md:text-2xl">{money(total)}</span></p>
+            <p className="text-sm">總金額 <span className="text-lg text-brand">{money(total)}</span></p>
           </div>
           <button
             disabled={!count}
-            onClick={() => navigate('/checkout', { state: { items: chosen.map(r => r.item), fromCart: true } })}
-            className="h-12 min-w-28 self-stretch bg-brand px-5 text-white transition hover:bg-brand-dark disabled:bg-gray-300 md:mr-6 md:h-11 md:min-w-52 md:self-auto md:rounded-sm"
+            onClick={goCheckout}
+            className="h-12 min-w-28 self-stretch bg-brand px-5 text-white transition hover:bg-brand-dark disabled:bg-disabled"
           >
             去買單 ({count})
           </button>

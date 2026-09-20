@@ -93,14 +93,14 @@ export default function SellerDashboard() {
       </div>
 
       {lowStock.length > 0 && (
-        <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 md:p-5">
-          <h2 className="flex items-center gap-1.5 font-medium text-amber-800"><AlertTriangle size={18} /> 庫存提醒</h2>
+        <section className="rounded-lg border border-warning-border bg-warning-bg p-4 md:p-5">
+          <h2 className="flex items-center gap-1.5 font-medium text-warning-text"><AlertTriangle size={18} /> 庫存提醒</h2>
           <ul className="mt-2 space-y-1.5 text-sm">
             {lowStock.map(p => (
               <li key={p.id}>
                 <Link to={`/seller/products/${p.id}/edit`} className="flex items-center justify-between gap-2 hover:text-brand">
                   <span className="truncate">{p.title}</span>
-                  <span className="shrink-0 text-xs text-amber-700">
+                  <span className="shrink-0 text-xs text-warning-text">
                     {p.variants.filter(v => v.stock <= 5).map(v => `${v.name} 剩 ${v.stock}`).join('、')}
                   </span>
                 </Link>

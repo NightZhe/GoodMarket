@@ -138,8 +138,8 @@ function ProductDetailView({ id }: { id: string }) {
               <dt className="w-20 shrink-0 text-muted">運送</dt>
               <dd className="space-y-1">
                 <p className="flex items-center gap-1.5">
-                  <Truck size={16} className="text-teal-600" />
-                  {product.freeShipping ? <span className="text-teal-600">免運費</span> : <>運費 {money(SHIPPING_FEE)}・同店滿 {money(FREE_SHIPPING_THRESHOLD)} 免運</>}
+                  <Truck size={16} className="text-success" />
+                  {product.freeShipping ? <span className="text-success">免運費</span> : <>運費 {money(SHIPPING_FEE)}・同店滿 {money(FREE_SHIPPING_THRESHOLD)} 免運</>}
                 </p>
                 <p className="flex items-center gap-1.5 text-muted"><MapPin size={16} /> 從 {product.location} 出貨</p>
               </dd>
@@ -151,14 +151,14 @@ function ProductDetailView({ id }: { id: string }) {
             <button
               onClick={() => act('cart')}
               disabled={stock === 0}
-              className="flex h-12 items-center gap-2 rounded-sm border border-brand bg-brand-soft px-6 text-brand transition hover:bg-[#ffe6dc] disabled:border-line disabled:bg-canvas disabled:text-gray-400"
+              className="flex h-12 items-center gap-2 rounded-sm border border-brand bg-brand-soft px-6 text-brand transition hover:bg-[#ffe6dc] disabled:border-line disabled:bg-canvas disabled:text-disabled"
             >
               <ShoppingCart size={20} /> 加入購物車
             </button>
             <button
               onClick={() => act('buy')}
               disabled={stock === 0}
-              className="h-12 min-w-44 rounded-sm bg-brand px-6 text-white transition hover:bg-brand-dark disabled:bg-gray-300"
+              className="h-12 min-w-44 rounded-sm bg-brand px-6 text-white transition hover:bg-brand-dark disabled:bg-disabled"
             >
               {stock === 0 ? '已售完' : '直接購買'}
             </button>
@@ -202,18 +202,18 @@ function ProductDetailView({ id }: { id: string }) {
       )}
 
       {/* 手機底部操作列 */}
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-40 flex bg-white shadow-[0_-2px_8px_rgba(0,0,0,0.06)] md:hidden">
-        <Link to="/" className="flex w-20 flex-col items-center justify-center text-[10px] text-teal-700">
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-40 flex bg-white shadow-sheet md:hidden">
+        <Link to="/" className="flex w-20 flex-col items-center justify-center text-[10px] text-success-text">
           <Store size={20} /> 首頁
         </Link>
         <button
           onClick={() => setSheet('cart')}
           disabled={stock === 0}
-          className="flex flex-1 flex-col items-center justify-center bg-teal-600 py-2 text-[11px] text-white disabled:bg-gray-300"
+          className="flex flex-1 flex-col items-center justify-center bg-success py-2 text-[11px] text-white disabled:bg-disabled"
         >
           <ShoppingCart size={20} /> 加入購物車
         </button>
-        <button onClick={() => setSheet('buy')} disabled={stock === 0} className="flex-1 bg-brand py-3.5 text-sm text-white disabled:bg-gray-400">
+        <button onClick={() => setSheet('buy')} disabled={stock === 0} className="flex-1 bg-brand py-3.5 text-sm text-white disabled:bg-disabled">
           {stock === 0 ? '已售完' : '直接購買'}
         </button>
       </div>
@@ -250,7 +250,7 @@ function VariantPicker(props: {
 }) {
   const { product, variantId, onPick, qty, setQty, stock, needPick } = props;
   return (
-    <div className={`space-y-5 rounded-sm ${needPick ? 'bg-[#fff4f4] p-3 ring-1 ring-red-200' : ''}`}>
+    <div className={`space-y-5 rounded-sm ${needPick ? 'bg-error-bg p-3 ring-1 ring-error-border' : ''}`}>
       <div className="flex flex-col gap-2 md:flex-row md:gap-4">
         <span className="w-20 shrink-0 pt-1.5 text-sm text-muted">規格</span>
         <div className="flex flex-wrap gap-2">
@@ -259,7 +259,7 @@ function VariantPicker(props: {
               key={v.id}
               disabled={v.stock === 0}
               onClick={() => onPick(v.id)}
-              className={`relative min-w-20 rounded-sm border px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:border-dashed disabled:text-gray-300 ${
+              className={`relative min-w-20 rounded-sm border px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:border-dashed disabled:text-disabled ${
                 v.id === variantId ? 'border-brand text-brand' : 'border-line hover:border-brand hover:text-brand'
               }`}
             >
@@ -274,7 +274,7 @@ function VariantPicker(props: {
         <QtyStepper value={qty} max={Math.max(1, stock)} onChange={setQty} />
         <span className="text-sm text-muted">還剩 {stock} 件</span>
       </div>
-      {needPick && <p className="text-sm text-red-500">請先選擇規格</p>}
+      {needPick && <p className="text-sm text-error">請先選擇規格</p>}
     </div>
   );
 }

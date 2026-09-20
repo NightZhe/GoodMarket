@@ -9,8 +9,8 @@ import type { OrderStatus } from '../../types';
 
 const PAY: Record<string, string> = { cod: '貨到付款', card: '信用卡', transfer: 'ATM 轉帳' };
 const TONE: Record<OrderStatus, string> = {
-  to_ship: 'bg-brand-soft text-brand', shipping: 'bg-sky-50 text-sky-700',
-  completed: 'bg-teal-50 text-teal-700', cancelled: 'bg-gray-100 text-muted',
+  to_ship: 'bg-brand-soft text-brand', shipping: 'bg-info-bg text-info-text',
+  completed: 'bg-success-soft text-success-text', cancelled: 'bg-canvas text-muted',
 };
 
 export default function SellerOrders() {
