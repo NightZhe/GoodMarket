@@ -57,7 +57,7 @@
 - react-router（`HashRouter`：GitHub Pages 沒有 SPA fallback）
 - Tailwind CSS v4（建置期編譯，不用 CDN）
 - lucide-react 圖示
-- GitHub Pages（`npm run deploy` 把 dist 推到 `gh-pages` 分支）
+- GitHub Pages（推 `main` 由 GitHub Actions 自動建置部署）
 
 ## 專案結構
 
@@ -82,15 +82,8 @@ npm run dev      # http://localhost:5173
 npm run build    # 型別檢查 + 打包到 dist/
 ```
 
-部署到 GitHub Pages：
-
-```bash
-npm run deploy
-```
-
-想改成「推 main 就自動部署」：先執行 `gh auth refresh -s workflow` 讓 token 有 workflow 權限，
-再把 `scripts/deploy.github-actions.yml.example` 搬到 `.github/workflows/deploy.yml`，
-並把 repo 的 Pages 來源改成 GitHub Actions。
+部署：**推到 `main` 分支就會自動部署**（`.github/workflows/deploy.yml`，GitHub Actions 建置後發佈到 GitHub Pages）。
+不需要手動跑任何部署指令；部署狀態看 repo 的 Actions 分頁。
 
 ## 下一步（接真後端時）
 

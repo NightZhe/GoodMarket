@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "deploy": "bash scripts/deploy.sh"
+    "preview": "vite preview"
   },
   "dependencies": {
     "lucide-react": "^1.47.0",
