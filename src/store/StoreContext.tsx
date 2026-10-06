@@ -97,7 +97,8 @@ interface Store {
   user: User | null;
   authReady: boolean;
   myShop: Shop | null;
-  signUp: (email: string, password: string) => Promise<void>;
+  /** 回傳 true 表示已直接登入；false 表示還要收信確認（專案有開 email 驗證時） */
+  signUp: (email: string, password: string) => Promise<boolean>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   createShop: (draft: ShopDraft) => Promise<Shop>;
@@ -249,8 +250,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // ── 賣家 ─────────────────────────────────────────────────
   const signUp = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw new Error(error.message);
+    return Boolean(data.session);
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {

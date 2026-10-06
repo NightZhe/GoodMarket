@@ -5,3 +5,5 @@ dist
 
 # 本機金鑰
 .env
+# Supabase CLI 的本機狀態（config.toml 要進版控，.temp 不用）
+supabase/.temp/

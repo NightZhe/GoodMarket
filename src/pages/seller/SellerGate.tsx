@@ -71,8 +71,9 @@ function AuthForm() {
       if (mode === 'in') {
         await signIn(email.trim(), password);
       } else {
-        await signUp(email.trim(), password);
-        setSent(true);
+        // 專案關閉 email 驗證時會直接拿到登入狀態，不必再請使用者收信
+        const signedIn = await signUp(email.trim(), password);
+        if (!signedIn) setSent(true);
       }
     } catch (err) {
       setError(translate(err instanceof Error ? err.message : '發生錯誤'));
