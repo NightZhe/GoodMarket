@@ -90,7 +90,7 @@ export default function BuyerLayout() {
           </div>
           <div>
             <p className="mb-3 font-semibold text-ink">關於好物集</p>
-            <p>人人都能開店的購物平台。示範版本，資料只存在你的瀏覽器。</p>
+            <p>人人都能開店的購物平台。任何人都能免費開店，上架的商品全站買家都看得到。</p>
           </div>
           <div>
             <p className="mb-3 font-semibold text-ink">成為賣家</p>

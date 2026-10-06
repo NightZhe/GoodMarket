@@ -116,17 +116,18 @@ create or replace function public.place_order(p_items jsonb, p_buyer jsonb, p_pa
 returns table (id uuid, access_token text, shop_id uuid, lines jsonb, shipping_fee integer, total integer, created_at timestamptz)
 language plpgsql security definer set search_path = public as $$
 declare
-  v_item        jsonb;
-  v_product     public.products%rowtype;
-  v_variant     jsonb;
-  v_idx         integer;
-  v_qty         integer;
-  v_shop        uuid;
-  v_lines       jsonb;
-  v_subtotal    integer;
-  v_shipping    integer;
-  v_all_free    boolean;
-  v_order       public.orders%rowtype;
+  v_item     jsonb;
+  v_product  public.products%rowtype;
+  v_variant  jsonb;
+  v_idx      integer;
+  v_qty      integer;
+  -- 依商店分組的累積結果：{ "<shop_id>": { lines, subtotal, all_free } }
+  v_groups   jsonb := '{}'::jsonb;
+  v_group    jsonb;
+  v_key      text;
+  v_subtotal integer;
+  v_shipping integer;
+  v_order    public.orders%rowtype;
 begin
   if p_payment not in ('cod', 'card', 'transfer') then
     raise exception '付款方式不正確';
@@ -135,15 +136,16 @@ begin
      or coalesce(p_buyer->>'address', '') = '' then
     raise exception '收件資訊不完整';
   end if;
-
-  create temp table if not exists _order_shops (shop_id uuid primary key, lines jsonb, subtotal integer, all_free boolean) on commit drop;
-  delete from _order_shops;
+  if jsonb_array_length(coalesce(p_items, '[]'::jsonb)) = 0 then
+    raise exception '沒有要結帳的商品';
+  end if;
 
   for v_item in select * from jsonb_array_elements(p_items) loop
     v_qty := greatest(1, coalesce((v_item->>'qty')::integer, 1));
 
-    select * into v_product from public.products
-      where id = (v_item->>'productId')::uuid and status = 'active' for update;
+    -- for update：鎖住這一列，同時間另一筆訂單要等這筆做完才能扣同一份庫存
+    select * into v_product from public.products p
+      where p.id = (v_item->>'productId')::uuid and p.status = 'active' for update;
     if not found then
       raise exception '商品不存在或已下架';
     end if;
@@ -160,37 +162,35 @@ begin
     end if;
 
     -- 扣庫存、累加銷量
-    update public.products set
-      variants = jsonb_set(variants, array[v_idx::text, 'stock'],
+    update public.products p set
+      variants = jsonb_set(p.variants, array[v_idx::text, 'stock'],
                            to_jsonb((v_variant->>'stock')::integer - v_qty)),
-      sold = sold + v_qty
-    where id = v_product.id;
+      sold = p.sold + v_qty
+    where p.id = v_product.id;
 
-    -- 依商店分組累積明細
-    insert into _order_shops (shop_id, lines, subtotal, all_free)
-    values (
-      v_product.shop_id,
-      jsonb_build_array(jsonb_build_object(
+    -- 累積到該商店的明細
+    v_key := v_product.shop_id::text;
+    v_group := coalesce(v_groups -> v_key,
+                        jsonb_build_object('lines', '[]'::jsonb, 'subtotal', 0, 'all_free', true));
+    v_groups := jsonb_set(v_groups, array[v_key], jsonb_build_object(
+      'lines', (v_group -> 'lines') || jsonb_build_array(jsonb_build_object(
         'productId', v_product.id, 'variantId', v_variant->>'id',
         'title', v_product.title, 'variantName', v_variant->>'name',
         'image', coalesce(v_product.images->>0, ''),
         'price', (v_variant->>'price')::integer, 'qty', v_qty
       )),
-      (v_variant->>'price')::integer * v_qty,
-      v_product.free_shipping
-    )
-    on conflict (shop_id) do update set
-      lines = _order_shops.lines || excluded.lines,
-      subtotal = _order_shops.subtotal + excluded.subtotal,
-      all_free = _order_shops.all_free and excluded.all_free;
+      'subtotal', (v_group->>'subtotal')::integer + (v_variant->>'price')::integer * v_qty,
+      'all_free', (v_group->>'all_free')::boolean and v_product.free_shipping
+    ));
   end loop;
 
   -- 每家店開一張單：同店滿 499 免運，或該店這批商品都標免運
-  for v_shop, v_lines, v_subtotal, v_all_free in select s.shop_id, s.lines, s.subtotal, s.all_free from _order_shops s loop
-    v_shipping := case when v_subtotal >= 499 or v_all_free then 0 else 60 end;
+  for v_key, v_group in select key, value from jsonb_each(v_groups) loop
+    v_subtotal := (v_group->>'subtotal')::integer;
+    v_shipping := case when v_subtotal >= 499 or (v_group->>'all_free')::boolean then 0 else 60 end;
 
     insert into public.orders (shop_id, lines, shipping_fee, total, buyer_name, buyer_phone, buyer_address, payment)
-    values (v_shop, v_lines, v_shipping, v_subtotal + v_shipping,
+    values (v_key::uuid, v_group -> 'lines', v_shipping, v_subtotal + v_shipping,
             p_buyer->>'name', p_buyer->>'phone', p_buyer->>'address', p_payment)
     returning * into v_order;
 
