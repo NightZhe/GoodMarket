@@ -4,10 +4,22 @@
 
 **線上示範：** https://nightzhe.github.io/GoodMarket/
 
-> 目前是 **純前端示範版**：沒有後端，所有資料（商品、訂單、購物車、商店）都存在瀏覽器 `localStorage`，
-> 每個人看到的是自己瀏覽器裡的資料。清除網站資料即可回到初始示範狀態。
+資料存在 **Supabase**：賣家註冊登入後上架的商品，**全站買家都看得到**。
+只有購物車與買家的訂單憑證留在瀏覽器（購物車本來就該跟著裝置，買家則刻意不需要帳號）。
 
 ## 功能
+
+### 帳號與權限
+
+| 角色 | 要不要帳號 | 能做什麼 |
+|------|-----------|---------|
+| 買家 | 不用 | 逛、搜尋、加購物車、下單；下單後憑瀏覽器裡的憑證查自己的訂單、取消或確認收貨 |
+| 賣家 | 要（Email + 密碼） | 註冊 → 開一家店 → 上架商品、改價改庫存、上下架、處理自己店的訂單 |
+
+權限規則寫在資料庫層（`supabase/schema.sql` 的 RLS），不是靠前端隱藏按鈕：
+商品與商店任何人可讀、只有店主能改；**訂單含收件人個資，只有該店店主讀得到**，
+買家則透過下單時取得的一次性 token 查自己那筆。下單走 `place_order()` 函式，
+在同一個交易裡檢查並扣庫存，避免兩個人同時買到最後一件。
 
 ### 買家前台（`/#/`）
 
@@ -25,7 +37,7 @@
 
 | 頁面 | 路由 | 說明 |
 |------|------|------|
-| 開店 / 登入 | `/seller` | 建立新商店，或選一家示範商店進入 |
+| 註冊 / 登入 / 開店 | `/seller` | Email 註冊（需收信啟用）→ 登入 → 建立自己的商店 |
 | 賣場總覽 | `/seller` | 待辦、營收、近 7 天營收圖、熱銷商品、庫存提醒 |
 | 我的商品 | `/seller/products` | 分頁（架上／售完／下架）、搜尋、上下架、刪除 |
 | 新增 / 編輯商品 | `/seller/products/new`、`/:id/edit` | 上傳照片（瀏覽器端壓縮）或貼網址、多規格價格庫存、原價、免運 |
@@ -54,6 +66,7 @@
 架構參考 [CarSocialMedia](https://github.com/NightZhe/CarSocialMedia)（前台 / 商家後台分離），升級為：
 
 - React 19 + TypeScript + Vite
+- Supabase（Postgres + Auth + Storage），權限靠 Row Level Security
 - react-router（`HashRouter`：GitHub Pages 沒有 SPA fallback）
 - Tailwind CSS v4（建置期編譯，不用 CDN）
 - lucide-react 圖示
@@ -78,17 +91,22 @@ src/
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # 型別檢查 + 打包到 dist/
+cp .env.example .env   # 填入 Supabase 的 URL 與 anon key
+npm run dev            # http://localhost:5173
+npm run build          # 型別檢查 + 打包到 dist/
 ```
+
+第一次設定 Supabase：後台 SQL Editor 依序跑 `supabase/schema.sql`（資料表與權限）
+與 `supabase/seed.sql`（示範商店與商品）。`seed.sql` 由 `src/data/seed.ts` 產生，請勿手改。
+
+部署用的金鑰放在 GitHub repo 的 Secrets（`VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`），
+由 Actions 在建置時帶入。anon key 可公開，資料安全靠 RLS。
 
 部署：**推到 `main` 分支就會自動部署**（`.github/workflows/deploy.yml`，GitHub Actions 建置後發佈到 GitHub Pages）。
 不需要手動跑任何部署指令；部署狀態看 repo 的 Actions 分頁。
 
-## 下一步（接真後端時）
+## 下一步
 
-- 會員系統（買家 / 賣家帳號、登入）
-- 後端 API + 資料庫：把 `StoreContext.tsx` 的 action 換成呼叫 API
-- 圖片改存物件儲存（S3 / R2），不再塞 localStorage
+- 買家帳號（目前刻意不需要帳號，訂單綁在瀏覽器憑證上）
 - 金流（綠界 / 藍新）、物流（超商取貨）
 - 商品評價、聊聊、優惠券、平台管理後台（審核商品、抽成）

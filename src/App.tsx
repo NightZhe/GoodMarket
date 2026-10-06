@@ -1,5 +1,7 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { StoreProvider } from './store/StoreContext';
+import { isConfigured } from './lib/supabase';
+import SetupNotice from './pages/SetupNotice';
 import { ToastProvider } from './components/Toast';
 import ScrollToTop from './components/ScrollToTop';
 import BuyerLayout from './pages/buyer/BuyerLayout';
@@ -19,6 +21,9 @@ import SellerOrders from './pages/seller/SellerOrders';
 
 // GitHub Pages 是純靜態主機，沒有 SPA fallback，所以用 HashRouter（網址會是 /#/product/p001）
 export default function App() {
+  // 沒設定後端金鑰就不要讓整站壞在看不懂的錯誤上
+  if (!isConfigured) return <SetupNotice />;
+
   return (
     <StoreProvider>
       <ToastProvider>

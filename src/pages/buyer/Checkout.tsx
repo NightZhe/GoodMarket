@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { CheckCircle2, MapPin, Store } from 'lucide-react';
+import { CheckCircle2, Loader2, MapPin, Store } from 'lucide-react';
 import { shippingFor, useStore } from '../../store/StoreContext';
 import ProductImage from '../../components/ProductImage';
 import EmptyState from '../../components/EmptyState';
@@ -23,6 +23,8 @@ export default function Checkout() {
   const [payment, setPayment] = useState<Order['payment']>('cod');
   const [touched, setTouched] = useState(false);
   const [done, setDone] = useState<Order[] | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const items = state?.items ?? [];
 
@@ -70,12 +72,22 @@ export default function Checkout() {
   const shipping = groups.reduce((s, g) => s + g.shipping, 0);
   const valid = buyer.name.trim() && /^09\d{2}-?\d{3}-?\d{3}$/.test(buyer.phone.trim()) && buyer.address.trim().length >= 6;
 
-  const submit = () => {
+  const submit = async () => {
     setTouched(true);
     if (!valid) return;
-    localStorage.setItem(BUYER_KEY, JSON.stringify(buyer));
-    setDone(checkout({ items, buyer, payment, fromCart: !!state?.fromCart }));
-    window.scrollTo(0, 0);
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      const orders = await checkout({ items, buyer, payment, fromCart: !!state?.fromCart });
+      localStorage.setItem(BUYER_KEY, JSON.stringify(buyer));
+      setDone(orders);
+      window.scrollTo(0, 0);
+    } catch (err) {
+      // 最常見的是下單瞬間庫存被買走，訊息直接來自資料庫的檢查
+      setSubmitError(err instanceof Error ? err.message : '下單失敗，請再試一次');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const field = (key: keyof Order['buyer'], label: string, placeholder: string, bad: boolean, hint: string) => (
@@ -157,15 +169,23 @@ export default function Checkout() {
       <aside className="sticky top-28 hidden rounded-md bg-white p-5 lg:block">
         <h2 className="font-medium">訂單摘要</h2>
         <dl className="mt-4 space-y-3 text-sm">{summaryRows}</dl>
-        <button onClick={submit} className="mt-4 h-11 w-full rounded-sm bg-brand text-white transition hover:bg-brand-dark">
+        {submitError && <p className="mt-3 rounded-sm bg-error-bg px-3 py-2 text-sm text-error-text">{submitError}</p>}
+        <button onClick={() => void submit()} disabled={submitting}
+          className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-sm bg-brand text-white transition hover:bg-brand-dark disabled:bg-disabled">
+          {submitting && <Loader2 size={16} className="animate-spin" />}
           下訂單
         </button>
       </aside>
 
       {/* 手機：底部固定下單列 */}
       <div className="pb-safe fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-line bg-white lg:hidden">
-        <p className="flex-1 px-4 text-sm">總付款 <span className="text-lg text-brand">{money(subtotal + shipping)}</span></p>
-        <button onClick={submit} className="h-12 min-w-32 bg-brand px-6 text-white transition hover:bg-brand-dark">
+        <div className="flex-1 px-4">
+          <p className="text-sm">總付款 <span className="text-lg text-brand">{money(subtotal + shipping)}</span></p>
+          {submitError && <p className="text-xs text-error">{submitError}</p>}
+        </div>
+        <button onClick={() => void submit()} disabled={submitting}
+          className="flex h-12 min-w-32 items-center justify-center gap-2 bg-brand px-6 text-white transition hover:bg-brand-dark disabled:bg-disabled">
+          {submitting && <Loader2 size={16} className="animate-spin" />}
           下訂單
         </button>
       </div>

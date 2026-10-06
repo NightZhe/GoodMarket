@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Store } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
@@ -16,12 +16,13 @@ const TABS: { id: OrderStatus | 'all'; label: string }[] = [
   { id: 'completed', label: '完成' }, { id: 'cancelled', label: '不成立' },
 ];
 
-// 示範版沒有會員系統：「我的訂單」顯示在這台瀏覽器下的單（排除賣家示範訂單）
+// 買家不需要帳號：下單時拿到的憑證存在這台瀏覽器，用它回來查自己的訂單
 export default function Orders() {
-  const { orders, getShop, updateOrderStatus } = useStore();
+  const { myOrders, getShop, cancelMyOrder, completeMyOrder, refreshMyOrders } = useStore();
   const [tab, setTab] = useState<OrderStatus | 'all'>('all');
-  const mine = orders.filter(o => !o.id.startsWith('ord_demo'));
-  const list = mine.filter(o => tab === 'all' || o.status === tab);
+  const list = myOrders.filter(o => tab === 'all' || o.status === tab);
+
+  useEffect(() => { void refreshMyOrders(); }, [refreshMyOrders]);
 
   return (
     <div className="mx-auto max-w-4xl md:px-4 md:pt-6">
@@ -57,10 +58,10 @@ export default function Orders() {
               <div className="flex items-center gap-3">
                 <span className="text-sm">訂單金額 <span className="text-lg text-brand">{money(o.total)}</span></span>
                 {o.status === 'to_ship' && (
-                  <button onClick={() => updateOrderStatus(o.id, 'cancelled')} className="rounded-sm border border-line px-3 py-1.5 text-sm">取消訂單</button>
+                  <button onClick={() => void cancelMyOrder(o.id)} className="rounded-sm border border-line px-3 py-1.5 text-sm">取消訂單</button>
                 )}
                 {o.status === 'shipping' && (
-                  <button onClick={() => updateOrderStatus(o.id, 'completed')} className="rounded-sm bg-brand px-3 py-1.5 text-sm text-white">完成訂單</button>
+                  <button onClick={() => void completeMyOrder(o.id)} className="rounded-sm bg-brand px-3 py-1.5 text-sm text-white">完成訂單</button>
                 )}
               </div>
             </footer>

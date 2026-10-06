@@ -5,14 +5,13 @@ import ProductImage from '../../components/ProductImage';
 import { money, soldText } from '../../lib/format';
 
 export default function SellerDashboard() {
-  const { sellerShopId, products, orders, getShop } = useStore();
-  const shop = getShop(sellerShopId!)!;
+  const { myShop, products, shopOrders } = useStore();
+  const shop = myShop!;
   const mine = products.filter(p => p.shopId === shop.id);
-  const myOrders = orders.filter(o => o.shopId === shop.id);
-  const valid = myOrders.filter(o => o.status !== 'cancelled');
+  const valid = shopOrders.filter(o => o.status !== 'cancelled');
 
   const revenue = valid.reduce((s, o) => s + o.total, 0);
-  const toShip = myOrders.filter(o => o.status === 'to_ship').length;
+  const toShip = shopOrders.filter(o => o.status === 'to_ship').length;
   const active = mine.filter(p => p.status === 'active').length;
   const lowStock = mine.filter(p => p.variants.some(v => v.stock <= 5));
 
@@ -46,7 +45,7 @@ export default function SellerDashboard() {
         <h2 className="font-medium">待辦事項</h2>
         <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md bg-line md:grid-cols-4">
           <Todo to="/seller/orders" n={toShip} label="待出貨" highlight={toShip > 0} />
-          <Todo to="/seller/orders" n={myOrders.filter(o => o.status === 'shipping').length} label="運送中" />
+          <Todo to="/seller/orders" n={shopOrders.filter(o => o.status === 'shipping').length} label="運送中" />
           <Todo to="/seller/products" n={active} label="上架中商品" />
           <Todo to="/seller/products" n={lowStock.length} label="庫存偏低" highlight={lowStock.length > 0} />
         </div>

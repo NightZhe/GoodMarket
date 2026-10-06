@@ -10,13 +10,13 @@ import type { Product } from '../../types';
 type Tab = 'all' | 'active' | 'soldout' | 'hidden';
 
 export default function SellerProducts() {
-  const { sellerShopId, products, saveProduct, deleteProduct } = useStore();
+  const { myShop, products, saveProduct, deleteProduct } = useStore();
   const toast = useToast();
   const [tab, setTab] = useState<Tab>('all');
   const [kw, setKw] = useState('');
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  const mine = products.filter(p => p.shopId === sellerShopId);
+  const mine = products.filter(p => p.shopId === myShop?.id);
   const stockOf = (p: Product) => p.variants.reduce((s, v) => s + v.stock, 0);
   const match: Record<Tab, (p: Product) => boolean> = {
     all: () => true,
@@ -86,7 +86,12 @@ export default function SellerProducts() {
                     <Link to={`/seller/products/${p.id}/edit`} aria-label="編輯" title="編輯" className="rounded-md p-2 text-muted hover:bg-canvas hover:text-brand"><Pencil size={17} /></Link>
                     <button
                       aria-label={p.status === 'active' ? '下架' : '上架'} title={p.status === 'active' ? '下架' : '上架'}
-                      onClick={() => { saveProduct({ ...p, status: p.status === 'active' ? 'hidden' : 'active' }); toast(p.status === 'active' ? '已下架' : '已重新上架'); }}
+                      onClick={async () => {
+                        try {
+                          await saveProduct({ ...p, status: p.status === 'active' ? 'hidden' : 'active' });
+                          toast(p.status === 'active' ? '已下架' : '已重新上架');
+                        } catch (e) { toast(e instanceof Error ? e.message : '操作失敗'); }
+                      }}
                       className="rounded-md p-2 text-muted hover:bg-canvas hover:text-brand">
                       {p.status === 'active' ? <EyeOff size={17} /> : <Eye size={17} />}
                     </button>
@@ -113,7 +118,15 @@ export default function SellerProducts() {
             <p className="mt-1 text-xs text-muted">刪除後無法復原。只是暫時不賣的話，建議改用「下架」。</p>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setConfirmId(null)} className="rounded-sm border border-line px-4 py-2 text-sm">取消</button>
-              <button onClick={() => { deleteProduct(target.id); setConfirmId(null); toast('已刪除'); }} className="rounded-sm bg-error px-4 py-2 text-sm text-white">刪除</button>
+              <button
+                onClick={async () => {
+                  try {
+                    await deleteProduct(target.id);
+                    toast('已刪除');
+                  } catch (e) { toast(e instanceof Error ? e.message : '刪除失敗'); }
+                  setConfirmId(null);
+                }}
+                className="rounded-sm bg-error px-4 py-2 text-sm text-white">刪除</button>
             </div>
           </div>
         </div>

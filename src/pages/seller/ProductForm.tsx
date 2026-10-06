@@ -1,21 +1,22 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ImagePlus, Link2, Plus, Trash2, X } from 'lucide-react';
+import { ImagePlus, Link2, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { CATEGORIES } from '../../data/seed';
 import { useToast } from '../../components/Toast';
 import ProductImage from '../../components/ProductImage';
 import EmptyState from '../../components/EmptyState';
 import { uid } from '../../lib/format';
+import { supabase } from '../../lib/supabase';
 import type { CategoryId, Product } from '../../types';
 
 const MAX_IMAGES = 6;
 
 interface VariantRow { id: string; name: string; price: string; stock: string }
 
-/** 上傳的照片先在瀏覽器縮到 800px JPEG，避免 localStorage 被塞爆 */
+/** 照片先在瀏覽器縮到 800px JPEG 再上傳，省頻寬也省儲存空間 */
 const compress = (file: File) =>
-  new Promise<string>((resolve, reject) => {
+  new Promise<Blob>((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const scale = Math.min(1, 800 / Math.max(img.width, img.height));
@@ -24,25 +25,35 @@ const compress = (file: File) =>
       canvas.height = Math.round(img.height * scale);
       canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(img.src);
-      resolve(canvas.toDataURL('image/jpeg', 0.8));
+      canvas.toBlob(b => (b ? resolve(b) : reject(new Error('圖片轉檔失敗'))), 'image/jpeg', 0.8);
     };
     img.onerror = reject;
     img.src = URL.createObjectURL(file);
   });
 
+/** 上傳到 Supabase Storage，回傳公開網址 */
+const upload = async (file: File, shopId: string) => {
+  const blob = await compress(file);
+  const path = `${shopId}/${uid('img')}.jpg`;
+  const { error } = await supabase.storage.from('product-images')
+    .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+  if (error) throw new Error(error.message);
+  return supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl;
+};
+
 export default function ProductForm() {
   const { id } = useParams();
-  const { sellerShopId, getProduct, getShop, saveProduct } = useStore();
+  const { myShop, getProduct, saveProduct } = useStore();
   const existing = id ? getProduct(id) : undefined;
 
-  if (id && (!existing || existing.shopId !== sellerShopId)) {
+  if (id && (!existing || existing.shopId !== myShop?.id)) {
     return <EmptyState icon="📦" title="找不到這件商品" action={<Link to="/seller/products" className="text-brand">回商品列表</Link>} />;
   }
-  return <Form key={id ?? 'new'} existing={existing} shopId={sellerShopId!} location={getShop(sellerShopId!)!.location} onSave={saveProduct} />;
+  return <Form key={id ?? 'new'} existing={existing} shopId={myShop!.id} location={myShop!.location} onSave={saveProduct} />;
 }
 
 function Form({ existing, shopId, location, onSave }: {
-  existing?: Product; shopId: string; location: string; onSave: (p: Product) => void;
+  existing?: Product; shopId: string; location: string; onSave: (p: Product) => Promise<void>;
 }) {
   const navigate = useNavigate();
   const toast = useToast();
@@ -60,6 +71,8 @@ function Form({ existing, shopId, location, onSave }: {
     [{ id: uid('v'), name: '標準款', price: '', stock: '' }],
   );
   const [touched, setTouched] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const num = (s: string) => (/^\d+$/.test(s.trim()) ? Number(s) : NaN);
   const errors = {
@@ -79,11 +92,15 @@ function Form({ existing, shopId, location, onSave }: {
     if (!files) return;
     const room = MAX_IMAGES - images.length;
     const picked = [...files].filter(f => f.type.startsWith('image/')).slice(0, room);
+    if (!picked.length) return;
+    setUploading(true);
     try {
-      const urls = await Promise.all(picked.map(compress));
+      const urls = await Promise.all(picked.map(f => upload(f, shopId)));
       setImages(prev => [...prev, ...urls].slice(0, MAX_IMAGES));
-    } catch {
-      toast('圖片讀取失敗');
+    } catch (err) {
+      toast(err instanceof Error ? `圖片上傳失敗：${err.message}` : '圖片上傳失敗');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -94,13 +111,15 @@ function Form({ existing, shopId, location, onSave }: {
     setUrlInput('');
   };
 
-  const submit = (status: Product['status']) => {
+  const submit = async (status: Product['status']) => {
     setTouched(true);
     if (hasError) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    onSave({
+    setSaving(true);
+    try {
+      await onSave({
       id: existing?.id ?? uid('p'),
       shopId,
       title: title.trim(),
@@ -114,10 +133,15 @@ function Form({ existing, shopId, location, onSave }: {
       sold: existing?.sold ?? 0,
       rating: existing?.rating ?? 5,
       location: existing?.location ?? location,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
-    });
-    toast(status === 'active' ? (existing ? '已儲存並上架' : '商品已上架') : '已儲存（下架中）');
-    navigate('/seller/products');
+        createdAt: existing?.createdAt ?? new Date().toISOString(),
+      });
+      toast(status === 'active' ? (existing ? '已儲存並上架' : '商品已上架') : '已儲存（下架中）');
+      navigate('/seller/products');
+    } catch (err) {
+      toast(err instanceof Error ? `儲存失敗：${err.message}` : '儲存失敗');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const card = 'rounded-lg bg-white p-4 md:p-6';
@@ -145,10 +169,10 @@ function Form({ existing, shopId, location, onSave }: {
             </div>
           ))}
           {images.length < MAX_IMAGES && (
-            <button type="button" onClick={() => fileRef.current?.click()}
-              className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-brand bg-brand-soft/50 text-xs text-brand transition hover:bg-brand-soft">
-              <ImagePlus size={24} strokeWidth={1.5} />
-              上傳照片
+            <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()}
+              className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-brand bg-brand-soft/50 text-xs text-brand transition hover:bg-brand-soft disabled:opacity-60">
+              {uploading ? <Loader2 size={24} className="animate-spin" /> : <ImagePlus size={24} strokeWidth={1.5} />}
+              {uploading ? '上傳中…' : '上傳照片'}
             </button>
           )}
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
@@ -225,8 +249,9 @@ function Form({ existing, shopId, location, onSave }: {
 
       <div className="pb-safe fixed inset-x-0 bottom-0 z-40 flex justify-end gap-2 border-t border-line bg-white px-4 py-3 md:left-56 md:px-6">
         <button type="button" onClick={() => navigate(-1)} className="rounded-sm px-4 py-2.5 text-sm text-muted hover:bg-canvas">取消</button>
-        <button type="button" onClick={() => submit('hidden')} className="rounded-sm border border-line px-4 py-2.5 text-sm hover:bg-canvas">儲存但不上架</button>
-        <button type="button" onClick={() => submit('active')} className="rounded-sm bg-brand px-6 py-2.5 text-sm text-white hover:bg-brand-dark">
+        <button type="button" disabled={saving || uploading} onClick={() => void submit('hidden')} className="rounded-sm border border-line px-4 py-2.5 text-sm hover:bg-canvas disabled:opacity-50">儲存但不上架</button>
+        <button type="button" disabled={saving || uploading} onClick={() => void submit('active')} className="flex items-center gap-2 rounded-sm bg-brand px-6 py-2.5 text-sm text-white hover:bg-brand-dark disabled:bg-disabled">
+          {saving && <Loader2 size={14} className="animate-spin" />}
           {existing?.status === 'active' ? '儲存' : '儲存並上架'}
         </button>
       </div>

@@ -14,10 +14,10 @@ const TONE: Record<OrderStatus, string> = {
 };
 
 export default function SellerOrders() {
-  const { sellerShopId, orders, updateOrderStatus } = useStore();
+  const { myShop, shopOrders, updateOrderStatus } = useStore();
   const toast = useToast();
   const [tab, setTab] = useState<OrderStatus | 'all'>('to_ship');
-  const mine = orders.filter(o => o.shopId === sellerShopId);
+  const mine = shopOrders.filter(o => o.shopId === myShop?.id);
   const list = mine.filter(o => tab === 'all' || o.status === tab);
   const tabs: (OrderStatus | 'all')[] = ['all', 'to_ship', 'shipping', 'completed', 'cancelled'];
 
@@ -70,8 +70,8 @@ export default function SellerOrders() {
                 <span className="text-sm">訂單金額 <span className="text-lg font-medium text-brand">{money(o.total)}</span></span>
                 {o.status === 'to_ship' && (
                   <>
-                    <button onClick={() => { updateOrderStatus(o.id, 'cancelled'); toast('訂單已取消'); }} className="rounded-sm border border-line px-3 py-2 text-sm hover:bg-canvas">取消訂單</button>
-                    <button onClick={() => { updateOrderStatus(o.id, 'shipping'); toast('已安排出貨'); }} className="flex items-center gap-1.5 rounded-sm bg-brand px-4 py-2 text-sm text-white hover:bg-brand-dark">
+                    <button onClick={async () => { await updateOrderStatus(o.id, 'cancelled'); toast('訂單已取消'); }} className="rounded-sm border border-line px-3 py-2 text-sm hover:bg-canvas">取消訂單</button>
+                    <button onClick={async () => { await updateOrderStatus(o.id, 'shipping'); toast('已安排出貨'); }} className="flex items-center gap-1.5 rounded-sm bg-brand px-4 py-2 text-sm text-white hover:bg-brand-dark">
                       <Truck size={16} /> 安排出貨
                     </button>
                   </>

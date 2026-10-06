@@ -10,10 +10,10 @@ const NAV = [
 ];
 
 export default function SellerLayout() {
-  const { sellerShopId, getShop, logoutSeller, orders } = useStore();
+  const { myShop, signOut, shopOrders } = useStore();
   const navigate = useNavigate();
-  const shop = getShop(sellerShopId!)!;
-  const toShip = orders.filter(o => o.shopId === shop.id && o.status === 'to_ship').length;
+  const shop = myShop!; // SellerGate 已確保登入且有店
+  const toShip = shopOrders.filter(o => o.status === 'to_ship').length;
 
   return (
     <div className="min-h-dvh bg-[#f6f6f6]">
@@ -29,7 +29,7 @@ export default function SellerLayout() {
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-lg">{shop.avatar}</span>
             <span className="max-w-28 truncate">{shop.name}</span>
           </span>
-          <button onClick={() => { logoutSeller(); navigate('/seller'); }} aria-label="登出" title="登出" className="p-2 text-muted hover:text-brand">
+          <button onClick={() => { void signOut(); navigate('/seller'); }} aria-label="登出" title="登出" className="p-2 text-muted hover:text-brand">
             <LogOut size={18} />
           </button>
         </div>

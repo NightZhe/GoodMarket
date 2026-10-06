@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ClipboardList, Home, Search as SearchIcon, ShoppingCart, Store } from 'lucide-react';
+import { ClipboardList, Home, Loader2, Search as SearchIcon, ShoppingCart, Store } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 
 export function Logo({ light = true }: { light?: boolean }) {
@@ -13,7 +13,7 @@ export function Logo({ light = true }: { light?: boolean }) {
 }
 
 export default function BuyerLayout() {
-  const { cartCount } = useStore();
+  const { cartCount, loading, loadError, reload } = useStore();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [params] = useSearchParams();
@@ -66,7 +66,20 @@ export default function BuyerLayout() {
       </header>
 
       <main className={`flex-1 ${hideTabBar ? '' : 'pb-20 md:pb-0'}`}>
-        <Outlet />
+        {loadError ? (
+          <div className="mx-auto max-w-md px-4 py-24 text-center">
+            <p className="text-5xl">📡</p>
+            <p className="mt-4 font-medium">載入商品失敗</p>
+            <p className="mt-1 text-sm text-muted">{loadError}</p>
+            <button onClick={() => void reload()} className="mt-5 rounded-sm bg-brand px-6 py-2.5 text-sm text-white">重新載入</button>
+          </div>
+        ) : loading ? (
+          <div className="flex items-center justify-center py-32 text-muted">
+            <Loader2 size={28} className="animate-spin" />
+          </div>
+        ) : (
+          <Outlet />
+        )}
       </main>
 
       <footer className="mt-10 hidden border-t-4 border-brand bg-white md:block">
