@@ -130,8 +130,8 @@ function ProductDetailView({ id }: { id: string }) {
               {variant ? money(variant.price) : priceRange(product.variants.map(v => v.price))}
             </span>
             {discount > 0 && (
-              <span className="rounded-sm bg-brand px-1 text-xs font-semibold text-white">
-                {discount}% 折扣
+              <span className="rounded-sm bg-brand-dark px-1.5 py-0.5 text-xs font-semibold text-white">
+                -{discount}%
               </span>
             )}
           </div>

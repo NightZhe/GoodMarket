@@ -17,8 +17,8 @@ export default function ProductCard({ product }: { product: Product }) {
     >
       <div className="relative">
         <ProductImage src={product.images[0]} alt={product.title} className="w-full" />
-        {discount >= 10 && (
-          <span className="absolute right-0 top-0 rounded-bl-md bg-warning/95 px-1.5 py-0.5 text-[11px] font-semibold text-brand-dark">
+        {discount > 0 && (
+          <span className="absolute right-0 top-0 rounded-bl-md bg-brand-dark px-1.5 py-0.5 text-[11px] font-semibold text-white">
             -{discount}%
           </span>
         )}
@@ -33,8 +33,13 @@ export default function ProductCard({ product }: { product: Product }) {
         {product.freeShipping && (
           <span className="w-fit rounded-sm border border-success px-1 text-[10px] leading-4 text-success">免運</span>
         )}
-        <div className="mt-auto flex items-end justify-between gap-1">
-          <span className="text-base font-medium text-brand">{money(min)}</span>
+        <div className="mt-auto flex flex-wrap items-baseline justify-between gap-x-1.5 gap-y-0.5">
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-base font-medium text-brand">{money(min)}</span>
+            {discount > 0 && cheapest?.originalPrice && (
+              <span className="text-[11px] text-muted line-through">{money(cheapest.originalPrice)}</span>
+            )}
+          </span>
           <span className="text-[11px] text-muted">已售 {soldText(product.sold)}</span>
         </div>
         <div className="flex items-center justify-between text-[11px] text-muted">
