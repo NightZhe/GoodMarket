@@ -9,6 +9,9 @@ import { cheapestVariant, discountOf, money } from '../../lib/format';
 
 const PAGE = 12;
 
+// 限時特賣先不對外顯示（示範資料用的檔期機制還沒真的做）。改 true 就會回來。
+const SHOW_FLASH_SALE = false;
+
 export default function Home() {
   const { products } = useStore();
   const [shown, setShown] = useState(PAGE);
@@ -72,6 +75,7 @@ export default function Home() {
       </section>
 
       {/* 限時特賣 */}
+      {SHOW_FLASH_SALE && (
       <section className="bg-white md:rounded-md">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <div className="flex items-center gap-3">
@@ -107,6 +111,7 @@ export default function Home() {
           })}
         </div>
       </section>
+      )}
 
       {/* 每日推薦 */}
       <section>
