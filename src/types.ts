@@ -62,8 +62,15 @@ export interface OrderLine {
 }
 
 /** 訂單狀態歷程的一筆事件；狀態一變動資料庫就自動補上 */
+export type ShippingMilestone =
+  | 'handed_over'      // 賣家已寄件成功
+  | 'in_transit'       // 包裹送往物流中心
+  | 'out_for_delivery' // 包裹配送中
+  | 'arrived_store'    // 已送達門市，待取貨
+  | 'picked_up';       // 買家已取貨
+
 export interface OrderEvent {
-  status: 'placed' | OrderStatus;
+  status: 'placed' | OrderStatus | ShippingMilestone;
   at: string;
   carrier?: string | null;
   trackingNo?: string | null;

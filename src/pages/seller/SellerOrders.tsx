@@ -1,18 +1,108 @@
 import { useState } from 'react';
-import { ChevronDown, MapPin, Phone, Truck, User } from 'lucide-react';
+import { ChevronDown, MapPin, Phone, Receipt, Truck, User } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useToast } from '../../components/Toast';
 import ProductImage from '../../components/ProductImage';
 import OrderTimeline from '../../components/OrderTimeline';
 import { STATUS_LABEL } from '../buyer/Orders';
 import { dateText, money } from '../../lib/format';
-import type { OrderStatus } from '../../types';
+import { FEE_RATES, payoutOf } from '../../lib/payout';
+import type { Order, OrderStatus, ShippingMilestone } from '../../types';
 
 const PAY: Record<string, string> = { cod: '貨到付款', card: '信用卡', transfer: 'ATM 轉帳' };
 const TONE: Record<OrderStatus, string> = {
   to_ship: 'bg-brand-soft text-brand', shipping: 'bg-info-bg text-info-text',
   completed: 'bg-success-soft text-success-text', cancelled: 'bg-canvas text-muted',
 };
+
+/** 進帳資訊：賣家這筆訂單實際能拿多少，以及被扣了哪些費用 */
+function PayoutPanel({ order }: { order: Order }) {
+  const [open, setOpen] = useState(false);
+  const p = payoutOf(order);
+  const row = (label: string, value: number, opts?: { sub?: boolean; strong?: boolean; tone?: string }) => (
+    <div className={`flex items-center justify-between ${opts?.sub ? 'text-xs text-muted' : 'text-sm'}`}>
+      <span className={opts?.strong ? 'font-medium' : ''}>{label}</span>
+      <span className={`${opts?.strong ? 'font-medium' : ''} ${opts?.tone ?? ''}`}>
+        {value < 0 ? `-${money(-value)}` : money(value)}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="border-t border-line px-4 py-3">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-sm">
+          <Receipt size={16} className="text-muted" /> 進帳資訊
+        </span>
+        <button onClick={() => setOpen(!open)} className="flex items-center gap-1 text-sm text-brand">
+          {open ? '隱藏入帳明細' : '查看進帳明細'}
+          <ChevronDown size={14} className={`transition ${open ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-2 rounded-md bg-canvas p-4">
+          {row('訂單金額', p.orderTotal, { strong: true })}
+          {row('商品價格', p.itemTotal, { sub: true })}
+          {row('買家支付運費', p.buyerShipping, { sub: true })}
+
+          <div className="border-t border-line pt-2">
+            {row('成交＆金流手續費', p.feeTotal, { strong: true, tone: 'text-error-text' })}
+            {row(`成交手續費（商品價格 ${FEE_RATES.commission * 100}%）`, p.commission, { sub: true })}
+            {row(`金流與系統處理費（訂單金額 ${FEE_RATES.payment * 100}%）`, p.payment, { sub: true })}
+            {FEE_RATES.service > 0 && row('其他服務費', p.service, { sub: true })}
+          </div>
+
+          <div className="flex items-center justify-between border-t border-line pt-2">
+            <span className="font-medium">預估訂單進帳</span>
+            <span className="text-xl font-medium text-brand">{money(p.net)}</span>
+          </div>
+          <p className="text-xs text-muted">
+            費率為平台設定值；實際進帳以訂單完成後結算為準。運費由買家支付、賣家自行出貨，平台不另外代收。
+          </p>
+        </div>
+      )}
+
+      {!open && (
+        <p className="mt-1 text-xs text-muted">
+          預估進帳 <span className="text-sm text-brand">{money(p.net)}</span>
+          <span className="ml-2">（訂單金額 {money(p.orderTotal)}，手續費 {money(p.feeTotal)}）</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+const MILESTONES: { code: ShippingMilestone; label: string }[] = [
+  { code: 'handed_over', label: '已寄件' },
+  { code: 'in_transit', label: '送往物流中心' },
+  { code: 'out_for_delivery', label: '配送中' },
+  { code: 'arrived_store', label: '送達門市' },
+  { code: 'picked_up', label: '買家已取貨' },
+];
+
+/** 物流節點：按一下就往歷程追加，買家馬上看得到。已經按過的會變灰 */
+function MilestoneButtons({ done, onPick }: {
+  done: Set<string>;
+  onPick: (code: ShippingMilestone) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  return (
+    <div className="mr-auto flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-muted">更新進度</span>
+      {MILESTONES.map(m => (
+        <button
+          key={m.code}
+          disabled={done.has(m.code) || busy !== null}
+          onClick={async () => { setBusy(m.code); try { await onPick(m.code); } finally { setBusy(null); } }}
+          className="rounded-full border border-line px-2.5 py-1 text-xs transition hover:border-brand hover:text-brand disabled:border-line disabled:bg-canvas disabled:text-disabled"
+        >
+          {done.has(m.code) ? `✓ ${m.label}` : m.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const CARRIERS = ['7-ELEVEN 取貨', '全家取貨', '黑貓宅急便', '新竹物流', '郵局寄送', '賣家自送'];
 
@@ -58,7 +148,7 @@ function ShipForm({ onSubmit, onCancel }: {
 }
 
 export default function SellerOrders() {
-  const { myShop, shopOrders, updateOrderStatus } = useStore();
+  const { myShop, shopOrders, updateOrderStatus, addOrderEvent } = useStore();
   const toast = useToast();
   const [tab, setTab] = useState<OrderStatus | 'all'>('to_ship');
   const [shipId, setShipId] = useState<string | null>(null);   // 正在填出貨資訊的訂單
@@ -93,15 +183,27 @@ export default function SellerOrders() {
                 <span className={`ml-auto rounded-full px-2 py-0.5 font-medium ${TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span>
               </header>
               <div className="grid gap-4 p-4 md:grid-cols-[1fr_240px]">
-                <div className="space-y-3">
-                  {o.lines.map(l => (
-                    <div key={l.variantId} className="flex items-center gap-3">
-                      <ProductImage src={l.image} alt="" size="sm" className="w-12 rounded-sm border border-line" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm">{l.title}</p>
-                        <p className="text-xs text-muted">{l.variantName}</p>
+                <div>
+                  <div className="hidden grid-cols-[32px_1fr_90px_60px_90px] gap-2 border-b border-line pb-2 text-xs text-muted md:grid">
+                    <span>編號</span><span>商品</span>
+                    <span className="text-right">單價</span>
+                    <span className="text-right">數量</span>
+                    <span className="text-right">小計</span>
+                  </div>
+                  {o.lines.map((l, i) => (
+                    <div key={l.variantId} className="grid grid-cols-[1fr_90px] items-center gap-2 border-b border-line py-3 last:border-0 md:grid-cols-[32px_1fr_90px_60px_90px]">
+                      <span className="hidden text-xs text-muted md:block">{i + 1}</span>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <ProductImage src={l.image} alt="" size="sm" className="w-12 shrink-0 rounded-sm border border-line" />
+                        <div className="min-w-0">
+                          <p className="line-clamp-2 text-sm">{l.title}</p>
+                          <p className="text-xs text-muted">規格：{l.variantName}</p>
+                          <p className="text-xs text-muted md:hidden">{money(l.price)} × {l.qty}</p>
+                        </div>
                       </div>
-                      <span className="text-sm text-muted">×{l.qty}</span>
+                      <span className="hidden text-right text-sm md:block">{money(l.price)}</span>
+                      <span className="hidden text-right text-sm md:block">{l.qty}</span>
+                      <span className="text-right text-sm">{money(l.price * l.qty)}</span>
                     </div>
                   ))}
                 </div>
@@ -123,6 +225,8 @@ export default function SellerOrders() {
                 {openId === o.id && <div className="mt-3"><OrderTimeline order={o} /></div>}
               </div>
 
+              <PayoutPanel order={o} />
+
               {shipId === o.id && (
                 <ShipForm
                   onCancel={() => setShipId(null)}
@@ -138,6 +242,12 @@ export default function SellerOrders() {
               <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-3">
                 <span className="mr-auto text-xs text-muted">{PAY[o.payment]}・運費 {money(o.shippingFee)}</span>
                 <span className="text-sm">訂單金額 <span className="text-lg font-medium text-brand">{money(o.total)}</span></span>
+                {o.status === 'shipping' && (
+                  <MilestoneButtons
+                    done={new Set(o.events.map(e => e.status))}
+                    onPick={async code => { await addOrderEvent(o.id, code); toast('已更新物流進度'); setOpenId(o.id); }}
+                  />
+                )}
                 {o.status === 'to_ship' && (
                   <>
                     <button onClick={async () => { await updateOrderStatus(o.id, 'cancelled'); toast('訂單已取消'); }} className="rounded-sm border border-line px-3 py-2 text-sm hover:bg-canvas">取消訂單</button>

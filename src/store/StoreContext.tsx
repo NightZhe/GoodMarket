@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, type OrderRow, type ProductRow, type ShopRow } from '../lib/supabase';
-import type { CartItem, Order, OrderStatus, Product, Shop } from '../types';
+import type { CartItem, Order, OrderStatus, Product, Shop, ShippingMilestone } from '../types';
 
 // 資料存在 Supabase：賣家登入後上架的商品，所有人都看得到。
 // 唯一還留在瀏覽器的是「購物車」與「買家的訂單憑證」——前者本來就該跟著裝置，
@@ -112,6 +112,8 @@ interface Store {
   shopOrders: Order[];
   refreshShopOrders: () => Promise<void>;
   updateOrderStatus: (id: string, status: OrderStatus, shipping?: { carrier: string; trackingNo: string }) => Promise<void>;
+  /** 賣家手動更新物流節點（不改訂單狀態） */
+  addOrderEvent: (id: string, code: ShippingMilestone) => Promise<void>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -315,6 +317,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setShopOrders(prev => prev.map(o => (o.id === id ? toOrder(data as OrderRow) : o)));
   }, []);
 
+  const addOrderEvent = useCallback(async (id: string, code: ShippingMilestone) => {
+    const { data, error } = await supabase.rpc('add_order_event', { p_id: id, p_code: code });
+    if (error) throw new Error(error.message);
+    setShopOrders(prev => prev.map(o => (o.id === id ? { ...o, events: data as Order['events'] } : o)));
+  }, []);
+
   const value = useMemo<Store>(() => ({
     shops, products, loading, loadError, reload,
     getProduct: id => products.find(p => p.id === id),
@@ -324,12 +332,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addToCart, setCartQty, removeFromCart,
     checkout, myOrders, refreshMyOrders, cancelMyOrder, completeMyOrder,
     user, authReady, myShop, signUp, signIn, signOut, createShop,
-    saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus,
+    saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
   }), [
     shops, products, loading, loadError, reload, cart, addToCart, setCartQty, removeFromCart,
     checkout, myOrders, refreshMyOrders, cancelMyOrder, completeMyOrder,
     user, authReady, myShop, signUp, signIn, signOut, createShop,
-    saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus,
+    saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
