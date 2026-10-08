@@ -23,9 +23,10 @@ export default function Home() {
       .slice(0, 6),
     [active],
   );
-  // 上架時間由新到舊：新賣家一上架就出現在最前面
-  const recommended = useMemo(
-    () => [...active].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+  // 每日新發現照銷量排；新上架的另外開一區，才不會被銷量 0 壓到最後面
+  const recommended = useMemo(() => [...active].sort((a, b) => b.sold - a.sold), [active]);
+  const newest = useMemo(
+    () => [...active].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6),
     [active],
   );
 
@@ -111,6 +112,21 @@ export default function Home() {
           })}
         </div>
       </section>
+      )}
+
+      {/* 最新上架 */}
+      {newest.length > 0 && (
+        <section className="bg-white md:rounded-md">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <h2 className="text-lg font-bold">🆕 最新上架</h2>
+            <Link to="/search?sort=newest" className="flex items-center text-sm text-brand">
+              看更多 <ChevronRight size={16} />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 md:grid-cols-6 md:gap-2.5">
+            {newest.map(p => <ProductCard key={p.id} product={p} />)}
+          </div>
+        </section>
       )}
 
       {/* 每日推薦 */}
