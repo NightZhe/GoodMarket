@@ -5,7 +5,7 @@ import { useStore } from '../../store/StoreContext';
 import { CATEGORIES } from '../../data/seed';
 import ProductCard from '../../components/ProductCard';
 import ProductImage from '../../components/ProductImage';
-import { money } from '../../lib/format';
+import { cheapestVariant, discountOf, money } from '../../lib/format';
 
 const PAGE = 12;
 
@@ -15,8 +15,9 @@ export default function Home() {
   const active = useMemo(() => products.filter(p => p.status === 'active'), [products]);
 
   const flash = useMemo(
-    () => [...active].filter(p => p.originalPrice)
-      .sort((a, b) => discountOf(b) - discountOf(a)).slice(0, 6),
+    () => active.filter(p => discountOf(cheapestVariant(p.variants)) > 0)
+      .sort((a, b) => discountOf(cheapestVariant(b.variants)) - discountOf(cheapestVariant(a.variants)))
+      .slice(0, 6),
     [active],
   );
   const recommended = useMemo(() => [...active].sort((a, b) => b.sold - a.sold), [active]);
@@ -84,7 +85,7 @@ export default function Home() {
         </div>
         <div className="no-scrollbar flex gap-2 overflow-x-auto p-3 md:grid md:grid-cols-6 md:overflow-visible">
           {flash.map(p => {
-            const price = Math.min(...p.variants.map(v => v.price));
+            const price = cheapestVariant(p.variants).price;
             const stock = p.variants.reduce((s, v) => s + v.stock, 0);
             const ratio = Math.min(0.95, p.sold / (p.sold + stock * 20));
             return (
@@ -92,7 +93,7 @@ export default function Home() {
                 <div className="relative overflow-hidden rounded-sm">
                   <ProductImage src={p.images[0]} alt={p.title} className="w-full" />
                   <span className="absolute right-0 top-0 bg-warning px-1 text-[11px] font-semibold text-brand-dark">
-                    -{discountOf(p)}%
+                    -{discountOf(cheapestVariant(p.variants))}%
                   </span>
                 </div>
                 <p className="mt-2 text-lg font-medium text-brand">{money(price)}</p>
@@ -145,9 +146,6 @@ export default function Home() {
     </div>
   );
 }
-
-const discountOf = (p: { originalPrice?: number; variants: { price: number }[] }) =>
-  p.originalPrice ? Math.round((1 - Math.min(...p.variants.map(v => v.price)) / p.originalPrice) * 100) : 0;
 
 function Perk({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (

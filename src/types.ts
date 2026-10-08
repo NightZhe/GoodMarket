@@ -21,8 +21,9 @@ export interface Shop {
 
 export interface Variant {
   id: string;
-  name: string;         // 例：黑色 / L
-  price: number;
+  name: string;          // 例：黑色 / L
+  price: number;         // 售價
+  originalPrice?: number; // 原價（選填，用來顯示折扣）；每個規格可各自不同
   stock: number;
 }
 
@@ -34,7 +35,6 @@ export interface Product {
   categoryId: CategoryId;
   images: string[];     // http(s) URL、data URL，或 "art:🎧:#hex:#hex" 示範插圖
   variants: Variant[];
-  originalPrice?: number;
   sold: number;
   rating: number;
   location: string;

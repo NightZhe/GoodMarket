@@ -5,6 +5,7 @@ import { useStore } from '../../store/StoreContext';
 import { CATEGORIES } from '../../data/seed';
 import ProductCard from '../../components/ProductCard';
 import EmptyState from '../../components/EmptyState';
+import { cheapestVariant, discountOf } from '../../lib/format';
 import type { Product } from '../../types';
 
 type Sort = 'relevance' | 'newest' | 'sales' | 'price_asc' | 'price_desc' | 'discount';
@@ -41,7 +42,7 @@ export default function Search() {
       sales: (a, b) => b.sold - a.sold,
       price_asc: (a, b) => minPrice(a) - minPrice(b),
       price_desc: (a, b) => minPrice(b) - minPrice(a),
-      discount: (a, b) => (minPrice(a) / (a.originalPrice ?? minPrice(a))) - (minPrice(b) / (b.originalPrice ?? minPrice(b))),
+      discount: (a, b) => discountOf(cheapestVariant(b.variants)) - discountOf(cheapestVariant(a.variants)),
     };
     return list.sort(by[sort]);
   }, [products, shops, q, cat, sort, free]);

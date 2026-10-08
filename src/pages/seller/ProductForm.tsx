@@ -12,7 +12,7 @@ import type { CategoryId, Product } from '../../types';
 
 const MAX_IMAGES = 6;
 
-interface VariantRow { id: string; name: string; price: string; stock: string }
+interface VariantRow { id: string; name: string; price: string; original: string; stock: string }
 
 /** 照片先在瀏覽器縮到 800px JPEG 再上傳，省頻寬也省儲存空間 */
 const compress = (file: File) =>
@@ -64,11 +64,12 @@ function Form({ existing, shopId, location, onSave }: {
   const [categoryId, setCategoryId] = useState<CategoryId | ''>(existing?.categoryId ?? '');
   const [images, setImages] = useState<string[]>(existing?.images ?? []);
   const [urlInput, setUrlInput] = useState('');
-  const [originalPrice, setOriginalPrice] = useState(existing?.originalPrice ? String(existing.originalPrice) : '');
   const [freeShipping, setFreeShipping] = useState(existing?.freeShipping ?? false);
   const [variants, setVariants] = useState<VariantRow[]>(
-    existing?.variants.map(v => ({ id: v.id, name: v.name, price: String(v.price), stock: String(v.stock) })) ??
-    [{ id: uid('v'), name: '標準款', price: '', stock: '' }],
+    existing?.variants.map(v => ({
+      id: v.id, name: v.name, price: String(v.price),
+      original: v.originalPrice ? String(v.originalPrice) : '', stock: String(v.stock),
+    })) ?? [{ id: uid('v'), name: '標準款', price: '', original: '', stock: '' }],
   );
   const [touched, setTouched] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -81,9 +82,10 @@ function Form({ existing, shopId, location, onSave }: {
     images: images.length === 0 ? '至少需要 1 張商品圖片' : '',
     description: description.trim().length < 10 ? '商品描述至少 10 個字' : '',
     variants: variants.some(v => !v.name.trim() || !(num(v.price) > 0) || Number.isNaN(num(v.stock)))
-      ? '每個規格都要填名稱、大於 0 的價格與庫存' : '',
-    originalPrice: originalPrice && !(num(originalPrice) > Math.min(...variants.map(v => num(v.price) || Infinity)))
-      ? '原價要高於售價，否則請留空' : '',
+      ? '每個規格都要填名稱、大於 0 的售價與庫存' : '',
+    // 原價是選填，但填了就必須高於該規格自己的售價
+    original: variants.some(v => v.original && !(num(v.original) > num(v.price)))
+      ? '原價要高於同一列的售價，否則請留空' : '',
   };
   const hasError = Object.values(errors).some(Boolean);
   const err = (k: keyof typeof errors) => touched && errors[k] ? <p className="mt-1 text-xs text-error">{errors[k]}</p> : null;
@@ -126,8 +128,10 @@ function Form({ existing, shopId, location, onSave }: {
       description: description.trim(),
       categoryId: categoryId as CategoryId,
       images,
-      variants: variants.map(v => ({ id: v.id, name: v.name.trim(), price: num(v.price), stock: num(v.stock) })),
-      originalPrice: originalPrice ? num(originalPrice) : undefined,
+        variants: variants.map(v => ({
+          id: v.id, name: v.name.trim(), price: num(v.price), stock: num(v.stock),
+          ...(v.original ? { originalPrice: num(v.original) } : {}),
+        })),
       freeShipping,
       status,
       sold: existing?.sold ?? 0,
@@ -215,18 +219,19 @@ function Form({ existing, shopId, location, onSave }: {
       <section className={`${card} space-y-3`}>
         <div className="flex items-center justify-between">
           <h2 className="font-medium">規格與庫存</h2>
-          <button type="button" onClick={() => setVariants(v => [...v, { id: uid('v'), name: '', price: v[v.length - 1]?.price ?? '', stock: '' }])}
+          <button type="button" onClick={() => setVariants(v => [...v, { id: uid('v'), name: '', price: v[v.length - 1]?.price ?? '', original: v[v.length - 1]?.original ?? '', stock: '' }])}
             className="flex items-center gap-1 text-sm text-brand"><Plus size={16} /> 新增規格</button>
         </div>
-        <div className="hidden grid-cols-[1fr_120px_100px_36px] gap-2 text-xs text-muted md:grid">
-          <span>規格名稱（如：黑色 / L）</span><span>售價</span><span>庫存</span><span />
+        <div className="hidden grid-cols-[1fr_110px_110px_90px_36px] gap-2 text-xs text-muted md:grid">
+          <span>規格名稱（如：黑色 / L）</span><span>售價</span><span>原價（選填）</span><span>庫存</span><span />
         </div>
         {variants.map((v, i) => {
           const patch = (p: Partial<VariantRow>) => setVariants(rows => rows.map(r => (r.id === v.id ? { ...r, ...p } : r)));
           return (
-            <div key={v.id} className="grid grid-cols-[1fr_1fr_36px] gap-2 rounded-md bg-canvas p-2 md:grid-cols-[1fr_120px_100px_36px] md:bg-transparent md:p-0">
+            <div key={v.id} className="grid grid-cols-[1fr_1fr_36px] gap-2 rounded-md bg-canvas p-2 md:grid-cols-[1fr_110px_110px_90px_36px] md:bg-transparent md:p-0">
               <input aria-label={`規格 ${i + 1} 名稱`} value={v.name} onChange={e => patch({ name: e.target.value })} placeholder="規格名稱" className={`col-span-3 bg-white md:col-span-1 ${input}`} />
               <input aria-label={`規格 ${i + 1} 售價`} value={v.price} inputMode="numeric" onChange={e => patch({ price: e.target.value.replace(/\D/g, '') })} placeholder="$ 售價" className={`bg-white ${input}`} />
+              <input aria-label={`規格 ${i + 1} 原價`} value={v.original} inputMode="numeric" onChange={e => patch({ original: e.target.value.replace(/\D/g, '') })} placeholder="$ 原價" className={`col-span-2 bg-white md:col-span-1 ${input}`} />
               <input aria-label={`規格 ${i + 1} 庫存`} value={v.stock} inputMode="numeric" onChange={e => patch({ stock: e.target.value.replace(/\D/g, '') })} placeholder="庫存" className={`bg-white ${input}`} />
               <button type="button" aria-label="刪除規格" disabled={variants.length === 1} onClick={() => setVariants(rows => rows.filter(r => r.id !== v.id))}
                 className="flex items-center justify-center text-muted hover:text-error disabled:opacity-30"><Trash2 size={17} /></button>
@@ -234,12 +239,9 @@ function Form({ existing, shopId, location, onSave }: {
           );
         })}
         {err('variants')}
+        {err('original')}
+        <p className="text-xs text-muted">填了原價，商品頁與商品卡就會顯示劃掉的原價與折扣百分比。</p>
         <div className="grid gap-4 border-t border-line pt-4 md:grid-cols-2">
-          <label className="block text-sm">
-            原價（選填，會顯示折扣）
-            <input value={originalPrice} inputMode="numeric" onChange={e => setOriginalPrice(e.target.value.replace(/\D/g, ''))} placeholder="$" className={`mt-1 ${input}`} />
-            {err('originalPrice')}
-          </label>
           <label className="flex items-center gap-2 self-end pb-2.5 text-sm">
             <input type="checkbox" checked={freeShipping} onChange={e => setFreeShipping(e.target.checked)} className="h-4 w-4 accent-brand" />
             這件商品由我吸收運費（免運）

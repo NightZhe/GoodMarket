@@ -19,8 +19,9 @@ export interface ShopRow {
 
 export interface ProductRow {
   id: string; shop_id: string; title: string; description: string; category_id: string;
-  images: string[]; variants: { id: string; name: string; price: number; stock: number }[];
-  original_price: number | null; sold: number; rating: number; location: string;
+  images: string[];
+  variants: { id: string; name: string; price: number; originalPrice?: number; stock: number }[];
+  sold: number; rating: number; location: string;
   free_shipping: boolean; status: 'active' | 'hidden'; created_at: string;
 }
 

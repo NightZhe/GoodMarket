@@ -2,11 +2,12 @@ import { Link } from 'react-router-dom';
 import { MapPin, Star } from 'lucide-react';
 import type { Product } from '../types';
 import ProductImage from './ProductImage';
-import { money, soldText } from '../lib/format';
+import { cheapestVariant, discountOf, money, soldText } from '../lib/format';
 
 export default function ProductCard({ product }: { product: Product }) {
-  const min = Math.min(...product.variants.map(v => v.price));
-  const discount = product.originalPrice ? Math.round((1 - min / product.originalPrice) * 100) : 0;
+  const cheapest = cheapestVariant(product.variants);
+  const min = cheapest?.price ?? 0;
+  const discount = discountOf(cheapest);
   const soldOut = product.variants.every(v => v.stock === 0);
 
   return (

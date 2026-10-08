@@ -31,9 +31,8 @@ create table if not exists public.products (
   description    text not null default '',
   category_id    text not null,
   images         jsonb not null default '[]'::jsonb,
-  -- [{ id, name, price, stock }]
+  -- [{ id, name, price, originalPrice?, stock }]，原價跟著規格走
   variants       jsonb not null default '[]'::jsonb,
-  original_price integer,
   sold           integer not null default 0,
   rating         numeric(2,1) not null default 5.0,
   location       text not null default '臺北市',

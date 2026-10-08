@@ -24,18 +24,28 @@ const art = (emoji: string, from: string, to: string) => `art:${emoji}:${from}:$
 let seq = 0;
 const v = (name: string, price: number, stock: number): Variant => ({ id: `v${++seq}`, name, price, stock });
 
-type SeedInput = Omit<Product, 'id' | 'status' | 'createdAt' | 'location'> & { daysAgo: number };
+// 示範資料沿用「整件商品一個原價」的寫法，產生時再依各規格售價換算成各自的原價
+type SeedInput = Omit<Product, 'id' | 'status' | 'createdAt' | 'location'> & {
+  daysAgo: number;
+  originalPrice?: number;
+};
 
 const shopLocation = (shopId: string) => SEED_SHOPS.find(s => s.id === shopId)?.location ?? '臺北市';
 
 const make = (list: SeedInput[]): Product[] =>
-  list.map(({ daysAgo, ...p }, i) => ({
-    ...p,
-    id: `p${String(i + 1).padStart(3, '0')}`,
-    status: 'active',
-    location: shopLocation(p.shopId),
-    createdAt: new Date(Date.now() - daysAgo * 86400000).toISOString(),
-  }));
+  list.map(({ daysAgo, originalPrice, ...p }, i) => {
+    const cheapest = Math.min(...p.variants.map(v => v.price));
+    // 各規格維持一致的折扣幅度
+    const ratio = originalPrice ? originalPrice / cheapest : 0;
+    return {
+      ...p,
+      variants: p.variants.map(v => (ratio ? { ...v, originalPrice: Math.round(v.price * ratio) } : v)),
+      id: `p${String(i + 1).padStart(3, '0')}`,
+      status: 'active' as const,
+      location: shopLocation(p.shopId),
+      createdAt: new Date(Date.now() - daysAgo * 86400000).toISOString(),
+    };
+  });
 
 export const SEED_PRODUCTS: Product[] = make([
   { shopId: 'shop_gadget', title: '【一年保固】主動降噪藍牙耳機 40 小時續航 低延遲遊戲模式', description: '主動降噪深度 -35dB，通透模式一鍵切換。\n單次充電 8 小時、搭配充電盒共 40 小時。\nIPX4 防潑水，運動通勤都適用。', categoryId: '3c', images: [art('🎧', '#dbeafe', '#93c5fd'), art('🎵', '#e0e7ff', '#a5b4fc')], variants: [v('曜石黑', 1290, 58), v('月光白', 1290, 34), v('霧藍', 1390, 12)], originalPrice: 2490, sold: 12840, rating: 4.9, freeShipping: true, daysAgo: 40 },

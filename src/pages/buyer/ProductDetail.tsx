@@ -8,7 +8,7 @@ import ProductCard from '../../components/ProductCard';
 import QtyStepper from '../../components/QtyStepper';
 import EmptyState from '../../components/EmptyState';
 import { useToast } from '../../components/Toast';
-import { money, priceRange, soldText } from '../../lib/format';
+import { cheapestVariant, discountOf, money, priceRange, soldText } from '../../lib/format';
 import type { Product } from '../../types';
 
 // 用 key 讓切換到另一個商品時，規格／數量等狀態重新開始
@@ -46,6 +46,8 @@ function ProductDetailView({ id }: { id: string }) {
 
   const shop = getShop(product.shopId);
   const variant = product.variants.find(v => v.id === variantId);
+  const shown = variant ?? cheapestVariant(product.variants); // 未選規格時以最低價那個為準
+  const discount = discountOf(shown);
   const stock = variant ? variant.stock : product.variants.reduce((s, v) => s + v.stock, 0);
   const category = CATEGORIES.find(c => c.id === product.categoryId);
 
@@ -119,16 +121,17 @@ function ProductDetailView({ id }: { id: string }) {
             <span><span className="underline underline-offset-2">{soldText(product.sold)}</span> <span className="text-muted">已售出</span></span>
           </div>
 
+          {/* 原價與折扣都跟著規格走：選了規格看該規格的，沒選就看最低價那個 */}
           <div className="mt-3 flex flex-wrap items-center gap-3 bg-[#fafafa] px-4 py-4 md:mt-4">
-            {product.originalPrice && (
-              <span className="text-muted line-through">{money(product.originalPrice)}</span>
+            {shown?.originalPrice && discount > 0 && (
+              <span className="text-muted line-through">{money(shown.originalPrice)}</span>
             )}
             <span className="text-3xl font-medium text-brand">
               {variant ? money(variant.price) : priceRange(product.variants.map(v => v.price))}
             </span>
-            {product.originalPrice && (
+            {discount > 0 && (
               <span className="rounded-sm bg-brand px-1 text-xs font-semibold text-white">
-                {Math.round((1 - Math.min(...product.variants.map(v => v.price)) / product.originalPrice) * 100)}% 折扣
+                {discount}% 折扣
               </span>
             )}
           </div>
@@ -225,7 +228,12 @@ function ProductDetailView({ id }: { id: string }) {
             <div className="flex gap-3 border-b border-line p-4">
               <ProductImage src={product.images[0]} alt="" size="sm" className="w-20 rounded-md border border-line" />
               <div className="flex flex-1 flex-col justify-end">
-                <p className="text-xl text-brand">{variant ? money(variant.price) : priceRange(product.variants.map(v => v.price))}</p>
+                <p className="flex items-baseline gap-2">
+                  <span className="text-xl text-brand">{variant ? money(variant.price) : priceRange(product.variants.map(v => v.price))}</span>
+                  {shown?.originalPrice && discount > 0 && (
+                    <span className="text-sm text-muted line-through">{money(shown.originalPrice)}</span>
+                  )}
+                </p>
                 <p className="text-xs text-muted">庫存 {stock}</p>
               </div>
               <button onClick={() => setSheet(null)} aria-label="關閉" className="self-start p-1 text-muted"><X size={22} /></button>
@@ -263,7 +271,8 @@ function VariantPicker(props: {
                 v.id === variantId ? 'border-brand text-brand' : 'border-line hover:border-brand hover:text-brand'
               }`}
             >
-              {v.name}
+              <span>{v.name}</span>
+              <span className="ml-1.5 text-xs text-muted">{money(v.price)}</span>
               {v.id === variantId && <span className="absolute bottom-0 right-0 h-0 w-0 border-b-[10px] border-l-[10px] border-b-brand border-l-transparent" />}
             </button>
           ))}

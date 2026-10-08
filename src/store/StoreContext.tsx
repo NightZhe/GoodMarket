@@ -42,7 +42,7 @@ const toShop = (r: ShopRow): Shop => ({
 const toProduct = (r: ProductRow): Product => ({
   id: r.id, shopId: r.shop_id, title: r.title, description: r.description,
   categoryId: r.category_id as Product['categoryId'], images: r.images, variants: r.variants,
-  originalPrice: r.original_price ?? undefined, sold: r.sold, rating: Number(r.rating),
+  sold: r.sold, rating: Number(r.rating),
   location: r.location, freeShipping: r.free_shipping, status: r.status, createdAt: r.created_at,
 });
 
@@ -280,7 +280,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const row = {
       shop_id: myShop.id, title: product.title, description: product.description,
       category_id: product.categoryId, images: product.images, variants: product.variants,
-      original_price: product.originalPrice ?? null, free_shipping: product.freeShipping,
+      free_shipping: product.freeShipping,
       location: myShop.location, status: product.status,
     };
     // 新商品的 id 是前端暫時產生的，交給資料庫發 uuid
