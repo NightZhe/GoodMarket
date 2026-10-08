@@ -61,8 +61,17 @@ export interface OrderLine {
   qty: number;
 }
 
+/** 訂單狀態歷程的一筆事件；狀態一變動資料庫就自動補上 */
+export interface OrderEvent {
+  status: 'placed' | OrderStatus;
+  at: string;
+  carrier?: string | null;
+  trackingNo?: string | null;
+}
+
 export interface Order {
   id: string;
+  orderNo: string;      // 好記的訂單編號，如 2610086C04A1E8
   shopId: string;
   lines: OrderLine[];
   shippingFee: number;
@@ -70,5 +79,8 @@ export interface Order {
   status: OrderStatus;
   buyer: { name: string; phone: string; address: string };
   payment: 'cod' | 'card' | 'transfer';
+  carrier?: string | null;    // 物流方式
+  trackingNo?: string | null; // 物流單號
+  events: OrderEvent[];
   createdAt: string;
 }

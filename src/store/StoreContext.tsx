@@ -47,8 +47,11 @@ const toProduct = (r: ProductRow): Product => ({
 });
 
 const toOrder = (r: OrderRow): Order => ({
-  id: r.id, shopId: r.shop_id, lines: r.lines, shippingFee: r.shipping_fee, total: r.total,
+  id: r.id, orderNo: r.order_no, shopId: r.shop_id, lines: r.lines,
+  shippingFee: r.shipping_fee, total: r.total,
   status: r.status, payment: r.payment, createdAt: r.created_at,
+  carrier: r.carrier, trackingNo: r.tracking_no,
+  events: (r.events ?? []) as Order['events'],
   buyer: { name: r.buyer_name ?? '', phone: r.buyer_phone ?? '', address: r.buyer_address ?? '' },
 });
 
@@ -108,7 +111,7 @@ interface Store {
   deleteProduct: (id: string) => Promise<void>;
   shopOrders: Order[];
   refreshShopOrders: () => Promise<void>;
-  updateOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
+  updateOrderStatus: (id: string, status: OrderStatus, shipping?: { carrier: string; trackingNo: string }) => Promise<void>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -298,10 +301,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setProducts(prev => prev.filter(p => p.id !== id));
   }, []);
 
-  const updateOrderStatus = useCallback(async (id: string, status: OrderStatus) => {
-    const { error } = await supabase.from('orders').update({ status }).eq('id', id);
+  const updateOrderStatus = useCallback(async (
+    id: string, status: OrderStatus, shipping?: { carrier: string; trackingNo: string },
+  ) => {
+    const patch: Record<string, unknown> = { status };
+    if (shipping) {
+      patch.carrier = shipping.carrier;
+      patch.tracking_no = shipping.trackingNo || null;
+    }
+    const { data, error } = await supabase.from('orders').update(patch).eq('id', id).select().single();
     if (error) throw new Error(error.message);
-    setShopOrders(prev => prev.map(o => (o.id === id ? { ...o, status } : o)));
+    // 歷程是資料庫的 trigger 寫的，用回傳的資料覆蓋才拿得到最新事件
+    setShopOrders(prev => prev.map(o => (o.id === id ? toOrder(data as OrderRow) : o)));
   }, []);
 
   const value = useMemo<Store>(() => ({

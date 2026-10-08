@@ -1,4 +1,4 @@
-import type { Category, Order, Product, Shop, Variant } from '../types';
+import type { Category, Product, Shop, Variant } from '../types';
 
 export const CATEGORIES: Category[] = [
   { id: 'women', name: '女生衣著', icon: '👗' },
@@ -77,18 +77,3 @@ export const SEED_PRODUCTS: Product[] = make([
   { shopId: 'shop_daily', title: '316 不鏽鋼保溫瓶 750ml 保冷 24 小時', description: '醫療級 316 不鏽鋼，裝咖啡、果汁都安心。', categoryId: 'sports', images: [art('🥤', '#ccfbf1', '#2dd4bf')], variants: [v('霧黑', 690, 60), v('奶油白', 690, 52), v('湖水綠', 720, 20)], originalPrice: 1090, sold: 13900, rating: 4.9, freeShipping: true, daysAgo: 33 },
   { shopId: 'shop_daily', title: '寶寶矽膠餐盤組 吸盤防翻 分隔設計', description: '食品級矽膠，強力吸盤不怕寶寶打翻。', categoryId: 'baby', images: [art('🍼', '#e0e7ff', '#818cf8')], variants: [v('奶油藍', 520, 40), v('杏桃粉', 520, 38)], originalPrice: 680, sold: 3310, rating: 4.9, freeShipping: false, daysAgo: 19 },
 ]);
-
-export const SEED_ORDERS: Order[] = [
-  {
-    id: 'ord_demo1', shopId: 'shop_gadget', status: 'to_ship', payment: 'cod', shippingFee: 60,
-    lines: [{ productId: 'p001', variantId: 'v1', title: SEED_PRODUCTS[0].title, variantName: '曜石黑', image: SEED_PRODUCTS[0].images[0], price: 1290, qty: 1 }],
-    total: 1350, buyer: { name: '王小明', phone: '0912-345-678', address: '臺北市大安區復興南路一段 100 號' },
-    createdAt: new Date(Date.now() - 3 * 3600000).toISOString(),
-  },
-  {
-    id: 'ord_demo2', shopId: 'shop_gadget', status: 'shipping', payment: 'card', shippingFee: 0,
-    lines: [{ productId: 'p002', variantId: 'v4', title: SEED_PRODUCTS[1].title, variantName: '白色', image: SEED_PRODUCTS[1].images[0], price: 690, qty: 2 }],
-    total: 1380, buyer: { name: '林美玲', phone: '0922-111-222', address: '新北市板橋區文化路二段 50 號' },
-    createdAt: new Date(Date.now() - 30 * 3600000).toISOString(),
-  },
-];

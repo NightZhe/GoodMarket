@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Store } from 'lucide-react';
+import { ChevronDown, Store } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import ProductImage from '../../components/ProductImage';
 import EmptyState from '../../components/EmptyState';
 import { dateText, money } from '../../lib/format';
+import OrderTimeline from '../../components/OrderTimeline';
 import type { OrderStatus } from '../../types';
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -20,6 +21,7 @@ const TABS: { id: OrderStatus | 'all'; label: string }[] = [
 export default function Orders() {
   const { myOrders, getShop, cancelMyOrder, completeMyOrder, refreshMyOrders } = useStore();
   const [tab, setTab] = useState<OrderStatus | 'all'>('all');
+  const [openId, setOpenId] = useState<string | null>(null);
   const list = myOrders.filter(o => tab === 'all' || o.status === tab);
 
   useEffect(() => { void refreshMyOrders(); }, [refreshMyOrders]);
@@ -39,8 +41,9 @@ export default function Orders() {
           <EmptyState icon="🧾" title="還沒有訂單" action={<Link to="/" className="text-brand">去逛逛</Link>} />
         ) : list.map(o => (
           <article key={o.id} className="bg-white md:rounded-md">
-            <header className="flex items-center justify-between border-b border-line px-4 py-3 text-sm">
+            <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line px-4 py-3 text-sm">
               <Link to={`/shop/${o.shopId}`} className="flex items-center gap-1.5 font-medium"><Store size={16} />{getShop(o.shopId)?.name}</Link>
+              <span className="order-3 w-full font-mono text-xs text-muted md:order-none md:w-auto">訂單編號 {o.orderNo}</span>
               <span className="text-brand">{STATUS_LABEL[o.status]}</span>
             </header>
             {o.lines.map(l => (
@@ -53,6 +56,21 @@ export default function Orders() {
                 <p className="text-sm">{money(l.price)}</p>
               </Link>
             ))}
+            {/* 物流進度：買家與賣家看到同一份歷程 */}
+            <div className="border-t border-line px-4 py-3">
+              <button
+                onClick={() => setOpenId(openId === o.id ? null : o.id)}
+                className="flex w-full items-center justify-between text-sm"
+              >
+                <span className="flex items-center gap-1.5">
+                  🚚 <span className="text-muted">運送進度</span>
+                  {o.trackingNo && <span className="font-mono text-xs text-success-text"># {o.trackingNo}</span>}
+                </span>
+                <ChevronDown size={16} className={`text-muted transition ${openId === o.id ? 'rotate-180' : ''}`} />
+              </button>
+              {openId === o.id && <div className="mt-3"><OrderTimeline order={o} /></div>}
+            </div>
+
             <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-[#fffefb] px-4 py-3">
               <span className="text-xs text-muted">{dateText(o.createdAt)}</span>
               <div className="flex items-center gap-3">

@@ -26,7 +26,9 @@ export interface ProductRow {
 }
 
 export interface OrderRow {
-  id: string; shop_id: string; lines: OrderLineRow[]; shipping_fee: number; total: number;
+  id: string; order_no: string; shop_id: string; lines: OrderLineRow[]; shipping_fee: number; total: number;
+  carrier?: string | null; tracking_no?: string | null;
+  events?: { status: string; at: string; carrier?: string | null; trackingNo?: string | null }[];
   status: 'to_ship' | 'shipping' | 'completed' | 'cancelled'; payment: 'cod' | 'card' | 'transfer';
   created_at: string; access_token?: string;
   buyer_name?: string; buyer_phone?: string; buyer_address?: string;
