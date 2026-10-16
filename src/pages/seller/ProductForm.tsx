@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, ImagePlus, Info, Link2, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { CATEGORIES } from '../../data/seed';
@@ -47,6 +47,14 @@ const upload = async (file: File, shopId: string) => {
   return supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl;
 };
 
+/** 存檔後回到哪：商品列表帶來的列表網址（含分頁與篩選）。只收站內的列表路徑，其他一律回列表預設狀態 */
+const LIST_PATH = '/seller/products';
+function returnTo(state: unknown): string {
+  const from = (state as { from?: unknown } | null)?.from;
+  const ok = typeof from === 'string' && (from === LIST_PATH || from.startsWith(`${LIST_PATH}?`));
+  return ok ? from : LIST_PATH;
+}
+
 export default function ProductForm() {
   const { id } = useParams();
   const { myShop, getProduct, saveProduct } = useStore();
@@ -62,6 +70,7 @@ function Form({ existing, shopId, location, onSave }: {
   existing?: Product; shopId: string; location: string; onSave: (p: Product) => Promise<void>;
 }) {
   const navigate = useNavigate();
+  const routeLocation = useLocation();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -176,7 +185,7 @@ function Form({ existing, shopId, location, onSave }: {
         createdAt: existing?.createdAt ?? new Date().toISOString(),
       });
       toast(status === 'active' ? (existing ? '已儲存並上架' : '商品已上架') : '已儲存（下架中）');
-      navigate('/seller/products');
+      navigate(returnTo(routeLocation.state));
     } catch (err) {
       toast(err instanceof Error ? `儲存失敗：${err.message}` : '儲存失敗');
     } finally {

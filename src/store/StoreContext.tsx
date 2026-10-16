@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, type OrderRow, type ProductRow, type ShopRow } from '../lib/supabase';
 import type {
@@ -202,13 +202,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => writeLocal(CART_KEY, cart), [cart]);
   useEffect(() => writeLocal(ORDER_KEYS, orderKeys), [orderKeys]);
 
-  // 商店與商品：公開資料，任何人都讀得到
+  // 商店與商品：公開資料，任何人都讀得到；賣家登入後還會多看到自己下架的商品（RLS）。
+  // 同時可能有好幾次載入在飛（進站、登入、下單後），只採用最後發出的那一次，舊的回來不能蓋掉新的。
+  const loadSeq = useRef(0);
   const reload = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoadError(null);
     const [shopRes, productRes] = await Promise.all([
       supabase.from('shops').select('*').order('created_at'),
       fetchAllProducts(),
     ]);
+    if (seq !== loadSeq.current) return;
     if (shopRes.error || productRes.error) {
       setLoadError(shopRes.error?.message ?? productRes.error?.message ?? '載入失敗');
       setLoading(false);
@@ -219,10 +223,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
   // 登入狀態
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -232,6 +232,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // 登入狀態確定後載入商品，之後登入、登出、換帳號都要重載：
+  // 未登入時 RLS 只回上架商品，不重載的話賣家看不到自己下架的商品（登出後也會殘留）。
+  // 用 user.id 當依賴：token 更新會換 user 物件，但不需要重載。
+  // loading 在重載期間回到 true，讓使用商品數量的畫面（例如分頁）知道現在的資料還不可信。
+  const userId = session?.user.id ?? null;
+  useEffect(() => {
+    if (!authReady) return;
+    setLoading(true);
+    void reload();
+  }, [authReady, userId, reload]);
 
   // 登入後載入自己的商店；登出就清掉
   const user = session?.user ?? null;
