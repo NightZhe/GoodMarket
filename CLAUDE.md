@@ -21,4 +21,16 @@
 ## 部署
 
 推 `main` 由 GitHub Actions 自動部署到 GitHub Pages，不用 `/deploy` skill（那是 Railway 用的）。
-資料庫異動用 Supabase CLI：`npx supabase db query --linked -f <檔案>`（已 link 專案 `hvecvwzpummmlsakxqbw`）。
+
+## 資料庫（2026-10-16 起）
+
+- **來源真相是 `supabase/migrations/`**：基準檔是正式站唯讀匯出，之後每次異動新增一個 migration。
+  `supabase/schema.sql` 已落後正式站，不要拿它重建資料庫。
+- **本機開發**：Docker ＋ `npx supabase start`；`.env.local` 指向 `http://127.0.0.1:54321`（Vite 會蓋過指向正式站的 `.env`）。
+  重置：`npx supabase db reset --local`（會載入 `supabase/seed.sql`，由 `scripts/gen-seed-sql.mts` 產生）。
+- **套用正式站**（`hvecvwzpummmlsakxqbw`，已 link）：只套新的 migration 檔，
+  `npx supabase db query --linked -f supabase/migrations/<檔名>.sql`。不要用 `db push`
+  （正式站沒有基準檔的 migration 紀錄，會重跑基準檔）。
+- **順序**：先套資料庫（只做相容的新增）→ 再推前端。反過來新前端會找不到新結構。
+- `db query --local -f` 不支援一個檔多個指令；本機整檔請用
+  `docker exec -i supabase_db_GoodMarket psql -U postgres -d postgres < 檔案`。
