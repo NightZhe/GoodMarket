@@ -1,7 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, type OrderRow, type ProductRow, type ShopRow } from '../lib/supabase';
-import type { CartItem, Order, OrderStatus, Product, Shop, ShippingMilestone } from '../types';
+import type {
+  CartItem, ImportBatchResult, ImportIndex, Order, OrderStatus, Product, Shop, ShippingMilestone,
+} from '../types';
+import { ImportCallError, toCallError } from '../lib/import/errors';
+import { UPLOAD_TIMEOUT_MS, abortError, withTimeout } from '../lib/import/images';
+import type { ImportApi } from '../lib/import/runner';
 
 // 資料存在 Supabase：賣家登入後上架的商品，所有人都看得到。
 // 唯一還留在瀏覽器的是「購物車」與「買家的訂單憑證」——前者本來就該跟著裝置，
@@ -72,6 +77,59 @@ export interface ShopDraft {
   location: string;
 }
 
+/**
+ * 載入全部商品。API 單次最多回 1000 筆，超過會被靜默截斷；
+ * 一次匯入就可能上百件，全站商品很容易超過，所以要分頁抓到底（排序加 id 讓分頁穩定）。
+ */
+const PRODUCT_PAGE = 1000;
+async function fetchAllProducts(): Promise<{ data: ProductRow[] | null; error: { message: string } | null }> {
+  const rows: ProductRow[] = [];
+  for (let from = 0; ; from += PRODUCT_PAGE) {
+    const { data, error } = await supabase.from('products').select('*')
+      .order('created_at', { ascending: false }).order('id')
+      .range(from, from + PRODUCT_PAGE - 1);
+    if (error) return { data: null, error };
+    rows.push(...(data as ProductRow[]));
+    if (data.length < PRODUCT_PAGE) return { data: rows, error: null };
+  }
+}
+
+/** 匯入相關的 RPC 呼叫逾時；網路卡住時要能轉成「可重新嘗試」，不能無限等 */
+const IMPORT_CALL_TIMEOUT_MS = 60_000;
+
+/**
+ * 呼叫匯入用的 RPC（規格 6.0）。錯誤一律轉成 ImportCallError：
+ * 後端的呼叫層錯誤碼在 error.hint（不可重試），其餘（網路、逾時）可重送。
+ * 使用者離開頁面（signal 被取消）丟 AbortError；逾時是可重試的暫時性錯誤。
+ */
+async function callImportRpc<T>(
+  fn: string, args: Record<string, unknown>, signal?: AbortSignal,
+): Promise<T> {
+  const ctl = new AbortController();
+  let timedOut = false;
+  const onAbort = () => ctl.abort();
+  if (signal?.aborted) throw abortError();
+  signal?.addEventListener('abort', onAbort, { once: true });
+  const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, IMPORT_CALL_TIMEOUT_MS);
+  try {
+    const { data, error } = await supabase.rpc(fn, args).abortSignal(ctl.signal);
+    if (error) {
+      if (signal?.aborted) throw abortError();
+      if (timedOut) throw new ImportCallError('連線逾時', null);
+      throw toCallError(error);
+    }
+    return data as T;
+  } catch (e) {
+    if (e instanceof ImportCallError || (e instanceof DOMException && e.name === 'AbortError' && signal?.aborted)) throw e;
+    if (timedOut) throw new ImportCallError('連線逾時', null);
+    if (signal?.aborted) throw abortError();
+    throw new ImportCallError(e instanceof Error ? e.message : String(e), null);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
 interface Store {
   // 公開資料
   shops: Shop[];
@@ -114,6 +172,14 @@ interface Store {
   updateOrderStatus: (id: string, status: OrderStatus, shipping?: { carrier: string; trackingNo: string }) => Promise<void>;
   /** 賣家手動更新物流節點（不改訂單狀態） */
   addOrderEvent: (id: string, code: ShippingMilestone) => Promise<void>;
+
+  // 蝦皮匯入（所有寫入都走資料庫的四個 RPC，不直接寫 products 表）
+  /** 本店既有的匯入商品、已轉存圖片與最近一次匯入紀錄；預覽用它判斷「新增／更新」 */
+  getImportIndex: (signal?: AbortSignal) => Promise<ImportIndex>;
+  /** 匯入執行器用的 start／batch／finish 三個呼叫 */
+  importApi: ImportApi;
+  /** 上傳一張已壓縮的圖片到自己店的資料夾，回傳公開網址 */
+  uploadImportImage: (blob: Blob) => Promise<string>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -141,7 +207,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setLoadError(null);
     const [shopRes, productRes] = await Promise.all([
       supabase.from('shops').select('*').order('created_at'),
-      supabase.from('products').select('*').order('created_at', { ascending: false }),
+      fetchAllProducts(),
     ]);
     if (shopRes.error || productRes.error) {
       setLoadError(shopRes.error?.message ?? productRes.error?.message ?? '載入失敗');
@@ -323,6 +389,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setShopOrders(prev => prev.map(o => (o.id === id ? { ...o, events: data as Order['events'] } : o)));
   }, []);
 
+  // ── 蝦皮匯入 ─────────────────────────────────────────────
+  const getImportIndex = useCallback(
+    (signal?: AbortSignal) => callImportRpc<ImportIndex>('get_import_index', { p_source: 'shopee' }, signal),
+    [],
+  );
+
+  const importApi = useMemo<ImportApi>(() => ({
+    // 讀一筆最小的資料：有沒有拿到 HTTP 回應才是重點（status 0＝網路層就失敗），不在乎內容
+    reachable: async () => {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 5000);
+      try {
+        const { status } = await supabase.from('shops').select('id', { head: true }).abortSignal(ctl.signal);
+        return status !== 0;
+      } catch {
+        return false;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    start: (meta, signal) => callImportRpc('start_product_import', { p_source: 'shopee', p_meta: meta }, signal),
+    batch: async (importId, items, signal) => {
+      const data = await callImportRpc<{ results: ImportBatchResult[] }>(
+        'import_products_batch', { p_import_id: importId, p_items: items }, signal);
+      return data.results;
+    },
+    finish: (importId, failures, skippedImages, signal) => callImportRpc('finish_product_import', {
+      p_import_id: importId, p_client_failures: failures, p_skipped_images: skippedImages,
+    }, signal),
+  }), []);
+
+  const uploadImportImage = useCallback(async (blob: Blob): Promise<string> => {
+    if (!myShop) throw new Error('請先建立商店');
+    const path = `${myShop.id}/${crypto.randomUUID()}.jpg`;
+    const bucket = supabase.storage.from('product-images');
+    const { error } = await withTimeout(
+      bucket.upload(path, blob, { contentType: 'image/jpeg', upsert: false }),
+      UPLOAD_TIMEOUT_MS, '上傳逾時',
+    );
+    if (error) throw new Error(error.message);
+    return bucket.getPublicUrl(path).data.publicUrl;
+  }, [myShop]);
+
   const value = useMemo<Store>(() => ({
     shops, products, loading, loadError, reload,
     getProduct: id => products.find(p => p.id === id),
@@ -333,11 +442,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     checkout, myOrders, refreshMyOrders, cancelMyOrder, completeMyOrder,
     user, authReady, myShop, signUp, signIn, signOut, createShop,
     saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
+    getImportIndex, importApi, uploadImportImage,
   }), [
     shops, products, loading, loadError, reload, cart, addToCart, setCartQty, removeFromCart,
     checkout, myOrders, refreshMyOrders, cancelMyOrder, completeMyOrder,
     user, authReady, myShop, signUp, signIn, signOut, createShop,
     saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
+    getImportIndex, importApi, uploadImportImage,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

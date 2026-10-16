@@ -9,6 +9,9 @@ export const CATEGORIES: Category[] = [
   { id: 'food', name: '美食伴手禮', icon: '🍪' },
   { id: 'sports', name: '運動戶外', icon: '⛺' },
   { id: 'baby', name: '母嬰用品', icon: '🧸' },
+  { id: 'games', name: '電玩遊戲', icon: '🎮' },
+  { id: 'toys', name: '玩具收藏', icon: '🤖' },
+  { id: 'other', name: '其他', icon: '📦' },
 ];
 
 export const SEED_SHOPS: Shop[] = [

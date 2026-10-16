@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Filter } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
@@ -19,6 +19,13 @@ export default function Search() {
   const cat = params.get('cat') ?? '';
   const sort = (params.get('sort') as Sort) || 'relevance';
   const free = params.get('free') === '1';
+
+  const chipsRef = useRef<HTMLDivElement>(null);
+
+  // 從首頁點第 9 類以後進來時，選取的 chip 在螢幕外；進頁與 ?cat= 改變時把它捲到看得見
+  useEffect(() => {
+    chipsRef.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [cat]);
 
   const set = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -79,12 +86,13 @@ export default function Search() {
 
       <section className="min-w-0 flex-1">
         {/* 手機分類 chips */}
-        <div className="no-scrollbar flex gap-2 overflow-x-auto bg-white px-3 py-2.5 md:hidden">
+        <div ref={chipsRef} className="no-scrollbar flex gap-2 overflow-x-auto bg-white px-3 py-2.5 md:hidden">
           {[{ id: '', name: '全部', icon: '' }, ...CATEGORIES].map(c => (
             <button
               key={c.id || 'all'}
               onClick={() => set('cat', c.id)}
-              className={`shrink-0 rounded-full border px-3 py-1 text-xs ${cat === c.id ? 'border-brand bg-brand-soft text-brand' : 'border-line text-ink'}`}
+              aria-pressed={cat === c.id}
+              className={`shrink-0 rounded-full border px-3 py-1 text-xs ${cat === c.id ? 'border-brand bg-brand-soft font-medium text-brand' : 'border-line text-ink'}`}
             >
               {c.icon} {c.name}
             </button>

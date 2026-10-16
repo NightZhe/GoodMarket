@@ -65,11 +65,11 @@ export default function Home() {
       {/* 分類 */}
       <section className="bg-white md:rounded-md">
         <h2 className="border-b border-line px-4 py-3 text-sm font-medium text-muted">分類</h2>
-        <div className="grid grid-cols-4 md:grid-cols-8">
+        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-11">
           {CATEGORIES.map(c => (
-            <Link key={c.id} to={`/search?cat=${c.id}`} className="flex flex-col items-center gap-2 px-1 py-4 transition hover:bg-brand-soft/60">
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-canvas text-3xl">{c.icon}</span>
-              <span className="text-center text-xs">{c.name}</span>
+            <Link key={c.id} to={`/search?cat=${c.id}`} className="flex flex-col items-center gap-1.5 px-1 py-3 transition hover:bg-brand-soft/60 md:gap-2 md:py-4">
+              <span aria-hidden="true" className="flex h-12 w-12 items-center justify-center rounded-full bg-canvas text-2xl md:h-14 md:w-14 md:text-3xl">{c.icon}</span>
+              <span className="px-1 text-center text-xs">{c.name}</span>
             </Link>
           ))}
         </div>

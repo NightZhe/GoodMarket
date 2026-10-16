@@ -24,6 +24,9 @@ function ProductDetailView({ id }: { id: string }) {
   const product = getProduct(id);
 
   const [imgIdx, setImgIdx] = useState(0);
+  // 主圖來源只有兩種：圖庫（imgIdx）或規格圖。以「最後一次使用者動作」為準：
+  // 選規格 → 規格圖；點縮圖 → 圖庫。程式預選單一規格不算使用者動作，所以預設是圖庫。
+  const [showVariantImage, setShowVariantImage] = useState(false);
   const [variantId, setVariantId] = useState<string | null>(
     product?.variants.length === 1 ? product.variants[0].id : null,
   );
@@ -49,6 +52,12 @@ function ProductDetailView({ id }: { id: string }) {
   const shown = variant ?? cheapestVariant(product.variants); // 未選規格時以最低價那個為準
   const discount = discountOf(shown);
   const stock = variant ? variant.stock : product.variants.reduce((s, v) => s + v.stock, 0);
+  // 選到有規格圖的規格就顯示規格圖；沒有規格圖就退回圖庫（最後點選的縮圖），主圖區不會空白、
+  // 也不會停在上一個規格的圖（F-7.1）
+  const variantImage = showVariantImage ? variant?.image : undefined;
+  const mainSrc = variantImage ?? product.images[imgIdx] ?? product.images[0];
+  const mainAlt = variantImage && variant ? `${product.title}（${variant.name}）` : product.title;
+  const pickThumb = (i: number) => { setImgIdx(i); setShowVariantImage(false); };
   const category = CATEGORIES.find(c => c.id === product.categoryId);
 
   const act = (mode: 'cart' | 'buy') => {
@@ -70,7 +79,7 @@ function ProductDetailView({ id }: { id: string }) {
     <VariantPicker
       product={product}
       variantId={variantId}
-      onPick={vid => { setVariantId(vid); setNeedPick(false); setQty(1); }}
+      onPick={vid => { setVariantId(vid); setShowVariantImage(true); setNeedPick(false); setQty(1); }}
       qty={qty}
       setQty={setQty}
       stock={stock}
@@ -88,23 +97,45 @@ function ProductDetailView({ id }: { id: string }) {
         <span className="truncate">{product.title}</span>
       </nav>
 
-      <section className="grid gap-0 bg-white md:grid-cols-[450px_1fr] md:gap-8 md:rounded-md md:p-5">
-        {/* 圖片 */}
-        <div>
-          <ProductImage src={product.images[imgIdx] ?? product.images[0]} alt={product.title} size="lg" className="w-full" />
+      <section className="grid grid-cols-[minmax(0,1fr)] gap-0 bg-white md:grid-cols-[450px_1fr] md:gap-8 md:rounded-md md:p-5">
+        {/* 圖片：min-w-0 讓手機的縮圖橫捲列不會把整頁撐寬 */}
+        <div className="min-w-0">
+          <div className="relative">
+            <ProductImage
+              src={mainSrc}
+              alt={mainAlt}
+              size="lg"
+              className="w-full"
+              onError={variantImage ? () => setShowVariantImage(false) : undefined}
+            />
+            {variantImage && variant && (
+              <span className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-sm bg-ink/75 px-2 py-1 text-xs text-white">
+                <span className="shrink-0 font-medium">規格圖</span>
+                <span className="truncate">{variant.name}</span>
+              </span>
+            )}
+          </div>
+          <p role="status" className="sr-only">{variantImage && variant ? `已切換為規格圖：${variant.name}` : ''}</p>
           {product.images.length > 1 && (
-            <div className="mt-2 flex gap-2 px-3 md:px-0">
-              {product.images.map((img, i) => (
-                <button
-                  key={i}
-                  onMouseEnter={() => setImgIdx(i)}
-                  onClick={() => setImgIdx(i)}
-                  aria-label={`第 ${i + 1} 張圖`}
-                  className={`w-16 overflow-hidden rounded-sm border-2 md:w-20 ${i === imgIdx ? 'border-brand' : 'border-transparent'}`}
-                >
-                  <ProductImage src={img} alt="" size="sm" className="w-full" />
-                </button>
-              ))}
+            <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto px-3 md:grid md:grid-cols-5 md:overflow-visible md:px-0">
+              {product.images.map((img, i) => {
+                const selected = !variantImage && i === imgIdx;
+                return (
+                  <button
+                    key={i}
+                    onMouseEnter={() => pickThumb(i)}
+                    onClick={e => {
+                      pickThumb(i);
+                      e.currentTarget.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+                    }}
+                    aria-label={`第 ${i + 1} 張圖，共 ${product.images.length} 張`}
+                    aria-current={selected ? 'true' : undefined}
+                    className={`h-14 w-14 shrink-0 overflow-hidden rounded-sm border-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 md:h-auto md:w-full ${selected ? 'border-brand' : 'border-transparent'}`}
+                  >
+                    <ProductImage src={img} alt="" size="sm" className="h-full w-full" />
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -226,7 +257,7 @@ function ProductDetailView({ id }: { id: string }) {
           <div className="animate-fade absolute inset-0 bg-black/45" onClick={() => setSheet(null)} />
           <div className="animate-sheet pb-safe absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-2xl bg-white">
             <div className="flex gap-3 border-b border-line p-4">
-              <ProductImage src={product.images[0]} alt="" size="sm" className="w-20 rounded-md border border-line" />
+              <ProductImage src={variant?.image ?? product.images[0]} alt="" size="sm" className="w-20 rounded-md border border-line" />
               <div className="flex flex-1 flex-col justify-end">
                 <p className="flex items-baseline gap-2">
                   <span className="text-xl text-brand">{variant ? money(variant.price) : priceRange(product.variants.map(v => v.price))}</span>
@@ -267,7 +298,7 @@ function VariantPicker(props: {
               key={v.id}
               disabled={v.stock === 0}
               onClick={() => onPick(v.id)}
-              className={`relative min-w-20 rounded-sm border px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:border-dashed disabled:text-disabled ${
+              className={`relative min-w-20 max-w-full break-words rounded-sm border px-3 py-1.5 text-left text-sm transition disabled:cursor-not-allowed disabled:border-dashed disabled:text-disabled ${
                 v.id === variantId ? 'border-brand text-brand' : 'border-line hover:border-brand hover:text-brand'
               }`}
             >

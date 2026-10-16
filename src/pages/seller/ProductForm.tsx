@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ImagePlus, Link2, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ImagePlus, Info, Link2, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { CATEGORIES } from '../../data/seed';
 import { useToast } from '../../components/Toast';
@@ -10,7 +10,13 @@ import { uid } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
 import type { CategoryId, Product } from '../../types';
 
-const MAX_IMAGES = 6;
+const MAX_IMAGES = 9;
+const MAX_DESCRIPTION = 3000;
+const DESCRIPTION_WARN_FROM = 2700;
+const thousands = (n: number) => n.toLocaleString('en-US');
+
+/** 字數以 code point 計（等同資料庫 char_length），不用 UTF-16 的 string.length */
+const cpLength = (s: string) => [...s].length;
 
 interface VariantRow { id: string; name: string; price: string; original: string; stock: string }
 
@@ -80,20 +86,28 @@ function Form({ existing, shopId, location, onSave }: {
     title: title.trim().length < 5 ? '商品名稱至少 5 個字' : '',
     categoryId: !categoryId ? '請選擇分類' : '',
     images: images.length === 0 ? '至少需要 1 張商品圖片' : '',
-    description: description.trim().length < 10 ? '商品描述至少 10 個字' : '',
     variants: variants.some(v => !v.name.trim() || !(num(v.price) > 0) || Number.isNaN(num(v.stock)))
       ? '每個規格都要填名稱、大於 0 的售價與庫存' : '',
     // 原價是選填，但填了就必須高於該規格自己的售價
     original: variants.some(v => v.original && !(num(v.original) > num(v.price)))
       ? '原價要高於同一列的售價，否則請留空' : '',
   };
+  const imagesFull = images.length >= MAX_IMAGES;
   const hasError = Object.values(errors).some(Boolean);
+  const descLength = cpLength(description);
+  const [descLevel, setDescLevel] = useState<'none' | 'near' | 'full'>('none');
+  const [descAnnounce, setDescAnnounce] = useState('');
+  const descCountTone = descLength > MAX_DESCRIPTION ? 'font-medium text-warning-text'
+    : descLength === MAX_DESCRIPTION ? 'font-medium text-error-text'
+    : descLength >= DESCRIPTION_WARN_FROM ? 'text-warning-text' : 'text-muted';
   const err = (k: keyof typeof errors) => touched && errors[k] ? <p className="mt-1 text-xs text-error">{errors[k]}</p> : null;
 
   const addFiles = async (files: FileList | null) => {
     if (!files) return;
     const room = MAX_IMAGES - images.length;
-    const picked = [...files].filter(f => f.type.startsWith('image/')).slice(0, room);
+    const all = [...files].filter(f => f.type.startsWith('image/'));
+    const picked = all.slice(0, room);
+    if (all.length > picked.length) toast(`最多 ${MAX_IMAGES} 張，已加入前 ${picked.length} 張，其餘略過`);
     if (!picked.length) return;
     setUploading(true);
     try {
@@ -113,6 +127,23 @@ function Form({ existing, shopId, location, onSave }: {
     setUrlInput('');
   };
 
+  /** 輸入超過上限時擋掉；既有描述已超過上限時不截斷，只允許不再變長的編輯（刪除、改寫） */
+  const changeDescription = (next: string) => {
+    const nextLen = cpLength(next);
+    let accepted: string | null = null;
+    if (nextLen <= MAX_DESCRIPTION || nextLen <= descLength) accepted = next;
+    else if (descLength < MAX_DESCRIPTION) accepted = [...next].slice(0, MAX_DESCRIPTION).join('');
+    if (accepted === null) return;
+    setDescription(accepted);
+    // 只在跨進「接近上限」「達上限」的那一刻朗讀一次，不逐字播報
+    const len = cpLength(accepted);
+    const level = len === MAX_DESCRIPTION ? 'full' : len >= DESCRIPTION_WARN_FROM && len < MAX_DESCRIPTION ? 'near' : 'none';
+    if (level !== descLevel) {
+      setDescLevel(level);
+      setDescAnnounce(level === 'full' ? '已達字數上限' : level === 'near' ? `還能輸入 ${MAX_DESCRIPTION - len} 字` : '');
+    }
+  };
+
   const submit = async (status: Product['status']) => {
     setTouched(true);
     if (hasError) {
@@ -122,15 +153,20 @@ function Form({ existing, shopId, location, onSave }: {
     setSaving(true);
     try {
       await onSave({
+      // 編輯頁沒動到的欄位（匯入來的 source、規格的 sourceId／image 等）原樣帶回，不可只寫表單認得的欄位
+      ...existing,
       id: existing?.id ?? uid('p'),
       shopId,
       title: title.trim(),
-      description: description.trim(),
+      // 沒改過的描述原樣保留（不 trim、不截斷）；超過 3,000 字的匯入描述靠這行才不會被動到
+      description: description === existing?.description ? description : description.trim(),
       categoryId: categoryId as CategoryId,
       images,
         variants: variants.map(v => ({
+          ...existing?.variants.find(o => o.id === v.id),
           id: v.id, name: v.name.trim(), price: num(v.price), stock: num(v.stock),
-          ...(v.original ? { originalPrice: num(v.original) } : {}),
+          // 清空原價要真的拿掉；undefined 序列化成 JSON 時會被丟棄
+          originalPrice: v.original ? num(v.original) : undefined,
         })),
       freeShipping,
       status,
@@ -160,13 +196,16 @@ function Form({ existing, shopId, location, onSave }: {
       )}
 
       <section className={card}>
-        <h2 className="font-medium">商品圖片 <span className="text-xs font-normal text-muted">（最多 {MAX_IMAGES} 張，第一張為封面）</span></h2>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="font-medium">商品圖片 <span className="text-xs font-normal text-muted">（最多 {MAX_IMAGES} 張，第一張為封面）</span></h2>
+          <span className={`text-xs tabular-nums ${images.length >= MAX_IMAGES ? 'font-medium text-ink' : 'text-muted'}`}>{images.length}/{MAX_IMAGES}</span>
+        </div>
         <div className="mt-3 flex flex-wrap gap-3">
           {images.map((src, i) => (
             <div key={i} className="group relative w-24">
               <ProductImage src={src} alt={`圖片 ${i + 1}`} size="sm" className="w-24 rounded-md border border-line" />
               {i === 0 && <span className="absolute inset-x-0 bottom-0 rounded-b-md bg-black/55 text-center text-[10px] leading-5 text-white">封面</span>}
-              <button type="button" aria-label="移除圖片" onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+              <button type="button" aria-label={`移除圖片 ${i + 1}`} onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
                 className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white">
                 <X size={14} />
               </button>
@@ -182,13 +221,17 @@ function Form({ existing, shopId, location, onSave }: {
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
         </div>
         <div className="mt-3 flex gap-2">
-          <label className="flex flex-1 items-center gap-2 rounded-sm border border-line px-3">
+          <label className={`flex flex-1 items-center gap-2 rounded-sm border border-line px-3 ${imagesFull ? 'bg-subtle' : ''}`}>
             <Link2 size={16} className="text-muted" />
             <input value={urlInput} onChange={e => setUrlInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }}
-              placeholder="或貼上圖片網址 https://…" className="h-9 flex-1 text-sm outline-none" />
+              disabled={imagesFull} aria-label="圖片網址"
+              placeholder={imagesFull ? `已達上限 ${MAX_IMAGES} 張` : '或貼上圖片網址 https://…'} className="h-9 flex-1 bg-transparent text-sm outline-none" />
           </label>
-          <button type="button" onClick={addUrl} className="rounded-sm border border-line px-3 text-sm hover:bg-canvas">加入</button>
+          <button type="button" onClick={addUrl} disabled={imagesFull} className="rounded-sm border border-line px-3 text-sm hover:bg-canvas disabled:text-disabled disabled:hover:bg-transparent">加入</button>
         </div>
+        {imagesFull && (
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-muted"><Info size={16} aria-hidden="true" className="shrink-0" /> 已達上限 {MAX_IMAGES} 張。要新增請先移除一張。</p>
+        )}
         {err('images')}
       </section>
 
@@ -208,12 +251,25 @@ function Form({ existing, shopId, location, onSave }: {
           </select>
           {err('categoryId')}
         </label>
-        <label className="block text-sm">
-          商品描述
-          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={6} maxLength={2000}
+        <div className="text-sm">
+          <label htmlFor="product-description">商品描述 <span className="text-muted">（選填）</span></label>
+          <textarea id="product-description" value={description} onChange={e => changeDescription(e.target.value)} rows={6}
             placeholder="材質、尺寸、使用方式、注意事項…" className={`mt-1 resize-y ${input}`} />
-          {err('description')}
-        </label>
+          <div className="mt-1 flex justify-between gap-3 text-xs">
+            <span className={descLength === MAX_DESCRIPTION ? 'text-error-text' : 'text-warning-text'}>
+              {descLength === MAX_DESCRIPTION ? '已達字數上限'
+                : descLength >= DESCRIPTION_WARN_FROM && descLength < MAX_DESCRIPTION ? `還能輸入 ${MAX_DESCRIPTION - descLength} 字` : ''}
+            </span>
+            <span className={`tabular-nums ${descCountTone}`}>{thousands(descLength)}/{thousands(MAX_DESCRIPTION)}</span>
+          </div>
+          <p role="status" className="sr-only">{descAnnounce}</p>
+          {descLength > MAX_DESCRIPTION && (
+            <p className="mt-2 flex items-start gap-1.5 rounded-sm border border-warning-border bg-warning-bg px-3 py-2 text-xs text-warning-text">
+              <AlertTriangle size={16} aria-hidden="true" className="shrink-0" />
+              目前 {thousands(descLength)} 字，超過編輯上限 {thousands(MAX_DESCRIPTION)} 字（匯入的描述）。不修改描述可以直接儲存；要增加內容請先刪減。
+            </p>
+          )}
+        </div>
       </section>
 
       <section className={`${card} space-y-3`}>

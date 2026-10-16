@@ -3,12 +3,13 @@ interface Props {
   alt: string;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
+  onError?: () => void;
 }
 
 const emojiSize = { sm: 'text-2xl', md: 'text-6xl', lg: 'text-[9rem]' };
 
 /** 支援一般圖片網址／data URL，以及示範資料用的 "art:emoji:from:to" 插圖 */
-export default function ProductImage({ src, alt, className = '', size = 'md' }: Props) {
+export default function ProductImage({ src, alt, className = '', size = 'md', onError }: Props) {
   if (src.startsWith('art:')) {
     const [, emoji, from, to] = src.split(':');
     return (
@@ -22,5 +23,5 @@ export default function ProductImage({ src, alt, className = '', size = 'md' }: 
       </div>
     );
   }
-  return <img src={src} alt={alt} loading="lazy" className={`aspect-square object-cover ${className}`} />;
+  return <img src={src} alt={alt} loading="lazy" onError={onError} className={`aspect-square object-cover ${className}`} />;
 }

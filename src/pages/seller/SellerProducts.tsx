@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Eye, EyeOff, Pencil, PlusCircle, Search, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, FileSpreadsheet, Pencil, PlusCircle, Search, Trash2 } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useToast } from '../../components/Toast';
 import ProductImage from '../../components/ProductImage';
+import { btnOutline, btnPrimary, btnPrimaryLg } from '../../components/import/ui';
 import { priceRange, soldText } from '../../lib/format';
 import type { Product } from '../../types';
 
@@ -33,9 +34,14 @@ export default function SellerProducts() {
     <div className="mx-auto max-w-5xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">我的商品</h1>
-        <Link to="/seller/products/new" className="flex items-center gap-1.5 rounded-sm bg-brand px-4 py-2 text-sm text-white hover:bg-brand-dark">
-          <PlusCircle size={16} /> 新增商品
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/seller/products/import" className={btnOutline}>
+            <FileSpreadsheet size={16} aria-hidden="true" /> 從蝦皮匯入
+          </Link>
+          <Link to="/seller/products/new" className={btnPrimary}>
+            <PlusCircle size={16} aria-hidden="true" /> 新增商品
+          </Link>
+        </div>
       </div>
 
       <div className="mt-4 rounded-lg bg-white">
@@ -59,9 +65,19 @@ export default function SellerProducts() {
         </div>
 
         {list.length === 0 ? (
-          <div className="py-16 text-center text-sm text-muted">
-            {mine.length === 0 ? <>還沒有商品。<Link to="/seller/products/new" className="text-brand">上架第一件商品 →</Link></> : '沒有符合條件的商品'}
-          </div>
+          mine.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 px-4 py-14 text-center">
+              <span className="text-5xl" aria-hidden="true">🛍️</span>
+              <p className="text-lg font-medium">還沒有商品</p>
+              <p className="max-w-sm text-sm text-muted">有蝦皮賣場的話，可以把商品一次搬過來；商品、規格、庫存、圖片都會帶入。</p>
+              <div className="mt-2 flex w-full max-w-xs flex-col gap-2 md:w-auto md:max-w-none md:flex-row">
+                <Link to="/seller/products/import" className={btnPrimaryLg}>從蝦皮匯入商品</Link>
+                <Link to="/seller/products/new" className={`${btnOutline} px-6 text-base`}>手動新增第一件商品</Link>
+              </div>
+            </div>
+          ) : (
+            <div className="py-16 text-center text-sm text-muted">沒有符合條件的商品</div>
+          )
         ) : (
           <ul className="divide-y divide-line">
             {list.map(p => {

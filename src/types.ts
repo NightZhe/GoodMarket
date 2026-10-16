@@ -1,7 +1,8 @@
 // 領域模型：之後接真後端（Spring Boot / Node）時，這些型別就是 API 契約的起點
 
 export type CategoryId =
-  | 'women' | 'men' | 'beauty' | '3c' | 'home' | 'food' | 'sports' | 'baby';
+  | 'women' | 'men' | 'beauty' | '3c' | 'home' | 'food' | 'sports' | 'baby'
+  | 'games' | 'toys' | 'other';
 
 export interface Category {
   id: CategoryId;
@@ -25,7 +26,12 @@ export interface Variant {
   price: number;         // 售價
   originalPrice?: number; // 原價（選填，用來顯示折扣）；每個規格可各自不同
   stock: number;
+  sourceId?: string;     // 匯入來源的規格 ID（字串）；手動建立的規格沒有
+  image?: string;        // 規格圖（已轉存的好物集網址）；沒有則商品頁維持商品圖
 }
+
+/** 商品來源；手動建立的商品沒有 */
+export type ProductSource = 'shopee';
 
 export interface Product {
   id: string;
@@ -41,6 +47,8 @@ export interface Product {
   freeShipping: boolean;
   status: 'active' | 'hidden';
   createdAt: string;
+  source?: ProductSource;   // 匯入來源；手動建立的商品沒有
+  sourceProductId?: string; // 來源平台的商品 ID（字串，不轉數字）
 }
 
 export interface CartItem {
@@ -90,4 +98,97 @@ export interface Order {
   trackingNo?: string | null; // 物流單號
   events: OrderEvent[];
   createdAt: string;
+}
+
+// ───────── 蝦皮匯入契約（對應 .work 規格 6.0；由 supabase 的 rpc 實作）─────────
+
+/** 已轉存的圖片：url＝好物集 Storage 網址，sourceUrl＝來源（蝦皮）原網址 */
+export interface ImageRef {
+  url: string;
+  sourceUrl: string;
+}
+
+export type ImportFileKind = 'basic_info' | 'sales_info' | 'media_info';
+
+export interface ImportItemVariant {
+  sourceVariantId: string;  // /^\d{1,20}$/，同商品內不重複
+  name: string;             // 非空，同商品內不重複
+  price: number;            // 整數 1–499,999
+  stock: number;            // 整數 ≥ 0
+  image: ImageRef | null;
+}
+
+export interface ImportItem {
+  sourceProductId: string;  // /^\d{1,20}$/
+  title: string;            // 5–60 字（code point）
+  description: string;      // 不設上限
+  categoryId: CategoryId;
+  status: 'active' | 'hidden'; // 只在新增時採用；更新時由資料庫決定
+  images: ImageRef[];       // 1–9；順序即顯示順序
+  variants: ImportItemVariant[]; // ≥ 1
+}
+
+export interface ImportStartMeta {
+  externalShopId: string;
+  files: { kind: ImportFileKind; fileName: string }[];
+  totalProducts: number;    // X + Y，1–500
+  skipped: number;          // 因「略過已售完」不送的件數
+  options: { skipSoldOut: boolean; allHidden: boolean };
+}
+
+/** 呼叫層錯誤碼（error.hint） */
+export type ImportCallErrorCode =
+  | 'NOT_AUTHENTICATED' | 'NO_SHOP' | 'INVALID_PAYLOAD' | 'IMPORT_LIMIT_EXCEEDED'
+  | 'BATCH_TOO_LARGE' | 'IMPORT_NOT_FOUND' | 'IMPORT_CLOSED';
+
+/** 單件錯誤碼（results[].errors[].code）；DESCRIPTION_TOO_LONG 本版不使用但保留 */
+export type ItemErrorCode =
+  | 'SOURCE_ID_INVALID' | 'DUPLICATE_IN_BATCH' | 'TITLE_LENGTH' | 'DESCRIPTION_TOO_LONG'
+  | 'CATEGORY_INVALID' | 'STATUS_INVALID' | 'IMAGE_COUNT' | 'IMAGE_NOT_TRANSFERRED'
+  | 'VARIANT_REQUIRED' | 'VARIANT_NAME_INVALID' | 'VARIANT_NAME_DUPLICATE'
+  | 'VARIANT_SOURCE_DUPLICATE' | 'PRICE_INVALID' | 'STOCK_INVALID' | 'INTERNAL';
+
+export interface ImportBatchResult {
+  sourceProductId: string;
+  outcome: 'created' | 'updated' | 'failed';
+  productId: string | null;               // failed 時為 null
+  status: 'active' | 'hidden' | null;     // 寫入後的上下架；failed 時為 null
+  errors: { code: ItemErrorCode; field: string; message: string }[]; // 非 failed 時為 []
+}
+
+export interface ImportClientFailure {
+  sourceProductId: string;
+  code: string;             // 前端錯誤碼，如 IMAGE_DOWNLOAD_FAILED、MISSING_IN_FILE
+  message: string;
+}
+
+export interface ImportSkippedImage {
+  sourceProductId: string;
+  slot: string;             // 'image:1'…'image:8' 或 'option:〈選項名稱〉'
+  sourceUrl: string;
+  code: 'IMAGE_DOWNLOAD_FAILED' | 'IMAGE_UPLOAD_FAILED';
+}
+
+export interface ImportRecord {
+  importId: string;
+  status: 'running' | 'completed';
+  startedAt: string;
+  finishedAt: string | null;
+  totalProducts: number;
+  created: number;
+  updated: number;
+  failed: number;
+  skipped: number;
+  skippedImages: number;
+}
+
+export interface ImportIndex {
+  products: {
+    sourceProductId: string;
+    productId: string;
+    status: 'active' | 'hidden';
+    variants: { sourceVariantId: string; variantId: string }[];
+  }[];
+  images: { sourceUrl: string; url: string }[];
+  lastImport: ImportRecord | null;
 }

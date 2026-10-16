@@ -20,7 +20,7 @@ export interface ShopRow {
 export interface ProductRow {
   id: string; shop_id: string; title: string; description: string; category_id: string;
   images: string[];
-  variants: { id: string; name: string; price: number; originalPrice?: number; stock: number }[];
+  variants: { id: string; name: string; price: number; originalPrice?: number; stock: number; sourceId?: string; image?: string }[];
   sold: number; rating: number; location: string;
   free_shipping: boolean; status: 'active' | 'hidden'; created_at: string;
 }

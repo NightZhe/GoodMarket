@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ClipboardList, ExternalLink, LayoutDashboard, LogOut, Package, PlusCircle } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 
@@ -12,6 +12,9 @@ const NAV = [
 export default function SellerLayout() {
   const { myShop, signOut, shopOrders } = useStore();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // 匯入精靈是「我的商品」底下的流程，側欄與分頁列都要高亮「我的商品」
+  const isOn = (to: string, isActive: boolean) => isActive || (to === '/seller/products' && pathname.startsWith('/seller/products/import'));
   const shop = myShop!; // SellerGate 已確保登入且有店
   const toShip = shopOrders.filter(o => o.status === 'to_ship').length;
 
@@ -39,7 +42,7 @@ export default function SellerLayout() {
         <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 border-r border-line bg-white p-3 md:block">
           {NAV.map(n => (
             <NavLink key={n.to} to={n.to} end={n.end}
-              className={({ isActive }) => `mb-1 flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition ${isActive ? 'bg-brand-soft font-medium text-brand' : 'hover:bg-canvas'}`}>
+              className={({ isActive }) => `mb-1 flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition ${isOn(n.to, isActive) ? 'bg-brand-soft font-medium text-brand' : 'hover:bg-canvas'}`}>
               <n.icon size={18} />
               {n.label}
               {n.to === '/seller/orders' && toShip > 0 && (
@@ -58,7 +61,7 @@ export default function SellerLayout() {
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-white md:hidden">
         {NAV.map(n => (
           <NavLink key={n.to} to={n.to} end={n.end}
-            className={({ isActive }) => `relative flex flex-col items-center gap-0.5 py-2 text-[11px] ${isActive ? 'text-brand' : 'text-muted'}`}>
+            className={({ isActive }) => `relative flex flex-col items-center gap-0.5 py-2 text-[11px] ${isOn(n.to, isActive) ? 'text-brand' : 'text-muted'}`}>
             <n.icon size={22} />
             {n.label}
             {n.to === '/seller/orders' && toShip > 0 && (
