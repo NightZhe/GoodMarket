@@ -32,5 +32,8 @@
   `npx supabase db query --linked -f supabase/migrations/<檔名>.sql`。不要用 `db push`
   （正式站沒有基準檔的 migration 紀錄，會重跑基準檔）。
 - **順序**：先套資料庫（只做相容的新增）→ 再推前端。反過來新前端會找不到新結構。
+  **例外：migration 會「收回」權限時，反過來做**（2026-10-16 使用者拍板，商品評價那次）。
+  例如收回 orders 的欄位權限：舊前端的 `select('*')` 一碰到就 403。這時先推「不依賴新權限、
+  缺新 RPC 也能降級」的前端，再套 migration。推之前要在本機驗過「新前端＋舊資料庫」不會壞。
 - `db query --local -f` 不支援一個檔多個指令；本機整檔請用
   `docker exec -i supabase_db_GoodMarket psql -U postgres -d postgres < 檔案`。
