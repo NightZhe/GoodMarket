@@ -44,7 +44,8 @@ export default function Search() {
       return `${p.title} ${p.description} ${shopName}`.toLowerCase().includes(kw);
     });
     const by: Record<Sort, (a: Product, b: Product) => number> = {
-      relevance: (a, b) => b.sold * b.rating - a.sold * a.rating,
+      // 綜合只看銷量（決策 A-6）：舊的「銷量 × 評分」用的是從來沒更新過的假評分，改用真實評價後不再乘評分
+      relevance: (a, b) => b.sold - a.sold,
       newest: (a, b) => b.createdAt.localeCompare(a.createdAt),
       sales: (a, b) => b.sold - a.sold,
       price_asc: (a, b) => minPrice(a) - minPrice(b),

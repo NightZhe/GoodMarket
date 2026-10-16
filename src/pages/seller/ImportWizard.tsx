@@ -166,7 +166,10 @@ export default function ImportWizard() {
 
       {blocker.state === 'blocked' && (
         <LeaveDialog
-          written={(snap?.created ?? 0) + (snap?.updated ?? 0)}
+          title="要離開嗎？匯入還沒完成"
+          description={`現在離開會中斷匯入。已經寫入的 ${((snap?.created ?? 0) + (snap?.updated ?? 0)).toLocaleString('en-US')} 件商品會保留；沒做完的部分，之後再匯入同一批檔案就會接著完成。`}
+          stayLabel="留在這裡"
+          leaveLabel="離開並中斷"
           onStay={() => blocker.reset()}
           onLeave={() => { runner?.abort(); blocker.proceed(); }}
         />

@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ClipboardList, ExternalLink, LayoutDashboard, LogOut, Package, PlusCircle } from 'lucide-react';
+import { ClipboardList, ExternalLink, LayoutDashboard, LogOut, Package, PlusCircle, Star } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 
 const NAV = [
@@ -7,6 +7,7 @@ const NAV = [
   { to: '/seller/products', label: '我的商品', icon: Package, end: true },
   { to: '/seller/products/new', label: '新增商品', icon: PlusCircle, end: true },
   { to: '/seller/orders', label: '訂單管理', icon: ClipboardList, end: true },
+  { to: '/seller/reviews', label: '評價管理', icon: Star, end: true },
 ];
 
 export default function SellerLayout() {
@@ -53,15 +54,15 @@ export default function SellerLayout() {
           <Link to="/" className="mt-6 block border-t border-line px-3 pt-4 text-xs text-muted hover:text-brand">← 回到買家首頁</Link>
         </aside>
 
-        <main className="min-w-0 flex-1 p-3 pb-24 md:p-6">
+        <main className="min-w-0 flex-1 p-3 pb-28 md:p-6">
           <Outlet />
         </main>
       </div>
 
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-white md:hidden">
+      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-white md:hidden">
         {NAV.map(n => (
           <NavLink key={n.to} to={n.to} end={n.end}
-            className={({ isActive }) => `relative flex flex-col items-center gap-0.5 py-2 text-[11px] ${isOn(n.to, isActive) ? 'text-brand' : 'text-muted'}`}>
+            className={({ isActive }) => `relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 py-2 text-center text-[11px] leading-tight ${isOn(n.to, isActive) ? 'text-brand' : 'text-muted'}`}>
             <n.icon size={22} />
             {n.label}
             {n.to === '/seller/orders' && toShip > 0 && (

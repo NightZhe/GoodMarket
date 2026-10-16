@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, PlusCircle } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import ProductImage from '../../components/ProductImage';
 import { money, soldText } from '../../lib/format';
+import { getSellerReviewCounts } from '../../lib/reviews/api';
+import { useRefreshOnVisible } from '../../store/ReviewsContext';
 
 export default function SellerDashboard() {
   const { myShop, products, shopOrders } = useStore();
@@ -26,6 +29,17 @@ export default function SellerDashboard() {
     return { label: `${d.getMonth() + 1}/${d.getDate()}`, sum };
   });
   const peak = Math.max(1, ...days.map(d => d.sum));
+  // 待回覆評價：資料庫算好（未回覆、未被隱藏）。null＝載入中或失敗，顯示「–」，不當成 0
+  const [unreplied, setUnreplied] = useState<{ n: number | null; failed: boolean }>({ n: null, failed: false });
+  const loadUnreplied = () => {
+    getSellerReviewCounts().then(
+      c => setUnreplied({ n: c.unreplied_count, failed: false }),
+      () => setUnreplied(prev => ({ n: prev.n, failed: prev.n === null })),
+    );
+  };
+  useEffect(loadUnreplied, []);
+  useRefreshOnVisible(loadUnreplied);
+
   const top = [...mine].sort((a, b) => b.sold - a.sold).slice(0, 5);
 
   return (
@@ -43,11 +57,16 @@ export default function SellerDashboard() {
       {/* 待辦 */}
       <section className="rounded-lg bg-white p-4 md:p-5">
         <h2 className="font-medium">待辦事項</h2>
-        <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md bg-line md:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md bg-line md:grid-cols-5">
           <Todo to="/seller/orders" n={toShip} label="待出貨" highlight={toShip > 0} />
           <Todo to="/seller/orders" n={shopOrders.filter(o => o.status === 'shipping').length} label="運送中" />
           <Todo to="/seller/products" n={active} label="上架中商品" />
           <Todo to="/seller/products" n={lowStock.length} label="庫存偏低" highlight={lowStock.length > 0} />
+          <Todo
+            to="/seller/reviews?tab=unreplied" n={unreplied.n} label="待回覆評價" highlight={(unreplied.n ?? 0) > 0}
+            className="col-span-2 md:col-span-1"
+            ariaLabel={unreplied.n === null && unreplied.failed ? '待回覆評價，無法取得數量' : undefined}
+          />
         </div>
       </section>
 
@@ -112,10 +131,12 @@ export default function SellerDashboard() {
   );
 }
 
-function Todo({ to, n, label, highlight }: { to: string; n: number; label: string; highlight?: boolean }) {
+function Todo({ to, n, label, highlight, className = '', ariaLabel }: {
+  to: string; n: number | null; label: string; highlight?: boolean; className?: string; ariaLabel?: string;
+}) {
   return (
-    <Link to={to} className="group flex flex-col items-center gap-1 bg-white py-5 transition hover:bg-brand-soft/50">
-      <span className={`text-2xl font-semibold ${highlight ? 'text-brand' : ''}`}>{n}</span>
+    <Link to={to} aria-label={ariaLabel} className={`group flex flex-col items-center gap-1 bg-white py-5 transition hover:bg-brand-soft/50 ${className}`}>
+      <span className={`text-2xl font-semibold ${n === null ? 'text-muted' : highlight ? 'text-brand' : ''}`}>{n ?? '–'}</span>
       <span className="flex items-center text-xs text-muted">{label}<ChevronRight size={12} className="opacity-0 transition group-hover:opacity-100" /></span>
     </Link>
   );

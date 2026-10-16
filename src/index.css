@@ -60,5 +60,5 @@ button:disabled { cursor: not-allowed; }
 .animate-toast { animation: toast 1.8s ease-out forwards; }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-sheet, .animate-fade { animation: none; }
+  .animate-sheet, .animate-fade, .animate-toast { animation: none; }
 }

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 
 const Ctx = createContext<(msg: string) => void>(() => {});
@@ -6,6 +6,13 @@ const Ctx = createContext<(msg: string) => void>(() => {});
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<{ msg: string; key: number } | null>(null);
   const show = useCallback((msg: string) => setToast({ msg, key: Date.now() }), []);
+
+  // 「減少動態效果」時 toast 不播動畫，onAnimationEnd 就不會觸發；用計時器收掉，不然會一直掛在畫面上
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 1900);
+    return () => clearTimeout(t);
+  }, [toast]);
   return (
     <Ctx.Provider value={show}>
       {children}

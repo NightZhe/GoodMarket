@@ -27,7 +27,9 @@ export default function BuyerLayout() {
   };
 
   // 商品頁、結帳頁在手機上有自己的底部操作列，不顯示全站導覽
-  const hideTabBar = pathname.startsWith('/product/') || pathname === '/checkout' || pathname === '/cart';
+  // 評價表單（/orders/:id/review）手機底部有自己的送出列，也不顯示全站導覽
+  const hideTabBar = pathname.startsWith('/product/') || pathname === '/checkout' || pathname === '/cart'
+    || /^\/orders\/[^/]+\/review$/.test(pathname);
 
   return (
     <div className="flex min-h-dvh flex-col">

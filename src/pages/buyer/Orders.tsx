@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Store } from 'lucide-react';
+import { ChevronDown, Store, TriangleAlert } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import { useRefreshOnVisible, useReviews } from '../../store/ReviewsContext';
+import OrderReviewRow, { OrderReviewRowSkeleton } from '../../components/reviews/OrderReviewRow';
 import ProductImage from '../../components/ProductImage';
 import EmptyState from '../../components/EmptyState';
 import { dateText, money } from '../../lib/format';
@@ -22,9 +24,21 @@ export default function Orders() {
   const { myOrders, getShop, cancelMyOrder, completeMyOrder, refreshMyOrders } = useStore();
   const [tab, setTab] = useState<OrderStatus | 'all'>('all');
   const [openId, setOpenId] = useState<string | null>(null);
+  const { statusState, statusOf, refreshStatus } = useReviews();
   const list = myOrders.filter(o => tab === 'all' || o.status === tab);
+  const hasCompleted = list.some(o => o.status === 'completed');
 
   useEffect(() => { void refreshMyOrders(); }, [refreshMyOrders]);
+  // 評價期限會隨時間跨過：進頁與從背景回來都重新取得（保留舊畫面，不閃骨架）。
+  // 「已完成」的訂單集合變了（按了「完成訂單」）也要重新取得，否則剛完成的訂單要重新整理才有評價列
+  const completedKey = myOrders.filter(o => o.status === 'completed').map(o => o.id).join(',');
+  const [checkedKey, setCheckedKey] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    void refreshStatus(true).then(() => { if (current) setCheckedKey(completedKey); });
+    return () => { current = false; };
+  }, [refreshStatus, completedKey]);
+  useRefreshOnVisible(() => { void refreshStatus(true); });
 
   return (
     <div className="mx-auto max-w-4xl md:px-4 md:pt-6">
@@ -36,6 +50,18 @@ export default function Orders() {
           </button>
         ))}
       </div>
+      {statusState === 'error' && hasCompleted && (
+        <div className="mt-2 flex items-start gap-2 bg-warning-bg px-4 py-2.5 text-sm text-ink md:mt-3 md:rounded-md">
+          <TriangleAlert size={16} className="mt-0.5 shrink-0 text-warning-text" aria-hidden="true" />
+          <span className="flex-1">評價狀態暫時載入失敗</span>
+          <button
+            type="button" onClick={() => void refreshStatus()}
+            className="-my-2 min-h-11 px-2 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          >
+            重試
+          </button>
+        </div>
+      )}
       <div className="mt-2 space-y-2 md:mt-3 md:space-y-3">
         {list.length === 0 ? (
           <EmptyState icon="🧾" title="還沒有訂單" action={<Link to="/" className="text-brand">去逛逛</Link>} />
@@ -70,6 +96,14 @@ export default function Orders() {
               </button>
               {openId === o.id && <div className="mt-3"><OrderTimeline order={o} /></div>}
             </div>
+
+            {o.status === 'completed' && (() => {
+              const rs = statusOf(o.id);
+              if (rs) return <OrderReviewRow status={rs} />;
+              // 還沒取得這張單的評價狀態（剛完成、或第一次載入）時先放骨架，取得後才決定要不要顯示
+              return statusState === 'loading' || (statusState !== 'error' && checkedKey !== completedKey)
+                ? <OrderReviewRowSkeleton /> : null;
+            })()}
 
             <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-[#fffefb] px-4 py-3">
               <span className="text-xs text-muted">{dateText(o.createdAt)}</span>

@@ -3,15 +3,21 @@ import { Calendar, Package, Star } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import ProductCard from '../../components/ProductCard';
 import EmptyState from '../../components/EmptyState';
+import { ratingText } from '../../lib/reviews/format';
+import { useReviews } from '../../store/ReviewsContext';
 
 export default function ShopPage() {
   const { id = '' } = useParams();
   const { getShop, products } = useStore();
+  const { shopStat, summaryState } = useReviews();
   const shop = getShop(id);
   if (!shop) {
     return <div className="mx-auto max-w-6xl p-3 md:p-6"><EmptyState icon="🏚️" title="找不到這家商店" action={<Link to="/" className="text-brand">回首頁</Link>} /></div>;
   }
   const list = products.filter(p => p.shopId === id && p.status === 'active');
+  const stat = shopStat(id);
+  // 沒有評價才寫「尚無」；資料還沒回來或載入失敗時寫「–」，不對有評價的店說謊
+  const ratingValue = stat ? ratingText(stat.avg) : summaryState === 'ready' ? '尚無' : '–';
 
   return (
     <div className="mx-auto max-w-6xl md:px-4 md:pt-6">
@@ -25,7 +31,7 @@ export default function ShopPage() {
         </div>
         <div className="grid flex-1 grid-cols-3 gap-3 text-sm">
           <Stat icon={<Package size={16} />} label="商品" value={String(list.length)} />
-          <Stat icon={<Star size={16} />} label="評價" value={shop.rating.toFixed(1)} />
+          <Stat icon={<Star size={16} />} label="評價" value={ratingValue} />
           <Stat icon={<Calendar size={16} />} label="加入" value={new Date(shop.joinedAt).getFullYear() + ' 年'} />
           <p className="col-span-3 text-muted">{shop.description}</p>
         </div>

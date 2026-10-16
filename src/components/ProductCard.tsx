@@ -3,12 +3,16 @@ import { MapPin, Star } from 'lucide-react';
 import type { Product } from '../types';
 import ProductImage from './ProductImage';
 import { cheapestVariant, discountOf, money, soldText } from '../lib/format';
+import { ratingText } from '../lib/reviews/format';
+import { useReviews } from '../store/ReviewsContext';
 
 export default function ProductCard({ product }: { product: Product }) {
   const cheapest = cheapestVariant(product.variants);
   const min = cheapest?.price ?? 0;
   const discount = discountOf(cheapest);
   const soldOut = product.variants.every(v => v.stock === 0);
+  // 評分來自真實評價；沒有評價（或還沒載入）就不顯示星星，不會閃一個假的分數
+  const stat = useReviews().productStat(product.id);
 
   return (
     <Link
@@ -42,12 +46,14 @@ export default function ProductCard({ product }: { product: Product }) {
           </span>
           <span className="text-[11px] text-muted">已售 {soldText(product.sold)}</span>
         </div>
-        <div className="flex items-center justify-between text-[11px] text-muted">
-          <span className="flex items-center gap-0.5">
-            <Star size={11} className="fill-star text-star" />
-            {product.rating.toFixed(1)}
-          </span>
-          <span className="flex items-center gap-0.5">
+        <div className="flex items-center text-[11px] text-muted">
+          {stat && (
+            <span className="flex items-center gap-0.5">
+              <Star size={11} className="fill-star text-star" aria-hidden="true" />
+              <span className="sr-only">評分 </span>{ratingText(stat.avg)}
+            </span>
+          )}
+          <span className="ml-auto flex items-center gap-0.5">
             <MapPin size={11} />
             {product.location}
           </span>

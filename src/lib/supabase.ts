@@ -34,6 +34,20 @@ export interface OrderRow {
   buyer_name?: string; buyer_phone?: string; buyer_address?: string;
 }
 
+/**
+ * 賣家（authenticated）讀到的訂單：不含買家的訂單憑證 access_token。
+ * 憑證只在 place_order 回傳給下單的買家，賣家的瀏覽器不該載到任何一張單的憑證。
+ */
+export type ShopOrderRow = Omit<OrderRow, 'access_token'>;
+
+const SHOP_ORDER_FIELDS = [
+  'id', 'order_no', 'shop_id', 'lines', 'shipping_fee', 'total', 'status', 'payment', 'created_at',
+  'carrier', 'tracking_no', 'events', 'buyer_name', 'buyer_phone', 'buyer_address',
+] as const satisfies readonly (keyof ShopOrderRow)[];
+
+/** 賣家端查詢 orders 時的 select 欄位清單（明確列出，禁止 select('*')） */
+export const SHOP_ORDER_COLUMNS = SHOP_ORDER_FIELDS.join(',');
+
 interface OrderLineRow {
   productId: string; variantId: string; title: string; variantName: string;
   image: string; price: number; qty: number;

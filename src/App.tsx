@@ -14,12 +14,16 @@ import Cart from './pages/buyer/Cart';
 import Checkout from './pages/buyer/Checkout';
 import Orders from './pages/buyer/Orders';
 import ShopPage from './pages/buyer/ShopPage';
+import ReviewForm from './pages/buyer/ReviewForm';
+import ReviewsOverview from './pages/buyer/ReviewsOverview';
+import { ReviewsProvider } from './store/ReviewsContext';
 import SellerGate from './pages/seller/SellerGate';
 import SellerLayout from './pages/seller/SellerLayout';
 import SellerDashboard from './pages/seller/SellerDashboard';
 import SellerProducts from './pages/seller/SellerProducts';
 import ProductForm from './pages/seller/ProductForm';
 import SellerOrders from './pages/seller/SellerOrders';
+import SellerReviews from './pages/seller/SellerReviews';
 
 // 匯入精靈很少用到，且會載入約 650 KB 的 Excel 解析程式，所以整頁延後載入
 const ImportWizard = lazy(() => import('./pages/seller/ImportWizard'));
@@ -51,10 +55,12 @@ const router = createHashRouter(createRoutesFromElements(
       <Route index element={<Home />} />
       <Route path="search" element={<Search />} />
       <Route path="product/:id" element={<ProductDetail />} />
+      <Route path="product/:id/reviews" element={<ReviewsOverview />} />
       <Route path="shop/:id" element={<ShopPage />} />
       <Route path="cart" element={<Cart />} />
       <Route path="checkout" element={<Checkout />} />
       <Route path="orders" element={<Orders />} />
+      <Route path="orders/:orderId/review" element={<ReviewForm />} />
     </Route>
 
     {/* 賣家中心（後台） */}
@@ -66,6 +72,7 @@ const router = createHashRouter(createRoutesFromElements(
         <Route path="products/import" element={<Suspense fallback={<PageLoading />}><ImportWizard /></Suspense>} />
         <Route path="products/:id/edit" element={<ProductForm />} />
         <Route path="orders" element={<SellerOrders />} />
+        <Route path="reviews" element={<SellerReviews />} />
       </Route>
     </Route>
 
@@ -79,9 +86,11 @@ export default function App() {
 
   return (
     <StoreProvider>
-      <ToastProvider>
-        <RouterProvider router={router} />
-      </ToastProvider>
+      <ReviewsProvider>
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
+      </ReviewsProvider>
     </StoreProvider>
   );
 }

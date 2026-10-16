@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, MapPin, MessageCircle, ShoppingCart, Star, Store, Truck, X } from 'lucide-react';
 import { useStore, FREE_SHIPPING_THRESHOLD, SHIPPING_FEE } from '../../store/StoreContext';
+import { useReviews } from '../../store/ReviewsContext';
+import ProductReviewsSection from '../../components/reviews/ProductReviewsSection';
+import { ratingText } from '../../lib/reviews/format';
 import { CATEGORIES } from '../../data/seed';
 import ProductImage from '../../components/ProductImage';
 import ProductCard from '../../components/ProductCard';
@@ -21,6 +24,7 @@ function ProductDetailView({ id }: { id: string }) {
   const { getProduct, getShop, products, addToCart } = useStore();
   const navigate = useNavigate();
   const toast = useToast();
+  const { productStat, shopStat, summaryState } = useReviews();
   const product = getProduct(id);
 
   const [imgIdx, setImgIdx] = useState(0);
@@ -59,6 +63,12 @@ function ProductDetailView({ id }: { id: string }) {
   const mainAlt = variantImage && variant ? `${product.title}（${variant.name}）` : product.title;
   const pickThumb = (i: number) => { setImgIdx(i); setShowVariantImage(false); };
   const category = CATEGORIES.find(c => c.id === product.categoryId);
+  const stat = productStat(product.id);
+  const shopRating = shopStat(product.shopId);
+  const goReviews = () => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById('reviews')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
+  };
 
   const act = (mode: 'cart' | 'buy') => {
     if (!variant) {
@@ -144,11 +154,24 @@ function ProductDetailView({ id }: { id: string }) {
         <div className="px-3 py-3 md:px-0 md:py-0">
           <h1 className="text-lg leading-snug md:text-xl">{product.title}</h1>
           <div className="mt-2 flex items-center gap-3 text-sm">
-            <span className="flex items-center gap-1 text-brand">
-              <span className="underline underline-offset-2">{product.rating.toFixed(1)}</span>
-              <Star size={14} className="fill-brand" />
-            </span>
-            <span className="h-4 w-px bg-line" />
+            {/* 評價資料還沒回來或載入失敗時整段不顯示：不能對有評價的商品說「尚無評價」 */}
+            {stat ? (
+              <>
+                <button
+                  type="button" onClick={goReviews}
+                  className="-my-3 inline-flex min-h-11 items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                >
+                  <span className="flex items-center gap-1 font-medium">{ratingText(stat.avg)}<Star size={14} className="fill-star text-star" aria-hidden="true" /></span>
+                  <span className="underline underline-offset-2">{stat.count} 則評價</span>
+                </button>
+                <span className="h-4 w-px bg-line" />
+              </>
+            ) : summaryState === 'ready' && (
+              <>
+                <span className="text-muted">尚無評價</span>
+                <span className="h-4 w-px bg-line" />
+              </>
+            )}
             <span><span className="underline underline-offset-2">{soldText(product.sold)}</span> <span className="text-muted">已售出</span></span>
           </div>
 
@@ -208,8 +231,10 @@ function ProductDetailView({ id }: { id: string }) {
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium">{shop.name}</p>
-            <p className="truncate text-xs text-muted">{shop.location}・評價 {shop.rating.toFixed(1)}</p>
-            <div className="mt-2 flex gap-2">
+            <p className="break-words text-xs text-muted">
+              {shop.location}{shopRating ? `・評價 ${ratingText(shopRating.avg)}` : summaryState === 'ready' ? '・尚無評價' : ''}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
               <button onClick={() => toast('示範版尚未開放聊聊')} className="flex items-center gap-1 rounded-sm border border-brand bg-brand-soft px-3 py-1 text-xs text-brand">
                 <MessageCircle size={14} /> 聊聊
               </button>
@@ -220,6 +245,8 @@ function ProductDetailView({ id }: { id: string }) {
           </div>
         </section>
       )}
+
+      <ProductReviewsSection productId={product.id} />
 
       <section className="mt-2 bg-white p-4 md:mt-4 md:rounded-md md:p-6">
         <h2 className="bg-[#fafafa] px-3 py-2.5 text-base font-medium">商品詳情</h2>

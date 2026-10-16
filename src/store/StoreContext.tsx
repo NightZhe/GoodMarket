@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase, type OrderRow, type ProductRow, type ShopRow } from '../lib/supabase';
+import { supabase, SHOP_ORDER_COLUMNS, type OrderRow, type ProductRow, type ShopOrderRow, type ShopRow } from '../lib/supabase';
 import type {
   CartItem, ImportBatchResult, ImportIndex, Order, OrderStatus, Product, Shop, ShippingMilestone,
 } from '../types';
@@ -51,7 +51,7 @@ const toProduct = (r: ProductRow): Product => ({
   location: r.location, freeShipping: r.free_shipping, status: r.status, createdAt: r.created_at,
 });
 
-const toOrder = (r: OrderRow): Order => ({
+const toOrder = (r: ShopOrderRow): Order => ({
   id: r.id, orderNo: r.order_no, shopId: r.shop_id, lines: r.lines,
   shippingFee: r.shipping_fee, total: r.total,
   status: r.status, payment: r.payment, createdAt: r.created_at,
@@ -61,7 +61,7 @@ const toOrder = (r: OrderRow): Order => ({
 });
 
 /** 買家手上的訂單憑證：沒有帳號，靠這組 (id, token) 回來查自己的單 */
-interface OrderKey { id: string; token: string }
+export interface OrderKey { id: string; token: string }
 
 export interface CheckoutInput {
   items: CartItem[];
@@ -150,6 +150,10 @@ interface Store {
   // 買家訂單
   checkout: (input: CheckoutInput) => Promise<Order[]>;
   myOrders: Order[];
+  /** 這台瀏覽器裡的訂單憑證；評價用它向資料庫證明「這張訂單是我的」 */
+  orderKeys: OrderKey[];
+  /** 訂單列表至少載入過一次（成功或失敗都算）；沒有憑證時一開始就是 true */
+  myOrdersLoaded: boolean;
   refreshMyOrders: () => Promise<void>;
   cancelMyOrder: (id: string) => Promise<void>;
   completeMyOrder: (id: string) => Promise<void>;
@@ -193,6 +197,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>(() => readLocal<CartItem[]>(CART_KEY, []));
   const [orderKeys, setOrderKeys] = useState<OrderKey[]>(() => readLocal<OrderKey[]>(ORDER_KEYS, []));
   const [myOrders, setMyOrders] = useState<Order[]>([]);
+  const [myOrdersLoaded, setMyOrdersLoaded] = useState(() => readLocal<OrderKey[]>(ORDER_KEYS, []).length === 0);
 
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -261,9 +266,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const refreshShopOrders = useCallback(async () => {
     if (!myShop) return;
-    const { data, error } = await supabase.from('orders').select('*')
+    const { data, error } = await supabase.from('orders').select(SHOP_ORDER_COLUMNS)
       .eq('shop_id', myShop.id).order('created_at', { ascending: false });
-    if (!error && data) setShopOrders((data as OrderRow[]).map(toOrder));
+    if (!error && data) setShopOrders((data as unknown as ShopOrderRow[]).map(toOrder));
   }, [myShop]);
 
   useEffect(() => { void refreshShopOrders(); }, [refreshShopOrders]);
@@ -271,10 +276,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const refreshMyOrders = useCallback(async () => {
     if (orderKeys.length === 0) {
       setMyOrders([]);
+      setMyOrdersLoaded(true);
       return;
     }
     const { data, error } = await supabase.rpc('get_my_orders', { p_keys: orderKeys });
     if (!error && data) setMyOrders((data as OrderRow[]).map(toOrder));
+    setMyOrdersLoaded(true);
   }, [orderKeys]);
 
   useEffect(() => { void refreshMyOrders(); }, [refreshMyOrders]);
@@ -388,10 +395,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       patch.carrier = shipping.carrier;
       patch.tracking_no = shipping.trackingNo || null;
     }
-    const { data, error } = await supabase.from('orders').update(patch).eq('id', id).select().single();
+    const { data, error } = await supabase.from('orders').update(patch).eq('id', id).select(SHOP_ORDER_COLUMNS).single();
     if (error) throw new Error(error.message);
     // 歷程是資料庫的 trigger 寫的，用回傳的資料覆蓋才拿得到最新事件
-    setShopOrders(prev => prev.map(o => (o.id === id ? toOrder(data as OrderRow) : o)));
+    setShopOrders(prev => prev.map(o => (o.id === id ? toOrder(data as unknown as ShopOrderRow) : o)));
   }, []);
 
   const addOrderEvent = useCallback(async (id: string, code: ShippingMilestone) => {
@@ -450,13 +457,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     cart,
     cartCount: cart.reduce((s, c) => s + c.qty, 0),
     addToCart, setCartQty, removeFromCart,
-    checkout, myOrders, refreshMyOrders, cancelMyOrder, completeMyOrder,
+    checkout, myOrders, orderKeys, myOrdersLoaded, refreshMyOrders, cancelMyOrder, completeMyOrder,
     user, authReady, myShop, signUp, signIn, signOut, createShop,
     saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
     getImportIndex, importApi, uploadImportImage,
   }), [
     shops, products, loading, loadError, reload, cart, addToCart, setCartQty, removeFromCart,
-    checkout, myOrders, refreshMyOrders, cancelMyOrder, completeMyOrder,
+    checkout, myOrders, orderKeys, myOrdersLoaded, refreshMyOrders, cancelMyOrder, completeMyOrder,
     user, authReady, myShop, signUp, signIn, signOut, createShop,
     saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
     getImportIndex, importApi, uploadImportImage,
