@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronDown, MapPin, Phone, Receipt, Truck, User } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import { useRefreshOnVisible } from '../../store/ReviewsContext';
+import { orderActionErrorMessage } from '../../lib/orders/errors';
+import LeaveDialog from '../../components/import/LeaveDialog';
 import { useToast } from '../../components/Toast';
 import ProductImage from '../../components/ProductImage';
 import OrderTimeline from '../../components/OrderTimeline';
@@ -81,12 +84,20 @@ const MILESTONES: { code: ShippingMilestone; label: string }[] = [
   { code: 'picked_up', label: '買家已取貨' },
 ];
 
-/** 物流節點：按一下就往歷程追加，買家馬上看得到。已經按過的會變灰 */
+/**
+ * 物流節點：按一下就往歷程追加，買家馬上看得到。已經按過的會變灰。
+ * 「買家已取貨」會讓訂單轉成已完成而且改不回來，所以先確認；其他四個節點不用。
+ */
 function MilestoneButtons({ done, onPick }: {
   done: Set<string>;
   onPick: (code: ShippingMilestone) => Promise<void>;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const pick = async (code: ShippingMilestone) => {
+    setBusy(code);
+    try { await onPick(code); } finally { setBusy(null); }
+  };
   return (
     <div className="mr-auto flex flex-wrap items-center gap-1.5">
       <span className="text-xs text-muted">更新進度</span>
@@ -94,15 +105,28 @@ function MilestoneButtons({ done, onPick }: {
         <button
           key={m.code}
           disabled={done.has(m.code) || busy !== null}
-          onClick={async () => { setBusy(m.code); try { await onPick(m.code); } finally { setBusy(null); } }}
+          onClick={() => (m.code === 'picked_up' ? setConfirming(true) : void pick(m.code))}
           className="rounded-full border border-line px-2.5 py-1 text-xs transition hover:border-brand hover:text-brand disabled:border-line disabled:bg-canvas disabled:text-disabled"
         >
           {done.has(m.code) ? `✓ ${m.label}` : m.label}
         </button>
       ))}
+      {confirming && (
+        <LeaveDialog
+          title="確認買家已取貨？"
+          description="訂單將轉為已完成，之後無法再更改。"
+          stayLabel="取消" leaveLabel="確認已取貨" leaveTone="primary"
+          busy={busy !== null} busyLabel="處理中…"
+          onStay={() => setConfirming(false)}
+          onLeave={async () => { await pick('picked_up'); setConfirming(false); }}
+        />
+      )}
     </div>
   );
 }
+
+/** 回到前景重讀訂單的最短間隔：visibilitychange 與 focus 會接連觸發，快速切換分頁也不該連打資料庫 */
+const REFRESH_MIN_GAP_MS = 5000;
 
 const CARRIERS = ['7-ELEVEN 取貨', '全家取貨', '黑貓宅急便', '新竹物流', '郵局寄送', '賣家自送'];
 
@@ -148,8 +172,22 @@ function ShipForm({ onSubmit, onCancel }: {
 }
 
 export default function SellerOrders() {
-  const { myShop, shopOrders, updateOrderStatus, addOrderEvent } = useStore();
+  const { myShop, shopOrders, updateOrderStatus, addOrderEvent, refreshShopOrders } = useStore();
   const toast = useToast();
+  // 操作失敗（多半是畫面資料過期，例如買家剛完成或取消了這張單）：顯示錯誤訊息，並重讀成實際狀態
+  // 重讀不等結果：斷線時重讀本身也會卡住，按鈕不能因此一直停在處理中。
+  const onActionError = async (e: unknown) => {
+    toast(orderActionErrorMessage(e), 'error');
+    void refreshShopOrders();
+  };
+  // 買家可能在自己的裝置上完成或取消訂單：回到前景時靜默重讀（不經過 loading 狀態，畫面與捲動位置不動）
+  const lastRefreshAt = useRef(0);
+  useRefreshOnVisible(() => {
+    const now = Date.now();
+    if (now - lastRefreshAt.current < REFRESH_MIN_GAP_MS) return;
+    lastRefreshAt.current = now;
+    void refreshShopOrders();
+  }, { onFocus: true });
   const [tab, setTab] = useState<OrderStatus | 'all'>('to_ship');
   const [shipId, setShipId] = useState<string | null>(null);   // 正在填出貨資訊的訂單
   const [openId, setOpenId] = useState<string | null>(null);   // 展開歷程的訂單
@@ -227,11 +265,16 @@ export default function SellerOrders() {
 
               <PayoutPanel order={o} />
 
-              {shipId === o.id && (
+              {shipId === o.id && o.status === 'to_ship' && (
                 <ShipForm
                   onCancel={() => setShipId(null)}
                   onSubmit={async (carrier, trackingNo) => {
-                    await updateOrderStatus(o.id, 'shipping', { carrier, trackingNo });
+                    try {
+                      await updateOrderStatus(o.id, 'shipping', { carrier, trackingNo });
+                    } catch (e) {
+                      await onActionError(e);
+                      return;
+                    }
                     setShipId(null);
                     setOpenId(o.id);
                     toast('已安排出貨');
@@ -245,12 +288,29 @@ export default function SellerOrders() {
                 {o.status === 'shipping' && (
                   <MilestoneButtons
                     done={new Set(o.events.map(e => e.status))}
-                    onPick={async code => { await addOrderEvent(o.id, code); toast('已更新物流進度'); setOpenId(o.id); }}
+                    onPick={async code => {
+                      try {
+                        await addOrderEvent(o.id, code);
+                      } catch (e) {
+                        await onActionError(e);
+                        return;
+                      }
+                      toast('已更新物流進度');
+                      setOpenId(o.id);
+                    }}
                   />
                 )}
                 {o.status === 'to_ship' && (
                   <>
-                    <button onClick={async () => { await updateOrderStatus(o.id, 'cancelled'); toast('訂單已取消'); }} className="rounded-sm border border-line px-3 py-2 text-sm hover:bg-canvas">取消訂單</button>
+                    <button onClick={async () => {
+                      try {
+                        await updateOrderStatus(o.id, 'cancelled');
+                      } catch (e) {
+                        await onActionError(e);
+                        return;
+                      }
+                      toast('訂單已取消');
+                    }} className="rounded-sm border border-line px-3 py-2 text-sm hover:bg-canvas">取消訂單</button>
                     <button onClick={() => setShipId(shipId === o.id ? null : o.id)} className="flex items-center gap-1.5 rounded-sm bg-brand px-4 py-2 text-sm text-white hover:bg-brand-dark">
                       <Truck size={16} /> 安排出貨
                     </button>

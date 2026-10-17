@@ -54,10 +54,10 @@ button:disabled { cursor: not-allowed; }
 
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes toast { 0% { opacity: 0; transform: translate(-50%, 8px) scale(.96); } 12%, 85% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; } }
+@keyframes toast { 0% { opacity: 0; transform: translateY(8px) scale(.96); } 12%, 85% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; } }
 .animate-sheet { animation: sheet-up .28s cubic-bezier(.2,.8,.2,1); }
 .animate-fade { animation: fade-in .2s ease-out; }
-.animate-toast { animation: toast 1.8s ease-out forwards; }
+.animate-toast { animation: toast var(--toast-ms, 1.8s) ease-out forwards; }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-sheet, .animate-fade, .animate-toast { animation: none; }

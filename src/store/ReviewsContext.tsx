@@ -99,13 +99,21 @@ export function useReviews() {
   return c;
 }
 
-/** 回到前景時靜默重新取得（背景放太久，期限可能剛好跨過 23:59） */
-export function useRefreshOnVisible(fn: () => void) {
+/**
+ * 回到前景時靜默重新取得（背景放太久，期限可能剛好跨過 23:59）。
+ * onFocus：桌面上只切換視窗不會觸發 visibilitychange，需要時一併聽 window 的 focus。
+ * 兩個事件常同時發生，呼叫端自己負責去重。
+ */
+export function useRefreshOnVisible(fn: () => void, { onFocus = false }: { onFocus?: boolean } = {}) {
   const ref = useRef(fn);
   useEffect(() => { ref.current = fn; });
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') ref.current(); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, []);
+    if (onFocus) window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      if (onFocus) window.removeEventListener('focus', onVisible);
+    };
+  }, [onFocus]);
 }

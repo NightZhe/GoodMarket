@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
+import { toOrderActionError } from '../lib/orders/errors';
 import { supabase, SHOP_ORDER_COLUMNS, type OrderRow, type ProductRow, type ShopOrderRow, type ShopRow } from '../lib/supabase';
 import type {
   CartItem, ImportBatchResult, ImportIndex, Order, OrderStatus, Product, Shop, ShippingMilestone,
@@ -14,6 +15,8 @@ import type { ImportApi } from '../lib/import/runner';
 
 const CART_KEY = 'goodmarket_cart';
 const ORDER_KEYS = 'goodmarket_order_keys';
+/** 寫入節點後重讀該筆訂單的逾時 */
+const ORDER_REREAD_TIMEOUT_MS = 3000;
 
 export const SHIPPING_FEE = 60;
 export const FREE_SHIPPING_THRESHOLD = 499;
@@ -174,7 +177,7 @@ interface Store {
   shopOrders: Order[];
   refreshShopOrders: () => Promise<void>;
   updateOrderStatus: (id: string, status: OrderStatus, shipping?: { carrier: string; trackingNo: string }) => Promise<void>;
-  /** 賣家手動更新物流節點（不改訂單狀態） */
+  /** 賣家手動更新物流節點。「買家已取貨」會讓資料庫把運送中的訂單轉成已完成，所以完成後以資料庫重讀的整張訂單為準 */
   addOrderEvent: (id: string, code: ShippingMilestone) => Promise<void>;
 
   // 蝦皮匯入（所有寫入都走資料庫的四個 RPC，不直接寫 products 表）
@@ -264,11 +267,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [user]);
 
+  // 清單重讀與單筆寫入可能交錯：寫入完成時遞增序號，在它之前發出的清單重讀回來就丟掉，
+  // 否則較舊的快照會蓋掉剛寫入的結果（例如剛按完的物流節點又消失）。
+  const shopOrdersSeq = useRef(0);
   const refreshShopOrders = useCallback(async () => {
     if (!myShop) return;
+    const seq = shopOrdersSeq.current;
     const { data, error } = await supabase.from('orders').select(SHOP_ORDER_COLUMNS)
       .eq('shop_id', myShop.id).order('created_at', { ascending: false });
-    if (!error && data) setShopOrders((data as unknown as ShopOrderRow[]).map(toOrder));
+    if (error || !data || seq !== shopOrdersSeq.current) return;
+    const next = (data as unknown as ShopOrderRow[]).map(toOrder);
+    // 內容沒變就保留原本的陣列，回到前景的靜默重讀不會觸發任何重繪
+    setShopOrders(prev => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
   }, [myShop]);
 
   useEffect(() => { void refreshShopOrders(); }, [refreshShopOrders]);
@@ -396,15 +406,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       patch.tracking_no = shipping.trackingNo || null;
     }
     const { data, error } = await supabase.from('orders').update(patch).eq('id', id).select(SHOP_ORDER_COLUMNS).single();
-    if (error) throw new Error(error.message);
+    if (error) throw toOrderActionError(error);
     // 歷程是資料庫的 trigger 寫的，用回傳的資料覆蓋才拿得到最新事件
+    shopOrdersSeq.current++;
     setShopOrders(prev => prev.map(o => (o.id === id ? toOrder(data as unknown as ShopOrderRow) : o)));
   }, []);
 
   const addOrderEvent = useCallback(async (id: string, code: ShippingMilestone) => {
-    const { data, error } = await supabase.rpc('add_order_event', { p_id: id, p_code: code });
-    if (error) throw new Error(error.message);
-    setShopOrders(prev => prev.map(o => (o.id === id ? { ...o, events: data as Order['events'] } : o)));
+    const { data: rpcData, error } = await supabase.rpc('add_order_event', { p_id: id, p_code: code });
+    if (error) throw toOrderActionError(error);
+    const events = rpcData as Order['events'];
+    // 資料庫可能順便改了訂單狀態（買家已取貨 → 已完成），RPC 只回傳 events，所以整筆重讀，status 以資料庫為準。
+    // 欄位用 SHOP_ORDER_COLUMNS：access_token 的讀取權限已收回，select('*') 會 403。
+    // 重讀要有逾時，也不能自動重試（supabase-js 對 GET 預設會退避重試，斷線時會多轉好幾秒）：節點已經寫入，不能讓按鈕為了一次重讀卡住。
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), ORDER_REREAD_TIMEOUT_MS);
+    let reread;
+    try {
+      reread = await supabase.from('orders').select(SHOP_ORDER_COLUMNS).eq('id', id).retry(false).abortSignal(ctl.signal).single();
+    } finally {
+      clearTimeout(timer);
+    }
+    const { data, error: readError } = reread;
+    shopOrdersSeq.current++;
+    if (readError || !data) {
+      // 節點已經寫入成功，不能對使用者回報失敗（重按會重複追加）。重讀失敗時用 RPC 回傳的歷程推算：
+      // 資料庫的 trigger 在狀態變成已完成時會附加 completed，所以最後一筆是 completed 就代表訂單已完成。
+      setShopOrders(prev => prev.map(o => (o.id !== id ? o : {
+        ...o, events, status: events[events.length - 1]?.status === 'completed' ? 'completed' : o.status,
+      })));
+      return;
+    }
+    setShopOrders(prev => prev.map(o => (o.id === id ? toOrder(data as unknown as ShopOrderRow) : o)));
   }, []);
 
   // ── 蝦皮匯入 ─────────────────────────────────────────────

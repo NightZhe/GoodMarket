@@ -11,7 +11,7 @@ const STEP: Record<OrderEvent['status'], { label: string; hint: string; icon: ty
   out_for_delivery: { label: '包裹配送中', hint: '', icon: Truck, tone: 'text-success-text' },
   arrived_store:    { label: '已送達門市，待取貨', hint: '記得帶手機取貨', icon: Store, tone: 'text-success-text' },
   picked_up:        { label: '買家已取貨', hint: '', icon: PackageCheck, tone: 'text-success-text' },
-  completed:        { label: '訂單完成', hint: '買家已確認收貨', icon: PackageCheck, tone: 'text-success-text' },
+  completed:        { label: '訂單完成', hint: '交易已完成', icon: PackageCheck, tone: 'text-success-text' },
   cancelled:        { label: '訂單取消', hint: '', icon: XCircle, tone: 'text-muted' },
 };
 
