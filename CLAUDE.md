@@ -37,3 +37,23 @@
   缺新 RPC 也能降級」的前端，再套 migration。推之前要在本機驗過「新前端＋舊資料庫」不會壞。
 - `db query --local -f` 不支援一個檔多個指令；本機整檔請用
   `docker exec -i supabase_db_GoodMarket psql -U postgres -d postgres < 檔案`。
+- `db query --linked` 的 stdout 開頭有一行 `Initialising login role...`，不是純 JSON；解析時先切到第一個 `{`。
+  正式站步驟**一次一個指令**、每步檢查 exit 與輸出大小，不要用長串 `&&` 串接（2026-10-18 曾因此預覽檔寫成 0 bytes）。
+- `supabase/.env`（已 gitignore）放使用者本機 Google OAuth 用戶端的密鑰，**agent 不得建立、修改、刪除**，只能讀 sha256 證明沒動。
+- 本機假 OAuth 驗證法：暫改 `supabase/config.toml` 加 keycloak／github 區塊指向本機假伺服器，跑真實 GoTrue PKCE；測完必須還原並附 sha256。做法見 `.work/buyer-auth/t3-ac46.md`。
+
+## 目前狀態（2026-10-18，給新 session 的交接）
+
+已上線：商品評價（含照片、賣家回覆）；買家已取貨自動完成＋訂單狀態鎖定；**買家帳號**（遊客只能瀏覽，
+加購物車／下單／訂單／評價都要 Google 或 Apple 登入；購物車與訂單綁帳號；舊訂單憑證機制已移除）。
+每個功能的決策、規格、驗收報告、上線紀錄都在 `.work/<功能>/`（不進版控）：
+`product-reviews/`、`picked-up-complete/`、`buyer-auth/`（含 `prod-runbook.md`、`prod-apply-log.md`、`prod-delete-log.md`、`tools/`）。
+
+維運提醒：
+- **Apple 登入 client secret 2027-04-15 到期**，2027-04-01 前用 Supabase 文件頁工具＋原 `.p8` 重做並更新後台。
+- 刪帳號走人工流程：`.work/buyer-auth/prod-runbook.md` 第 6 節的工具；有開店的帳號工具會擋，另外處理。
+- 寄信用 Gmail SMTP（寄件人「好物集」），目前沒有任何流程會寄信；Confirm email 使用者決定**不開**（理由與風險評估在 `.work/buyer-auth/decisions.md`，本檔進公開 repo，不展開）。
+- 正式站 Storage 刪檔需要 service role key：由使用者在自己終端機以 `read -rs` 輸入後跑 `tools/delete-review-paths.mjs`，不經過 agent。
+
+已知小問題（不急）：登入方式設定讀取超過 5 秒會先顯示兩顆按鈕；平板寬度賣家首頁與商品頁有橫向捲軸；
+購物車兩次更新間隔 3 秒內讀屏可能不重念。
