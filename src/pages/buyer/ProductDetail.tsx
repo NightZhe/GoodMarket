@@ -29,7 +29,7 @@ export default function ProductDetail() {
 
 function ProductDetailView({ id }: { id: string }) {
   const { getProduct, getShop, products, addToCart, user, myShop } = useStore();
-  const { openLogin, runPendingOnLoad, loginError, setAutoNotice, handoff, clearHandoff } = useAuth();
+  const { openLogin, runPendingOnLoad, loginError, autoNotice, setAutoNotice, handoff, clearHandoff } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const { productStat, shopStat, summaryState } = useReviews();
@@ -166,7 +166,8 @@ function ProductDetailView({ id }: { id: string }) {
           </Banner>
         </div>
       )}
-      {ownShop && (
+      {/* 登入回來被擋的那則提示（上方 AutoNoticeBanner）已經說明是自己的店，顯示期間不再疊一個常駐說明；按「知道了」後才換成常駐的 */}
+      {ownShop && !(autoNotice?.productId === product.id && autoNotice.reason === 'own_shop') && (
         <div className="px-3 pt-2 md:px-0">
           <Banner kind="info" title="這是你自己商店的商品">賣家不能購買自己商店的商品。</Banner>
         </div>
