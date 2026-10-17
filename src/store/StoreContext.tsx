@@ -1,20 +1,27 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { toOrderActionError } from '../lib/orders/errors';
-import { supabase, SHOP_ORDER_COLUMNS, type OrderRow, type ProductRow, type ShopOrderRow, type ShopRow } from '../lib/supabase';
+import { toOrder } from '../lib/orders/map';
+import { placeAccountOrder } from '../lib/account/api';
+import { toAccountError } from '../lib/account/errors';
+import { validCartCount } from '../lib/account/cart';
+import { cleanLegacyStorage } from '../lib/account/legacy';
+import { browserStores, clearPending } from '../lib/auth/pending';
+import { BUYER_KEY } from '../lib/site';
+import { supabase, SHOP_ORDER_COLUMNS, type ProductRow, type ShopOrderRow, type ShopRow } from '../lib/supabase';
 import type {
   CartItem, ImportBatchResult, ImportIndex, Order, OrderStatus, Product, Shop, ShippingMilestone,
 } from '../types';
+import { useAccountCart, type CartState } from './useAccountCart';
+import { useAccountOrders, type OrdersState } from './useAccountOrders';
+import type { AccountErrorKind } from '../lib/account/errors';
 import { ImportCallError, toCallError } from '../lib/import/errors';
 import { UPLOAD_TIMEOUT_MS, abortError, withTimeout } from '../lib/import/images';
 import type { ImportApi } from '../lib/import/runner';
 
-// 資料存在 Supabase：賣家登入後上架的商品，所有人都看得到。
-// 唯一還留在瀏覽器的是「購物車」與「買家的訂單憑證」——前者本來就該跟著裝置，
-// 後者是因為買家不需要帳號，用下單時拿到的 token 回來查自己的訂單。
+// 資料都存在 Supabase：商品所有人看得到；購物車、訂單屬於登入的帳號（買家只能用 Google／Apple 登入）。
+// 瀏覽器裡只剩「結帳頁記住的收件資料」（登出時才清）與登入流程的暫存（見 lib/auth/pending.ts）。
 
-const CART_KEY = 'goodmarket_cart';
-const ORDER_KEYS = 'goodmarket_order_keys';
 /** 寫入節點後重讀該筆訂單的逾時 */
 const ORDER_REREAD_TIMEOUT_MS = 3000;
 
@@ -24,23 +31,6 @@ export const FREE_SHIPPING_THRESHOLD = 499;
 /** 同一家店滿額免運；或該店這批商品全部標示免運（與 place_order() 的規則一致） */
 export const shippingFor = (subtotal: number, products: (Product | undefined)[]) =>
   subtotal >= FREE_SHIPPING_THRESHOLD || products.every(p => p?.freeShipping) ? 0 : SHIPPING_FEE;
-
-const readLocal = <T,>(key: string, fallback: T): T => {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-const writeLocal = (key: string, value: unknown) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    console.warn('localStorage 寫入失敗');
-  }
-};
 
 const toShop = (r: ShopRow): Shop => ({
   id: r.id, name: r.name, avatar: r.avatar, description: r.description,
@@ -53,18 +43,6 @@ const toProduct = (r: ProductRow): Product => ({
   sold: r.sold, rating: Number(r.rating),
   location: r.location, freeShipping: r.free_shipping, status: r.status, createdAt: r.created_at,
 });
-
-const toOrder = (r: ShopOrderRow): Order => ({
-  id: r.id, orderNo: r.order_no, shopId: r.shop_id, lines: r.lines,
-  shippingFee: r.shipping_fee, total: r.total,
-  status: r.status, payment: r.payment, createdAt: r.created_at,
-  carrier: r.carrier, trackingNo: r.tracking_no,
-  events: (r.events ?? []) as Order['events'],
-  buyer: { name: r.buyer_name ?? '', phone: r.buyer_phone ?? '', address: r.buyer_address ?? '' },
-});
-
-/** 買家手上的訂單憑證：沒有帳號，靠這組 (id, token) 回來查自己的單 */
-export interface OrderKey { id: string; token: string }
 
 export interface CheckoutInput {
   items: CartItem[];
@@ -143,32 +121,48 @@ interface Store {
   getShop: (id: string) => Shop | undefined;
   reload: () => Promise<void>;
 
-  // 購物車（本機）
+  // 購物車（帳號版，D15）。沒登入時是空的，也不會呼叫資料庫
   cart: CartItem[];
+  /** 圖示上的數字：只算還買得到的（上架中、規格還在） */
   cartCount: number;
-  addToCart: (item: CartItem) => void;
-  setCartQty: (productId: string, variantId: string, qty: number) => void;
-  removeFromCart: (items: Pick<CartItem, 'productId' | 'variantId'>[]) => void;
+  cartState: CartState;
+  /** 載入失敗的原因：backend_missing＝資料庫還沒升級（AC-62 降級） */
+  cartIssue: AccountErrorKind | null;
+  /** 有修改還沒寫進帳號（斷線）；畫面要顯示「購物車暫時無法同步」與重試 */
+  cartSyncFailed: boolean;
+  /** 背景重讀發現內容變了（別台裝置改的）的次數 */
+  cartUpdateTick: number;
+  refreshCart: (silent?: boolean) => Promise<boolean>;
+  /** 失敗丟 AccountError（OWN_SHOP、OUT_OF_STOCK…，hint 在 code） */
+  addToCart: (item: CartItem) => Promise<void>;
+  setCartQty: (productId: string, variantId: string, qty: number) => Promise<void>;
+  removeFromCart: (items: Pick<CartItem, 'productId' | 'variantId'>[]) => Promise<void>;
+  retryCartSync: () => Promise<void>;
 
-  // 買家訂單
+  // 買家訂單（帳號版，D16）
   checkout: (input: CheckoutInput) => Promise<Order[]>;
   myOrders: Order[];
-  /** 這台瀏覽器裡的訂單憑證；評價用它向資料庫證明「這張訂單是我的」 */
-  orderKeys: OrderKey[];
-  /** 訂單列表至少載入過一次（成功或失敗都算）；沒有憑證時一開始就是 true */
-  myOrdersLoaded: boolean;
-  refreshMyOrders: () => Promise<void>;
+  myOrdersState: OrdersState;
+  myOrdersIssue: AccountErrorKind | null;
+  refreshMyOrders: (silent?: boolean) => Promise<boolean>;
   cancelMyOrder: (id: string) => Promise<void>;
   completeMyOrder: (id: string) => Promise<void>;
 
-  // 賣家帳號
+  // 登入狀態（買家與賣家共用同一個 session）
   user: User | null;
   authReady: boolean;
+  /** 登入「過期」（不是主動登出）：只要求重新登入，收件資料保留 */
+  sessionExpired: boolean;
+  /** 自己的商店資料已確定（沒登入、或已讀完）；判斷「賣家不能買自己商店的商品」前要等它 */
+  shopReady: boolean;
   myShop: Shop | null;
   /** 回傳 true 表示已直接登入；false 表示還要收信確認（專案有開 email 驗證時） */
   signUp: (email: string, password: string) => Promise<boolean>;
   signIn: (email: string, password: string) => Promise<void>;
+  /** 賣家中心的「換帳號」：登出所有裝置（A-8，維持現況） */
   signOut: () => Promise<void>;
+  /** 買家登出：只登出這台裝置，並清掉這台裝置記住的收件資料（A-7）。失敗會丟錯誤，仍維持登入 */
+  signOutBuyer: () => Promise<void>;
   createShop: (draft: ShopDraft) => Promise<Shop>;
 
   // 賣家商品與訂單
@@ -197,18 +191,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [cart, setCart] = useState<CartItem[]>(() => readLocal<CartItem[]>(CART_KEY, []));
-  const [orderKeys, setOrderKeys] = useState<OrderKey[]>(() => readLocal<OrderKey[]>(ORDER_KEYS, []));
-  const [myOrders, setMyOrders] = useState<Order[]>([]);
-  const [myOrdersLoaded, setMyOrdersLoaded] = useState(() => readLocal<OrderKey[]>(ORDER_KEYS, []).length === 0);
-
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [myShop, setMyShop] = useState<Shop | null>(null);
+  const [shopLoadedFor, setShopLoadedFor] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  // 主動登出時為 true：SIGNED_OUT 事件才知道是「使用者要登出」還是「登入過期」
+  const explicitSignOut = useRef(false);
   const [shopOrders, setShopOrders] = useState<Order[]>([]);
 
-  useEffect(() => writeLocal(CART_KEY, cart), [cart]);
-  useEffect(() => writeLocal(ORDER_KEYS, orderKeys), [orderKeys]);
+  // 上線前遺留在裝置上的舊購物車、訂單憑證、評價草稿（D16、D17＝B）：載入時清掉
+  useEffect(() => {
+    try { cleanLegacyStorage(localStorage, sessionStorage); } catch { /* 儲存空間被擋：沒有舊資料可清 */ }
+  }, []);
 
   // 商店與商品：公開資料，任何人都讀得到；賣家登入後還會多看到自己下架的商品（RLS）。
   // 同時可能有好幾次載入在飛（進站、登入、下單後），只採用最後發出的那一次，舊的回來不能蓋掉新的。
@@ -237,7 +232,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
       setAuthReady(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      setSession(next);
+      if (event === 'SIGNED_IN') setSessionExpired(false);
+      // 沒有人按登出卻被登出（token 失效、別的分頁登出）＝過期：只要求重新登入，資料保留
+      if (event === 'SIGNED_OUT' && !explicitSignOut.current) setSessionExpired(true);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -255,17 +255,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 登入後載入自己的商店；登出就清掉
   const user = session?.user ?? null;
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setMyShop(null);
       setShopOrders([]);
+      setShopLoadedFor(null);
       return;
     }
     let cancelled = false;
-    supabase.from('shops').select('*').eq('owner_id', user.id).maybeSingle().then(({ data }) => {
-      if (!cancelled) setMyShop(data ? toShop(data as ShopRow) : null);
+    supabase.from('shops').select('*').eq('owner_id', userId).maybeSingle().then(({ data }) => {
+      if (cancelled) return;
+      setMyShop(data ? toShop(data as ShopRow) : null);
+      setShopLoadedFor(userId);
     });
     return () => { cancelled = true; };
-  }, [user]);
+  }, [userId]);
+  const shopReady = authReady && (!userId || shopLoadedFor === userId);
+
+  // 伺服器說「沒登入」但畫面上還有人登入著：登入已經失效。當作過期，不是登出（資料保留）
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = userId;
+  const handleAuthLost = useCallback(() => {
+    if (!userIdRef.current) return;
+    setSessionExpired(true);
+    setSession(null);
+    void supabase.auth.signOut({ scope: 'local' });
+  }, []);
+
+  const { cart, cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart, addToCart, setCartQty, removeFromCart, retryCartSync } =
+    useAccountCart(userId, handleAuthLost);
+  const { myOrders, myOrdersState, myOrdersIssue, refreshMyOrders, cancelMyOrder, completeMyOrder } =
+    useAccountOrders(userId, handleAuthLost);
 
   // 清單重讀與單筆寫入可能交錯：寫入完成時遞增序號，在它之前發出的清單重讀回來就丟掉，
   // 否則較舊的快照會蓋掉剛寫入的結果（例如剛按完的物流節點又消失）。
@@ -283,69 +302,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { void refreshShopOrders(); }, [refreshShopOrders]);
 
-  const refreshMyOrders = useCallback(async () => {
-    if (orderKeys.length === 0) {
-      setMyOrders([]);
-      setMyOrdersLoaded(true);
-      return;
-    }
-    const { data, error } = await supabase.rpc('get_my_orders', { p_keys: orderKeys });
-    if (!error && data) setMyOrders((data as OrderRow[]).map(toOrder));
-    setMyOrdersLoaded(true);
-  }, [orderKeys]);
-
-  useEffect(() => { void refreshMyOrders(); }, [refreshMyOrders]);
-
-  // ── 購物車 ───────────────────────────────────────────────
-  const addToCart = useCallback((item: CartItem) => {
-    setCart(prev => {
-      const exist = prev.find(c => c.productId === item.productId && c.variantId === item.variantId);
-      return exist
-        ? prev.map(c => (c === exist ? { ...c, qty: c.qty + item.qty } : c))
-        : [...prev, item];
-    });
-  }, []);
-
-  const setCartQty = useCallback((productId: string, variantId: string, qty: number) => {
-    setCart(prev => prev.map(c =>
-      c.productId === productId && c.variantId === variantId ? { ...c, qty: Math.max(1, qty) } : c));
-  }, []);
-
-  const removeFromCart = useCallback((items: Pick<CartItem, 'productId' | 'variantId'>[]) => {
-    setCart(prev => prev.filter(c =>
-      !items.some(i => i.productId === c.productId && i.variantId === c.variantId)));
-  }, []);
-
   // ── 下單 ─────────────────────────────────────────────────
-  // 扣庫存與建單都在資料庫的 place_order() 裡完成，避免兩個人同時買到同一件庫存
+  // 扣庫存與建單都在資料庫的 place_account_order() 裡完成，避免兩個人同時買到同一件庫存。
+  // 從購物車結帳時，資料庫在同一個交易裡把已下單的品項從帳號購物車移除（所有裝置）。
   const checkout = useCallback(async (input: CheckoutInput): Promise<Order[]> => {
-    const { data, error } = await supabase.rpc('place_order', {
-      p_items: input.items.map(i => ({ productId: i.productId, variantId: i.variantId, qty: i.qty })),
-      p_buyer: input.buyer,
-      p_payment: input.payment,
-    });
-    if (error) throw new Error(error.message);
-
-    const rows = data as OrderRow[];
-    setOrderKeys(prev => [...rows.map(r => ({ id: r.id, token: r.access_token! })), ...prev]);
-    if (input.fromCart) removeFromCart(input.items);
+    let rows;
+    try {
+      rows = await placeAccountOrder(input);
+    } catch (e) {
+      const err = toAccountError(e);
+      if (err.kind === 'auth') handleAuthLost();
+      throw err;
+    }
+    if (input.fromCart) void refreshCart(true);
+    void refreshMyOrders(true);
     await reload(); // 庫存與銷量已變動
     return rows.map(toOrder);
-  }, [reload, removeFromCart]);
-
-  const cancelMyOrder = useCallback(async (id: string) => {
-    const key = orderKeys.find(k => k.id === id);
-    if (!key) return;
-    await supabase.rpc('cancel_my_order', { p_id: id, p_token: key.token });
-    await refreshMyOrders();
-  }, [orderKeys, refreshMyOrders]);
-
-  const completeMyOrder = useCallback(async (id: string) => {
-    const key = orderKeys.find(k => k.id === id);
-    if (!key) return;
-    await supabase.rpc('complete_my_order', { p_id: id, p_token: key.token });
-    await refreshMyOrders();
-  }, [orderKeys, refreshMyOrders]);
+  }, [reload, refreshCart, refreshMyOrders, handleAuthLost]);
 
   // ── 賣家 ─────────────────────────────────────────────────
   const signUp = useCallback(async (email: string, password: string) => {
@@ -359,9 +332,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
   }, []);
 
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+  const doSignOut = useCallback(async (scope: 'global' | 'local') => {
+    explicitSignOut.current = true;
+    try {
+      const { error } = await supabase.auth.signOut({ scope });
+      if (error) throw new Error(error.message);
+      // 只有使用者主動登出才清收件資料與登入暫存；登入過期不清（A-7）
+      try { localStorage.removeItem(BUYER_KEY); } catch { /* 儲存空間被擋：沒有東西可清 */ }
+      clearPending(browserStores());
+      setSessionExpired(false);
+    } finally {
+      explicitSignOut.current = false;
+    }
   }, []);
+
+  const signOut = useCallback(() => doSignOut('global'), [doSignOut]);
+  const signOutBuyer = useCallback(() => doSignOut('local'), [doSignOut]);
 
   const createShop = useCallback(async (draft: ShopDraft): Promise<Shop> => {
     if (!user) throw new Error('請先登入');
@@ -417,7 +403,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (error) throw toOrderActionError(error);
     const events = rpcData as Order['events'];
     // 資料庫可能順便改了訂單狀態（買家已取貨 → 已完成），RPC 只回傳 events，所以整筆重讀，status 以資料庫為準。
-    // 欄位用 SHOP_ORDER_COLUMNS：access_token 的讀取權限已收回，select('*') 會 403。
+    // 欄位用 SHOP_ORDER_COLUMNS：訂單憑證欄位的讀取權限已收回，select('*') 會 403。
     // 重讀要有逾時，也不能自動重試（supabase-js 對 GET 預設會退避重試，斷線時會多轉好幾秒）：節點已經寫入，不能讓按鈕為了一次重讀卡住。
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), ORDER_REREAD_TIMEOUT_MS);
@@ -488,16 +474,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     getProduct: id => products.find(p => p.id === id),
     getShop: id => shops.find(s => s.id === id),
     cart,
-    cartCount: cart.reduce((s, c) => s + c.qty, 0),
-    addToCart, setCartQty, removeFromCart,
-    checkout, myOrders, orderKeys, myOrdersLoaded, refreshMyOrders, cancelMyOrder, completeMyOrder,
-    user, authReady, myShop, signUp, signIn, signOut, createShop,
+    cartCount: validCartCount(cart, id => products.find(p => p.id === id)),
+    cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart, addToCart, setCartQty, removeFromCart, retryCartSync,
+    checkout, myOrders, myOrdersState, myOrdersIssue, refreshMyOrders, cancelMyOrder, completeMyOrder,
+    user, authReady, sessionExpired, shopReady, myShop, signUp, signIn, signOut, signOutBuyer, createShop,
     saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
     getImportIndex, importApi, uploadImportImage,
   }), [
-    shops, products, loading, loadError, reload, cart, addToCart, setCartQty, removeFromCart,
-    checkout, myOrders, orderKeys, myOrdersLoaded, refreshMyOrders, cancelMyOrder, completeMyOrder,
-    user, authReady, myShop, signUp, signIn, signOut, createShop,
+    shops, products, loading, loadError, reload, cart, cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart,
+    addToCart, setCartQty, removeFromCart, retryCartSync,
+    checkout, myOrders, myOrdersState, myOrdersIssue, refreshMyOrders, cancelMyOrder, completeMyOrder,
+    user, authReady, sessionExpired, shopReady, myShop, signUp, signIn, signOut, signOutBuyer, createShop,
     saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
     getImportIndex, importApi, uploadImportImage,
   ]);

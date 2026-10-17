@@ -19,15 +19,15 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 
 export const getReviewSummary = () => rpc<ReviewSummaryData>('get_review_summary');
 
-export const getMyReviewStatus = (keys: { id: string; token: string }[]) =>
-  rpc<OrderReviewStatus[]>('get_my_review_status', { p_keys: keys });
+// 買家端的三支評價 RPC 都用帳號驗身分（D16）：訂單屬於目前登入的帳號才能查、申請上傳、送出。
+export const getAccountReviewStatus = () => rpc<OrderReviewStatus[]>('get_account_review_status');
 
-export const requestReviewUpload = (orderId: string, token: string, productId: string, count: number) =>
-  rpc<UploadSlot[]>('request_review_upload', { p_order_id: orderId, p_token: token, p_product_id: productId, p_count: count });
+export const requestAccountReviewUpload = (orderId: string, productId: string, count: number) =>
+  rpc<UploadSlot[]>('request_account_review_upload', { p_order_id: orderId, p_product_id: productId, p_count: count });
 
-export const submitReviews = (orderId: string, token: string, nickname: string | null, items: SubmitItem[]) =>
-  rpc<{ id: string; product_id: string }[]>('submit_reviews', {
-    p_order_id: orderId, p_token: token, p_nickname: nickname, p_items: items,
+export const submitAccountReviews = (orderId: string, nickname: string | null, items: SubmitItem[]) =>
+  rpc<{ id: string; product_id: string }[]>('submit_account_reviews', {
+    p_order_id: orderId, p_nickname: nickname, p_items: items,
   });
 
 interface ListArgs { rating: number | null; withPhotos: boolean; limit: number; offset: number }

@@ -1,30 +1,55 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { CheckCircle2, Loader2, MapPin, Store } from 'lucide-react';
+import { CheckCircle2, Loader2, MapPin, Store, UserRound } from 'lucide-react';
 import { shippingFor, useStore } from '../../store/StoreContext';
+import { useAuth } from '../../store/AuthContext';
+import LoginRequired from '../../components/auth/LoginRequired';
+import Banner from '../../components/import/Banner';
+import { btnOutline } from '../../components/import/ui';
+import { accountErrorText, toAccountError } from '../../lib/account/errors';
+import { signedInText } from '../../lib/auth/identity';
+import { BUYER_KEY } from '../../lib/site';
 import ProductImage from '../../components/ProductImage';
 import EmptyState from '../../components/EmptyState';
 import { money } from '../../lib/format';
 import type { CartItem, Order } from '../../types';
 
-const BUYER_KEY = 'goodmarket_buyer';
 const PAYMENTS: { id: Order['payment']; label: string }[] = [
   { id: 'cod', label: '貨到付款' },
   { id: 'card', label: '信用卡（示範）' },
   { id: 'transfer', label: 'ATM 轉帳' },
 ];
 
+/** 結帳頁要先登入。sticky：登入在填寫途中過期時，頁面不能被換掉（收件資料、付款方式會消失），改開登入面板蓋在上面 */
 export default function Checkout() {
-  const { state } = useLocation() as { state: { items?: CartItem[]; fromCart?: boolean } | null };
-  const { getProduct, getShop, checkout } = useStore();
+  // 登入回來時，待辦動作是在頁面已經畫出來之後才帶著結帳狀態導到這一頁（同一個網址、新的 location.state）：
+  // 用 location.key 當 key 讓頁面重新掛載，品項、付款方式、收件資料才會從新的 state 還原
+  const { key } = useLocation();
+  return (
+    <LoginRequired kind="checkout" sticky>
+      <CheckoutView key={key} />
+    </LoginRequired>
+  );
+}
+
+interface CheckoutState { items?: CartItem[]; fromCart?: boolean; payment?: Order['payment']; buyer?: Order['buyer']; reauth?: boolean }
+
+function CheckoutView() {
+  const { state } = useLocation() as { state: CheckoutState | null };
+  const { getProduct, getShop, checkout, user } = useStore();
+  const { openLogin } = useAuth();
   const [buyer, setBuyer] = useState<Order['buyer']>(() => {
+    // 重新登入回來時，登入前填的收件資料以待辦動作帶回來的為準
+    if (state?.buyer) return state.buyer;
     try { return JSON.parse(localStorage.getItem(BUYER_KEY) ?? '') } catch { return { name: '', phone: '', address: '' }; }
   });
-  const [payment, setPayment] = useState<Order['payment']>('cod');
+  const [reauthNotice, setReauthNotice] = useState(Boolean(state?.reauth));
+  const [payment, setPayment] = useState<Order['payment']>(state?.payment ?? 'cod');
   const [touched, setTouched] = useState(false);
   const [done, setDone] = useState<Order[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [ownShopError, setOwnShopError] = useState(false);
 
   const items = state?.items ?? [];
 
@@ -72,19 +97,35 @@ export default function Checkout() {
   const shipping = groups.reduce((s, g) => s + g.shipping, 0);
   const valid = buyer.name.trim() && /^09\d{2}-?\d{3}-?\d{3}$/.test(buyer.phone.trim()) && buyer.address.trim().length >= 6;
 
+  // 登入過期：收件資料、付款方式、品項都留在頁面上；登入後由待辦動作原樣還原，按一次「下訂單」即可
+  const askRelogin = () => openLogin({
+    expired: true,
+    trigger: { kind: 'checkout', items, fromCart: !!state?.fromCart, payment, buyer },
+  });
+
   const submit = async () => {
     setTouched(true);
     if (!valid) return;
+    if (!user) { askRelogin(); return; }
     setSubmitting(true);
     setSubmitError('');
+    setOwnShopError(false);
     try {
       const orders = await checkout({ items, buyer, payment, fromCart: !!state?.fromCart });
       localStorage.setItem(BUYER_KEY, JSON.stringify(buyer));
       setDone(orders);
       window.scrollTo(0, 0);
     } catch (err) {
-      // 最常見的是下單瞬間庫存被買走，訊息直接來自資料庫的檢查
-      setSubmitError(err instanceof Error ? err.message : '下單失敗，請再試一次');
+      const e = toAccountError(err);
+      if (e.kind === 'auth') {
+        askRelogin();
+      } else if (e.code === 'OWN_SHOP') {
+        setSubmitError('購物車有自己商店的商品，無法下單');
+        setOwnShopError(true);
+      } else {
+        // 最常見的是下單瞬間庫存被買走，訊息直接來自資料庫的檢查（中文）
+        setSubmitError(accountErrorText(e, '下單失敗，請再試一次'));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -116,9 +157,22 @@ export default function Checkout() {
     <div className="mx-auto max-w-6xl pb-28 md:px-4 md:pt-6 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-4 lg:pb-10">
       {/* 桌機：左內容 + 右側訂單摘要（手機用底部固定列） */}
       <div className="min-w-0 space-y-2 md:space-y-4">
+      {reauthNotice && (
+        <div className="px-2 pt-2 md:px-0 md:pt-0">
+          <Banner kind="info" role="status" title="已重新登入" actions={<button type="button" className={btnOutline} onClick={() => setReauthNotice(false)}>知道了</button>}>
+            你填的資料都還在，可以繼續下單。
+          </Banner>
+        </div>
+      )}
       <section className="bg-white p-4 md:rounded-md md:p-6">
         <div className="-mx-4 -mt-4 mb-4 h-1 bg-[repeating-linear-gradient(45deg,#6fa6d6_0,#6fa6d6_33px,transparent_0,transparent_41px,#f18d9b_0,#f18d9b_74px,transparent_0,transparent_82px)] md:-mx-6 md:-mt-6 md:rounded-t-md" />
-        <h2 className="mb-4 flex items-center gap-1.5 text-brand"><MapPin size={18} /> 收件資訊</h2>
+        <h2 className="mb-4 flex items-center gap-1.5 text-brand">
+          <MapPin size={18} /> 收件資訊
+          <span className="ml-auto flex min-w-0 items-center gap-1 text-xs font-normal text-muted">
+            <UserRound size={14} className="shrink-0" aria-hidden="true" />
+            <span className="truncate">{user ? signedInText(user) : '登入已過期'}</span>
+          </span>
+        </h2>
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_2fr]">
           {field('name', '收件人', '王小明', !buyer.name.trim(), '請填寫收件人')}
           {field('phone', '手機號碼', '0912-345-678', !/^09\d{2}-?\d{3}-?\d{3}$/.test(buyer.phone.trim()), '請填寫 09 開頭的手機號碼')}
@@ -169,7 +223,7 @@ export default function Checkout() {
       <aside className="sticky top-28 hidden rounded-md bg-white p-5 lg:block">
         <h2 className="font-medium">訂單摘要</h2>
         <dl className="mt-4 space-y-3 text-sm">{summaryRows}</dl>
-        {submitError && <p className="mt-3 rounded-sm bg-error-bg px-3 py-2 text-sm text-error-text">{submitError}</p>}
+        {submitError && <p role="alert" className="mt-3 rounded-sm bg-error-bg px-3 py-2 text-sm text-error-text">{submitError}{ownShopError && <> <Link to="/cart" className="underline">回購物車</Link></>}</p>}
         <button onClick={() => void submit()} disabled={submitting}
           className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-sm bg-brand text-white transition hover:bg-brand-dark disabled:bg-disabled">
           {submitting && <Loader2 size={16} className="animate-spin" />}
@@ -181,7 +235,7 @@ export default function Checkout() {
       <div className="pb-safe fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-line bg-white lg:hidden">
         <div className="flex-1 px-4">
           <p className="text-sm">總付款 <span className="text-lg text-brand">{money(subtotal + shipping)}</span></p>
-          {submitError && <p className="text-xs text-error">{submitError}</p>}
+          {submitError && <p role="alert" className="text-xs text-error">{submitError}{ownShopError && <> <Link to="/cart" className="underline">回購物車</Link></>}</p>}
         </div>
         <button onClick={() => void submit()} disabled={submitting}
           className="flex h-12 min-w-32 items-center justify-center gap-2 bg-brand px-6 text-white transition hover:bg-brand-dark disabled:bg-disabled">

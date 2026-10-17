@@ -53,7 +53,7 @@ export const readyMessage = (count: number) => `將送出 ${count} 件商品的�
 export const confirmSummary = (items: number, photos: number) =>
   `將送出 ${items} 件商品的評價${photos > 0 ? `，共 ${photos} 張照片` : ''}。`;
 
-/** 組出 submit_reviews 的 p_items：只送有打星等的商品；照片只送已上傳成功的路徑 */
+/** 組出 submit_account_reviews 的 p_items：只送有打星等的商品；照片只送已上傳成功的路徑 */
 export function buildSubmitItems(
   items: { productId: string; rating: number; content: string; photos: { status: PhotoStatus; path?: string }[] }[],
 ) {

@@ -2,6 +2,13 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, MapPin, MessageCircle, ShoppingCart, Star, Store, Truck, X } from 'lucide-react';
 import { useStore, FREE_SHIPPING_THRESHOLD, SHIPPING_FEE } from '../../store/StoreContext';
+import { useAuth } from '../../store/AuthContext';
+import { accountErrorText, toAccountError } from '../../lib/account/errors';
+import { autoNoticeText } from '../../lib/auth/autoAction';
+import { handoffWhenLoggedIn } from '../../lib/auth/handoff';
+import { browserStores, peekPending } from '../../lib/auth/pending';
+import Banner from '../../components/import/Banner';
+import { btnOutline, btnPrimary } from '../../components/import/ui';
 import { useReviews } from '../../store/ReviewsContext';
 import ProductReviewsSection from '../../components/reviews/ProductReviewsSection';
 import { ratingText } from '../../lib/reviews/format';
@@ -21,7 +28,8 @@ export default function ProductDetail() {
 }
 
 function ProductDetailView({ id }: { id: string }) {
-  const { getProduct, getShop, products, addToCart } = useStore();
+  const { getProduct, getShop, products, addToCart, user, myShop } = useStore();
+  const { openLogin, runPendingOnLoad, loginError, setAutoNotice, handoff, clearHandoff } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const { productStat, shopStat, summaryState } = useReviews();
@@ -31,10 +39,20 @@ function ProductDetailView({ id }: { id: string }) {
   // 主圖來源只有兩種：圖庫（imgIdx）或規格圖。以「最後一次使用者動作」為準：
   // 選規格 → 規格圖；點縮圖 → 圖庫。程式預選單一規格不算使用者動作，所以預設是圖庫。
   const [showVariantImage, setShowVariantImage] = useState(false);
+  // 登入是整頁跳轉，回來時頁面重新載入：待辦動作裡存了登入前選的規格與數量，這裡還原（AC-2）。
+  // 只在「剛登入回來」或「登入失敗重開面板」時還原，平常開商品頁不受舊紀錄影響
+  // 網址帶來的選擇（LINE 外開接續）也只是預填：規格與數量帶入，但不會自動動作（B-2）
+  const [restored] = useState(() => {
+    const own = runPendingOnLoad || loginError ? peekPending(browserStores(), Date.now())?.action : null;
+    const a = own ?? handoff;
+    if (!a || (a.kind !== 'add_to_cart' && a.kind !== 'buy_now') || a.productId !== id) return null;
+    const v = product?.variants.find(x => x.id === a.variantId);
+    return v ? { variantId: v.id, qty: Math.min(a.qty, Math.max(1, v.stock)) } : null;
+  });
   const [variantId, setVariantId] = useState<string | null>(
-    product?.variants.length === 1 ? product.variants[0].id : null,
+    restored?.variantId ?? (product?.variants.length === 1 ? product.variants[0].id : null),
   );
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(restored?.qty ?? 1);
   const [sheet, setSheet] = useState<null | 'cart' | 'buy'>(null);
   const [needPick, setNeedPick] = useState(false);
 
@@ -46,6 +64,7 @@ function ProductDetailView({ id }: { id: string }) {
   if (!product || product.status !== 'active') {
     return (
       <div className="mx-auto max-w-6xl p-3 md:p-6">
+        <AutoNoticeBanner productId={id} />
         <EmptyState icon="📦" title="商品不存在或已下架" action={<Link to="/" className="text-brand">回首頁</Link>} />
       </div>
     );
@@ -70,17 +89,45 @@ function ProductDetailView({ id }: { id: string }) {
     document.getElementById('reviews')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
   };
 
-  const act = (mode: 'cart' | 'buy') => {
-    if (!variant) {
+  // 賣家不能買自己商店的商品（D12）：常駐說明，按鈕不可按但仍可聚焦（aria-disabled，不用 disabled）
+  const ownShop = Boolean(myShop) && myShop?.id === product.shopId;
+  const confirmHandoff = user && !ownShop && handoff && (handoff.kind === 'add_to_cart' || handoff.kind === 'buy_now')
+    && handoff.productId === product.id && handoffWhenLoggedIn(handoff) === 'confirm' ? handoff : null;
+
+  // pick：確認連結帶來的選擇時，照橫幅上寫的規格與數量做（使用者在橫幅出現後改了下面的選擇，也不能讓「確認」變成別的內容）
+  const act = (mode: 'cart' | 'buy', pick?: { variantId: string; qty: number }) => {
+    const chosen = pick ? product.variants.find(x => x.id === pick.variantId) : variant;
+    const chosenQty = pick ? pick.qty : qty;
+    // 自己店的商品：不管有沒有選規格，一按就說（不用等選完規格才發現不能買，B-6）
+    if (ownShop) {
+      toast('不能購買自己商店的商品', 'error');
+      return false;
+    }
+    if (!chosen) {
       setNeedPick(true);
       return false;
     }
-    if (variant.stock === 0) return false;
+    if (chosen.stock === 0) return false;
+    const trigger = { kind: mode === 'cart' ? 'add_to_cart' : 'buy_now', productId: product.id, variantId: chosen.id, qty: chosenQty } as const;
+    // 遊客只能瀏覽：加入購物車、直接購買都要先登入，登入完回到這個商品頁並自動完成（D14）
+    if (!user) {
+      openLogin({ trigger });
+      return false;
+    }
     if (mode === 'cart') {
-      addToCart({ productId: product.id, variantId: variant.id, qty });
-      toast('已加入購物車');
+      void (async () => {
+        try {
+          await addToCart({ productId: product.id, variantId: chosen.id, qty: chosenQty });
+          setAutoNotice(null);
+          toast('已加入購物車');
+        } catch (e) {
+          // 登入在這段時間失效：當作沒登入，開面板（待辦動作會在按下登入時存起來）
+          if (toAccountError(e).kind === 'auth') openLogin({ trigger });
+          else toast(accountErrorText(e, '加入購物車失敗，請再試一次'), 'error');
+        }
+      })();
     } else {
-      navigate('/checkout', { state: { items: [{ productId: product.id, variantId: variant.id, qty }], fromCart: false } });
+      navigate('/checkout', { state: { items: [{ productId: product.id, variantId: chosen.id, qty: chosenQty }], fromCart: false } });
     }
     return true;
   };
@@ -99,6 +146,31 @@ function ProductDetailView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto max-w-6xl pb-24 md:px-4 md:pb-0 md:pt-4">
+      <AutoNoticeBanner productId={product.id} />
+      {/* 已登入的人打開帶選擇的連結：不自動動作，問一次（連結是任何人都能散布的） */}
+      {confirmHandoff && restored && (
+        <div className="px-3 pt-2 md:px-0">
+          <Banner
+            kind="info" role="status"
+            title={confirmHandoff.kind === 'add_to_cart' ? '要加入購物車嗎？' : '要前往結帳嗎？'}
+            actions={
+              <>
+                <button type="button" className={btnPrimary} onClick={() => { const m = confirmHandoff.kind === 'add_to_cart' ? 'cart' : 'buy'; clearHandoff(); act(m, restored); }}>
+                  {confirmHandoff.kind === 'add_to_cart' ? '加入購物車' : '直接購買'}
+                </button>
+                <button type="button" className={btnOutline} onClick={clearHandoff}>不用了</button>
+              </>
+            }
+          >
+            這個連結帶了選擇：{product.variants.find(v => v.id === restored.variantId)?.name}　數量 {restored.qty}。確認後才會執行。
+          </Banner>
+        </div>
+      )}
+      {ownShop && (
+        <div className="px-3 pt-2 md:px-0">
+          <Banner kind="info" title="這是你自己商店的商品">賣家不能購買自己商店的商品。</Banner>
+        </div>
+      )}
       <nav className="hidden items-center gap-1 py-2 text-sm text-muted md:flex">
         <Link to="/" className="text-[#0055aa]">好物集</Link>
         <ChevronRight size={14} />
@@ -208,14 +280,16 @@ function ProductDetailView({ id }: { id: string }) {
             <button
               onClick={() => act('cart')}
               disabled={stock === 0}
-              className="flex h-12 items-center gap-2 rounded-sm border border-brand bg-brand-soft px-6 text-brand transition hover:bg-[#ffe6dc] disabled:border-line disabled:bg-canvas disabled:text-disabled"
+              aria-disabled={ownShop || undefined}
+              className={`flex h-12 items-center gap-2 rounded-sm border px-6 transition disabled:border-line disabled:bg-canvas disabled:text-disabled ${ownShop ? 'border-line bg-canvas text-disabled' : 'border-brand bg-brand-soft text-brand hover:bg-[#ffe6dc]'}`}
             >
               <ShoppingCart size={20} /> 加入購物車
             </button>
             <button
               onClick={() => act('buy')}
               disabled={stock === 0}
-              className="h-12 min-w-44 rounded-sm bg-brand px-6 text-white transition hover:bg-brand-dark disabled:bg-disabled"
+              aria-disabled={ownShop || undefined}
+              className={`h-12 min-w-44 rounded-sm px-6 text-white transition disabled:bg-disabled ${ownShop ? 'bg-disabled' : 'bg-brand hover:bg-brand-dark'}`}
             >
               {stock === 0 ? '已售完' : '直接購買'}
             </button>
@@ -268,13 +342,14 @@ function ProductDetailView({ id }: { id: string }) {
           <Store size={20} /> 首頁
         </Link>
         <button
-          onClick={() => setSheet('cart')}
+          onClick={() => (ownShop ? toast('不能購買自己商店的商品', 'error') : setSheet('cart'))}
           disabled={stock === 0}
-          className="flex flex-1 flex-col items-center justify-center bg-success py-2 text-[11px] text-white disabled:bg-disabled"
+          aria-disabled={ownShop || undefined}
+          className={`flex flex-1 flex-col items-center justify-center py-2 text-[11px] text-white disabled:bg-disabled ${ownShop ? 'bg-disabled' : 'bg-success'}`}
         >
           <ShoppingCart size={20} /> 加入購物車
         </button>
-        <button onClick={() => setSheet('buy')} disabled={stock === 0} className="flex-1 bg-brand py-3.5 text-sm text-white disabled:bg-disabled">
+        <button onClick={() => (ownShop ? toast('不能購買自己商店的商品', 'error') : setSheet('buy'))} disabled={stock === 0} aria-disabled={ownShop || undefined} className={`flex-1 py-3.5 text-sm text-white disabled:bg-disabled ${ownShop ? 'bg-disabled' : 'bg-brand'}`}>
           {stock === 0 ? '已售完' : '直接購買'}
         </button>
       </div>
@@ -342,6 +417,31 @@ function VariantPicker(props: {
         <span className="text-sm text-muted">還剩 {stock} 件</span>
       </div>
       {needPick && <p className="text-sm text-error">請先選擇規格</p>}
+    </div>
+  );
+}
+
+/** S-4：登入回來後，自動動作沒完成的原因。不搶焦點；登入完成的回饋用 status，失敗才用 alert */
+function AutoNoticeBanner({ productId }: { productId: string }) {
+  const { autoNotice, setAutoNotice } = useAuth();
+  if (!autoNotice || autoNotice.productId !== productId) return null;
+  const t = autoNoticeText(autoNotice.mode, autoNotice.reason, autoNotice.detail);
+  const dismiss = () => setAutoNotice(null);
+  return (
+    <div className="px-3 pt-2 md:px-0">
+      <Banner
+        kind={t.kind} title={t.title} role={t.kind === 'error' ? 'alert' : 'status'}
+        actions={
+          <>
+            {autoNotice.retry && (
+              <button type="button" className={btnPrimary} onClick={() => { const r = autoNotice.retry; dismiss(); r?.(); }}>再試一次</button>
+            )}
+            <button type="button" className={btnOutline} onClick={dismiss}>知道了</button>
+          </>
+        }
+      >
+        {t.body}
+      </Banner>
     </div>
   );
 }

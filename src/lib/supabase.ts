@@ -6,9 +6,13 @@ const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export const isConfigured = Boolean(url && anonKey);
+export const supabaseUrl = url ?? '';
+export const supabaseAnonKey = anonKey ?? '';
 
+// 本站是 hash 路由，implicit 流程把 token 接在 # 後面，會跟路由打架，所以用 PKCE（回跳網址是 ?code=）。
+// detectSessionInUrl 關掉：?code= 由 AuthBoot 在路由掛載之前自己換（要能顯示「登入中」、處理失敗與取消）。
 export const supabase = createClient(url ?? 'https://placeholder.supabase.co', anonKey ?? 'placeholder', {
-  auth: { persistSession: true, autoRefreshToken: true },
+  auth: { persistSession: true, autoRefreshToken: true, flowType: 'pkce', detectSessionInUrl: false },
 });
 
 /** Supabase 回傳 snake_case，App 內部一律 camelCase，轉換集中在這裡 */
@@ -30,15 +34,15 @@ export interface OrderRow {
   carrier?: string | null; tracking_no?: string | null;
   events?: { status: string; at: string; carrier?: string | null; trackingNo?: string | null }[];
   status: 'to_ship' | 'shipping' | 'completed' | 'cancelled'; payment: 'cod' | 'card' | 'transfer';
-  created_at: string; access_token?: string;
+  created_at: string;
   buyer_name?: string; buyer_phone?: string; buyer_address?: string;
 }
 
-/**
- * 賣家（authenticated）讀到的訂單：不含買家的訂單憑證 access_token。
- * 憑證只在 place_order 回傳給下單的買家，賣家的瀏覽器不該載到任何一張單的憑證。
- */
-export type ShopOrderRow = Omit<OrderRow, 'access_token'>;
+/** 賣家讀到的訂單（含收件資料）。買家自己的訂單走帳號版 RPC，沒有收件欄位，見 BuyerOrderRow */
+export type ShopOrderRow = OrderRow;
+
+/** 帳號版 RPC（get_account_orders、place_account_order…）回傳的訂單：沒有收件資料，也沒有任何身分憑證 */
+export type BuyerOrderRow = Omit<OrderRow, 'buyer_name' | 'buyer_phone' | 'buyer_address'>;
 
 const SHOP_ORDER_FIELDS = [
   'id', 'order_no', 'shop_id', 'lines', 'shipping_fee', 'total', 'status', 'payment', 'created_at',

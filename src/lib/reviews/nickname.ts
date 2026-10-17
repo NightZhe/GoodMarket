@@ -12,6 +12,9 @@ const ALLOWED = /^[-_0-9A-Za-z\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u{20000}-\
 
 export const NICKNAME_ERROR = `暱稱需為 ${NICKNAME_MIN}–${NICKNAME_MAX} 個字，只能用中英文、數字、_ 和 -`;
 
+/** 單一個字元是不是暱稱允許的字（預填暱稱用同一套規則去掉不合法字元） */
+export const isNicknameChar = (ch: string) => ALLOWED.test(ch);
+
 export const normalizeNickname = (raw: string) => raw.replace(EDGE_SPACE, '');
 
 export const codePointLength = (s: string) => [...s].length;

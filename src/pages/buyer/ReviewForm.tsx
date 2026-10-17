@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CircleX, Info } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useRefreshOnVisible, useReviews } from '../../store/ReviewsContext';
 import { useToast } from '../../components/Toast';
 import Banner from '../../components/import/Banner';
 import LeaveDialog from '../../components/import/LeaveDialog';
-import { btnOutline } from '../../components/import/ui';
+import { btnOutline, btnPrimary } from '../../components/import/ui';
 import { EditableItemCard, ReadonlyItemCard } from '../../components/reviews/ReviewItemCards';
 import { EmptyBlock, InlineError } from '../../components/reviews/states';
 import { useLightbox } from '../../components/reviews/useLightbox';
-import { submitReviews } from '../../lib/reviews/api';
+import { submitAccountReviews } from '../../lib/reviews/api';
+import LoginRequired from '../../components/auth/LoginRequired';
+import { accountLabel, nicknamePrefillFor } from '../../lib/auth/identity';
 import {
   NICKNAME_HINT_ERROR, ReviewError, needsStatusRefresh, submitErrorMessage, SUBMIT_FALLBACK,
 } from '../../lib/reviews/errors';
@@ -19,39 +21,46 @@ import { deadlineDateTime } from '../../lib/reviews/format';
 import { maskNickname, validateNickname } from '../../lib/reviews/nickname';
 import { formGate, partitionItems } from '../../lib/reviews/status';
 import type { OrderReviewStatus } from '../../lib/reviews/types';
-import { stateHasInput, toSubmitItems, useReviewEditor } from './reviewEditor';
+import { toSubmitItems, useReviewEditor } from './reviewEditor';
 
-/** 評價表單 #/orders/:orderId/review：先確認這張訂單的憑證與狀態，再顯示表單或說明 */
+/** 評價表單 #/orders/:orderId/review：要先登入；訂單要屬於目前登入的帳號（別人的訂單一律「找不到」，不透露存在與否） */
 export default function ReviewForm() {
+  return (
+    <LoginRequired kind="review">
+      <ReviewFormView />
+    </LoginRequired>
+  );
+}
+
+function ReviewFormView() {
   const { orderId = '' } = useParams();
-  const { orderKeys, myOrders, myOrdersLoaded } = useStore();
+  const { myOrders, myOrdersState, refreshMyOrders, user } = useStore();
   const { statusState, statusOf, refreshStatus } = useReviews();
   const [retrying, setRetrying] = useState(false);
   const status = statusOf(orderId);
-  const key = orderKeys.find(k => k.id === orderId);
 
   useRefreshOnVisible(() => { void refreshStatus(true); });
   useEffect(() => { void refreshStatus(true); }, [refreshStatus]);
 
+  const retry = () => {
+    setRetrying(true);
+    void Promise.all([refreshStatus(), refreshMyOrders()]).finally(() => setRetrying(false));
+  };
+
   let content: React.ReactNode;
-  if (!key) {
-    content = <Notice icon="🧾" title="找不到這筆訂單" description="這支手機（瀏覽器）裡沒有這筆訂單的資料。評價要用下單時的瀏覽器開啟；換過手機或清除過瀏覽資料，就無法評價了。" />;
-  } else if (!status && statusState === 'error') {
+  if (!status && (statusState === 'error' || myOrdersState === 'error')) {
     content = (
       <div className="mt-2 bg-white md:mt-3 md:rounded-md">
-        <InlineError
-          title="載入失敗" retrying={retrying}
-          onRetry={() => { setRetrying(true); void refreshStatus().finally(() => setRetrying(false)); }}
-        />
+        <InlineError title="載入失敗" retrying={retrying} onRetry={retry} />
         <p className="pb-6 text-center text-sm"><Link to="/orders" className="underline underline-offset-2">回我的訂單</Link></p>
       </div>
     );
   } else if (!status) {
     const order = myOrders.find(o => o.id === orderId);
-    if (statusState === 'loading' || !myOrdersLoaded) content = <FormSkeleton />;
+    if (statusState === 'loading' || myOrdersState === 'loading' || myOrdersState === 'idle') content = <FormSkeleton />;
     else if (order?.status === 'cancelled') content = <Notice icon="🧾" title="這筆訂單已取消" description="已取消的訂單無法評價。" />;
     else if (order) content = <Notice icon="🧾" title="訂單完成後才能評價" description="確認收到商品並按下「完成訂單」後，就可以評價了。" />;
-    else content = <Notice icon="🧾" title="找不到這筆訂單" description="這支手機（瀏覽器）裡沒有這筆訂單的資料。評價要用下單時的瀏覽器開啟；換過手機或清除過瀏覽資料，就無法評價了。" />;
+    else content = <NotFoundCard account={user ? accountLabel(user) : ''} />;
   } else {
     const gate = formGate(status);
     if (gate.kind === 'expiredEmpty') {
@@ -59,7 +68,7 @@ export default function ReviewForm() {
     } else if (gate.kind === 'empty') {
       content = <Notice icon="🧾" title="這筆訂單沒有可以評價的商品" />;
     } else {
-      content = <FormBody key={orderId} status={status} token={key.token} editable={gate.kind === 'form'} />;
+      content = <FormBody key={orderId} status={status} editable={gate.kind === 'form'} />;
     }
   }
 
@@ -95,6 +104,27 @@ function Notice({ icon, title, description }: { icon: string; title: string; des
   );
 }
 
+/** 訂單不在目前登入的帳號裡（S-8b）。文字不說「這是別人的訂單」：不透露訂單是否存在（R-10） */
+function NotFoundCard({ account }: { account: string }) {
+  return (
+    <div className="mt-2 bg-white md:mt-3 md:rounded-md">
+      <EmptyBlock
+        icon="🧾" title="找不到這筆訂單"
+        description="這筆訂單不在你目前登入的帳號裡。請確認登入的是下單時使用的 Google 或 Apple 帳號。"
+        action={
+          <>
+            {account && <p className="text-xs text-muted">目前登入：{account}</p>}
+            <div className="mt-3 flex w-full max-w-xs flex-col gap-2">
+              <Link to="/orders" className={`${btnPrimary} h-12 text-base`}>回我的訂單</Link>
+              <Link to="/account" className={`${btnOutline} h-12 text-base`}>到帳號頁切換帳號</Link>
+            </div>
+          </>
+        }
+      />
+    </div>
+  );
+}
+
 function FormSkeleton() {
   return (
     <div aria-busy="true" className="mt-2 space-y-2 md:mt-3 md:space-y-3">
@@ -124,10 +154,12 @@ function useOnline() {
   return online;
 }
 
-interface BodyProps { status: OrderReviewStatus; token: string; editable: boolean }
+interface BodyProps { status: OrderReviewStatus; editable: boolean }
 
-function FormBody({ status, token, editable }: BodyProps) {
+function FormBody({ status, editable }: BodyProps) {
   const navigate = useNavigate();
+  const { user } = useStore();
+  const prefill = useMemo(() => nicknamePrefillFor(user), [user]);
   const toast = useToast();
   const { refreshStatus, refreshSummary } = useReviews();
   const online = useOnline();
@@ -139,7 +171,7 @@ function FormBody({ status, token, editable }: BodyProps) {
   }, [refreshStatus]);
 
   const ed = useReviewEditor({
-    orderId: status.order_id, token, productIds: open.map(i => i.product_id), onFatal: handleFatal,
+    orderId: status.order_id, nicknamePrefill: prefill?.value ?? '', productIds: open.map(i => i.product_id), onFatal: handleFatal,
   });
   const { state } = ed;
 
@@ -153,6 +185,13 @@ function FormBody({ status, token, editable }: BodyProps) {
   const submittingRef = useRef(false);
 
   const nick = validateNickname(state.nickname);
+  // 預填只發生在載入時（沒有草稿）；使用者改過或清空之後說明就消失，也不會再次預填（R-14）
+  const prefillActive = Boolean(prefill) && state.nickname === prefill?.value && !ed.notice.restored;
+  const clearNickname = () => {
+    ed.setNickname('');
+    setServerNickError(false);
+    document.getElementById('nickname-input')?.focus();
+  };
   const nickError = (nickTouched && !nick.ok) || serverNickError ? (nick.ok ? NICKNAME_HINT_ERROR : nick.message) : null;
 
   const editorItems = open.map(i => {
@@ -162,7 +201,7 @@ function FormBody({ status, token, editable }: BodyProps) {
   const blocker = submitBlocker(editorItems, nick.ok);
   const ratedCount = ratedItems(editorItems).length;
   const photoCount = ratedItems(editorItems).reduce((n, i) => n + i.photos.filter(p => p.status === 'done').length, 0);
-  const dirty = editable && stateHasInput(state);
+  const dirty = editable && ed.hasUserInput;
 
   // 離開保護：有任何輸入時，站內導覽先經過確認；關分頁／重新整理另外掛 beforeunload
   const leave = useBlocker(({ currentLocation, nextLocation }) =>
@@ -211,13 +250,13 @@ function FormBody({ status, token, editable }: BodyProps) {
     const rated = ratedItems(editorItems).map(i => i.productId);
     try {
       try {
-        await submitReviews(status.order_id, token, nickname, toSubmitItems(state));
+        await submitAccountReviews(status.order_id, nickname, toSubmitItems(state));
       } catch (e) {
         if (!(e instanceof ReviewError) || e.code !== 'UPLOAD_EXPIRED') throw e;
         // 上傳位置在送出前過期：自動重新申請、重傳一次，再送一次（AC-72）
         const paths = await ed.reuploadAll(rated);
         if (!paths) throw e;
-        await submitReviews(status.order_id, token, nickname, toSubmitItems(state, paths));
+        await submitAccountReviews(status.order_id, nickname, toSubmitItems(state, paths));
       }
     } catch (e) {
       const code = e instanceof ReviewError ? e.code : null;
@@ -300,16 +339,29 @@ function FormBody({ status, token, editable }: BodyProps) {
             <label htmlFor="nickname-input" className="text-sm font-medium">
               暱稱<span className="font-normal text-muted">（選填，這張訂單的評價共用）</span>
             </label>
-            <input
-              id="nickname-input" type="text" value={state.nickname} placeholder="例如：小花貓"
-              autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="done"
-              aria-invalid={nickError ? true : undefined} aria-describedby="nickname-help nickname-error"
-              onChange={e => { ed.setNickname(e.target.value); setServerNickError(false); }}
-              onBlur={() => setNickTouched(true)}
-              className={`mt-2 block h-11 w-full scroll-mt-20 rounded-sm border px-3 text-base outline-none placeholder:text-muted ${nickError ? 'border-error-border' : 'border-line focus:border-ink'}`}
-            />
+            <div className="relative mt-2">
+              <input
+                id="nickname-input" type="text" value={state.nickname} placeholder="例如：小花貓"
+                autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="done"
+                aria-invalid={nickError ? true : undefined}
+                aria-describedby={`nickname-help ${prefillActive ? 'nickname-prefill ' : ''}nickname-error`}
+                onChange={e => { ed.setNickname(e.target.value); setServerNickError(false); }}
+                onBlur={() => setNickTouched(true)}
+                className={`block h-11 w-full scroll-mt-20 rounded-sm border pl-3 pr-11 text-base outline-none placeholder:text-muted ${nickError ? 'border-error-border' : 'border-line focus:border-ink'}`}
+              />
+              {state.nickname !== '' && (
+                <button
+                  type="button" aria-label="清空暱稱" onClick={clearNickname}
+                  className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                >
+                  <CircleX size={20} aria-hidden="true" />
+                </button>
+              )}
+            </div>
             <div className="mt-1.5 flex items-start justify-between gap-3 text-xs">
-              <p id="nickname-help" className="text-muted">暱稱會以遮罩方式公開（例：小*****貓），請勿使用真實姓名</p>
+              <p id="nickname-help" className="text-muted">
+                {prefillActive ? '暱稱會以遮罩方式公開，賣家看得到完整暱稱。' : '暱稱會以遮罩方式公開（例：小*****貓），請勿使用真實姓名'}
+              </p>
               <span className="shrink-0 tabular-nums text-muted">{Array.from(state.nickname.trim()).length} / 12</span>
             </div>
             <p id="nickname-error" role={nickError ? 'alert' : undefined} className="mt-1 text-xs text-error-text">{nickError}</p>
@@ -318,6 +370,17 @@ function FormBody({ status, token, editable }: BodyProps) {
                 {nick.ok && nick.value
                   ? <>公開時顯示為「<strong>{maskNickname(nick.value)}</strong>」</>
                   : '沒填暱稱的話，公開時顯示「匿名買家」'}
+              </p>
+            )}
+            {prefillActive && prefill && (
+              <p id="nickname-prefill" className="mt-3 flex gap-2 rounded-sm bg-subtle p-2.5 text-xs leading-5">
+                <Info size={14} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
+                <span>
+                  {prefill.adjusted
+                    ? `已把你的 Google 名稱「${prefill.original}」調整成符合暱稱規則的格式（去掉空格與符號）。`
+                    : '已填入你的 Google 名稱。'}
+                  Google 名稱可能是你的真實姓名，賣家會看到完整暱稱。不想用就直接修改或清空。
+                </span>
               </p>
             )}
             <div className="mt-4">

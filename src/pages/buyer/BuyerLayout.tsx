@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ClipboardList, Home, Loader2, Search as SearchIcon, ShoppingCart, Store } from 'lucide-react';
+import { ClipboardList, Home, Loader2, LogIn, Search as SearchIcon, ShoppingCart, Store, UserRound } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import { useAuth } from '../../store/AuthContext';
 
 export function Logo({ light = true }: { light?: boolean }) {
   return (
@@ -13,7 +14,12 @@ export function Logo({ light = true }: { light?: boolean }) {
 }
 
 export default function BuyerLayout() {
-  const { cartCount, loading, loadError, reload } = useStore();
+  const { cartCount, loading, loadError, reload, user } = useStore();
+  const { openLogin } = useAuth();
+  // 只有第一次載入商品時用轉圈圈取代頁面。登入、登出、登入過期之後的重新載入是在背景進行：
+  // 頁面若被卸載，結帳頁填到一半的收件資料就會消失（登入過期時要能留著，AC-13）
+  const loadedOnce = useRef(false);
+  if (!loading) loadedOnce.current = true;
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [params] = useSearchParams();
@@ -40,7 +46,19 @@ export default function BuyerLayout() {
             <span className="opacity-50">|</span>
             <Link to="/seller" className="hover:opacity-80">免費開店上架</Link>
           </div>
-          <Link to="/orders" className="hover:opacity-80">我的訂單</Link>
+          <div className="flex items-center gap-4">
+            <Link to="/orders" className="hover:opacity-80">我的訂單</Link>
+            <span className="opacity-50">|</span>
+            {user ? (
+              <Link to="/account" className="inline-flex items-center gap-1 font-medium hover:opacity-80">
+                <UserRound size={12} aria-hidden="true" />我的帳號
+              </Link>
+            ) : (
+              <button type="button" onClick={() => openLogin()} className="inline-flex items-center gap-1 font-medium hover:opacity-80">
+                <LogIn size={12} aria-hidden="true" />登入
+              </button>
+            )}
+          </div>
         </div>
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-2.5 md:gap-10 md:px-4 md:py-4">
           <Logo />
@@ -75,7 +93,7 @@ export default function BuyerLayout() {
             <p className="mt-1 text-sm text-muted">{loadError}</p>
             <button onClick={() => void reload()} className="mt-5 rounded-sm bg-brand px-6 py-2.5 text-sm text-white">重新載入</button>
           </div>
-        ) : loading ? (
+        ) : loading && !loadedOnce.current ? (
           <div className="flex items-center justify-center py-32 text-muted">
             <Loader2 size={28} className="animate-spin" />
           </div>
@@ -102,23 +120,34 @@ export default function BuyerLayout() {
       </footer>
 
       {!hideTabBar && (
-        <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-white/95 backdrop-blur md:hidden">
+        <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-white/95 backdrop-blur md:hidden">
           <Tab to="/" icon={<Home size={22} />} label="首頁" end />
           <Tab to="/search" icon={<SearchIcon size={22} />} label="逛逛" />
           <Tab to="/orders" icon={<ClipboardList size={22} />} label="訂單" />
           <Tab to="/seller" icon={<Store size={22} />} label="我要賣" />
+          {user ? (
+            <Tab to="/account" icon={<UserRound size={22} />} label="我的" ariaLabel="我的帳號" />
+          ) : (
+            // 登入不是一個頁面，是開登入面板、登入完留在原頁：所以是按鈕，不會亮起
+            <button type="button" onClick={() => openLogin()} className={TAB_CLASS('text-muted')}>
+              <LogIn size={22} aria-hidden="true" />登入
+            </button>
+          )}
         </nav>
       )}
     </div>
   );
 }
 
-function Tab({ to, icon, label, end }: { to: string; icon: React.ReactNode; label: string; end?: boolean }) {
+const TAB_CLASS = (tone: string) => `flex min-h-11 flex-col items-center gap-0.5 py-2 text-[11px] ${tone}`;
+
+function Tab({ to, icon, label, end, ariaLabel }: { to: string; icon: React.ReactNode; label: string; end?: boolean; ariaLabel?: string }) {
   return (
     <NavLink
       to={to}
       end={end}
-      className={({ isActive }) => `flex flex-col items-center gap-0.5 py-2 text-[11px] ${isActive ? 'text-brand' : 'text-muted'}`}
+      aria-label={ariaLabel}
+      className={({ isActive }) => TAB_CLASS(isActive ? 'text-brand' : 'text-muted')}
     >
       {icon}
       {label}

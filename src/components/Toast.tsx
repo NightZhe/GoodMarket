@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { CheckCircle2, CircleAlert } from 'lucide-react';
+import { CheckCircle2, CircleAlert, Info } from 'lucide-react';
 
-type ToastKind = 'success' | 'error';
-// 錯誤訊息比較長、使用者需要讀完；成功只是一閃而過的回饋
-const SHOW_MS: Record<ToastKind, number> = { success: 1800, error: 4000 };
+type ToastKind = 'success' | 'error' | 'info';
+// 錯誤訊息比較長、使用者需要讀完；成功只是一閃而過的回饋；info（登入已取消、已複製）字比成功多一點
+const SHOW_MS: Record<ToastKind, number> = { success: 1800, error: 4000, info: 2600 };
 // 比動畫多留一點，確保「減少動態效果」（沒有 animationend）時也由計時器收掉
 const HIDE_GRACE_MS = 100;
 const Ctx = createContext<(msg: string, kind?: ToastKind) => void>(() => {});
@@ -31,7 +31,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             style={{ '--toast-ms': `${SHOW_MS[toast.kind]}ms` } as CSSProperties}
             className="animate-toast flex max-w-full flex-col items-center gap-2 rounded-2xl bg-black/80 px-6 py-5 text-center text-sm text-white shadow-xl sm:max-w-sm"
           >
-            {toast.kind === 'error' ? <CircleAlert size={32} strokeWidth={1.6} /> : <CheckCircle2 size={32} strokeWidth={1.6} />}
+            {toast.kind === 'error' ? <CircleAlert size={32} strokeWidth={1.6} /> : toast.kind === 'info' ? <Info size={32} strokeWidth={1.6} /> : <CheckCircle2 size={32} strokeWidth={1.6} />}
             {toast.msg}
           </div>
         </div>

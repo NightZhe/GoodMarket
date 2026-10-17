@@ -338,6 +338,23 @@ skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
 
+# 買家註冊登入（.work/buyer-auth）：Google。client id／secret 一律走環境變數，不得寫進這個檔案。
+# 本機的值放在 supabase/.env（檔名就是 .env，已被 .gitignore 的 `.env` 規則排除，不進版控），兩行：
+#   SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=<本機用戶端 ID>
+#   SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=<本機用戶端密鑰>
+# Google 用戶端的重新導向 URI 填 http://127.0.0.1:54321/auth/v1/callback；改完要 supabase stop && supabase start。
+# 沒設環境變數時 enabled = true 仍可啟動，但送給 Google 的 client_id 會是字面的 "env(...)"，Google 會拒絕；
+# 所以沒有本機憑證時，Google 登入在本機不能用（資料庫與其他功能不受影響）。
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+redirect_uri = ""
+url = ""
+# 只有「用 signInWithIdToken 在本機測 Google」才需要打開；一般 OAuth 轉址流程不需要。
+skip_nonce_check = false
+email_optional = false
+
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.
 [auth.web3.solana]

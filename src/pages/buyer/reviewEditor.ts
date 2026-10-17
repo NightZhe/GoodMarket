@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { requestReviewUpload, reviewPhotoUrl, uploadReviewPhoto } from '../../lib/reviews/api';
+import { requestAccountReviewUpload, reviewPhotoUrl, uploadReviewPhoto } from '../../lib/reviews/api';
 import { draftKey, hasInput, parseDraft, splitUsablePhotos, type Draft } from '../../lib/reviews/draft';
 import { ReviewError } from '../../lib/reviews/errors';
 import { buildSubmitItems } from '../../lib/reviews/form';
@@ -38,10 +38,11 @@ export function clearDraft(orderId: string) {
   try { sessionStorage.removeItem(draftKey(orderId)); } catch { /* 隱私模式可能不能用 sessionStorage；沒有草稿可清就算了 */ }
 }
 
-function initialState(orderId: string, productIds: string[]): { state: EditorState; restored: boolean; dropped: number } {
+function initialState(orderId: string, productIds: string[], prefill: string): { state: EditorState; restored: boolean; dropped: number } {
   const items: Record<string, ItemState> = Object.fromEntries(productIds.map(id => [id, emptyItem()]));
   const draft = readDraft(orderId);
-  if (!draft || !hasInput(draft)) return { state: { items, nickname: '' }, restored: false, dropped: 0 };
+  // 暱稱預填（R-14）：草稿裡已經有內容時以草稿為準，不覆蓋
+  if (!draft || !hasInput(draft)) return { state: { items, nickname: prefill }, restored: false, dropped: 0 };
   let dropped = 0;
   for (const id of productIds) {
     const d = draft.items[id];
@@ -61,7 +62,8 @@ function initialState(orderId: string, productIds: string[]): { state: EditorSta
 
 interface Args {
   orderId: string;
-  token: string;
+  /** 暱稱預填值（Google 名稱處理後；沒有就是空字串）。只在沒有草稿時使用 */
+  nicknamePrefill: string;
   productIds: string[];
   /** 上傳／申請位置時遇到「訂單狀態變了」（已過期、已評價…）：交給頁面重新取得狀態 */
   onFatal: (e: ReviewError) => void;
@@ -71,8 +73,8 @@ interface Args {
  * 評價表單的狀態與照片上傳。照片的壓縮與上傳在這裡排隊：
  * 壓縮一次一張（手機記憶體），上傳各自進行；每張照片自己有狀態，失敗可以單張重試。
  */
-export function useReviewEditor({ orderId, token, productIds, onFatal }: Args) {
-  const [init] = useState(() => initialState(orderId, productIds));
+export function useReviewEditor({ orderId, nicknamePrefill, productIds, onFatal }: Args) {
+  const [init] = useState(() => initialState(orderId, productIds, nicknamePrefill));
   const [state, setState] = useState<EditorState>(init.state);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -84,6 +86,13 @@ export function useReviewEditor({ orderId, token, productIds, onFatal }: Args) {
     return () => { alive.current = false; };
   }, []);
 
+  // 只有預填值、使用者什麼都沒動：不算有輸入（不跳離開確認、不寫草稿、不顯示「已還原」）
+  const meaningful = useCallback(
+    (s: EditorState) => stateHasInput(nicknamePrefill && s.nickname === nicknamePrefill ? { ...s, nickname: '' } : s),
+    [nicknamePrefill],
+  );
+  const hasUserInput = meaningful(state);
+
   // 草稿：延遲一下再寫，打字時不用每個字都寫。送出成功或確認離開後就不再寫（否則清掉之後又被寫回去）
   const draftOff = useRef(false);
   const discardDraft = useCallback(() => {
@@ -94,12 +103,12 @@ export function useReviewEditor({ orderId, token, productIds, onFatal }: Args) {
     const t = setTimeout(() => {
       if (draftOff.current) return;
       try {
-        if (stateHasInput(state)) sessionStorage.setItem(draftKey(orderId), JSON.stringify(toDraft(state)));
+        if (meaningful(state)) sessionStorage.setItem(draftKey(orderId), JSON.stringify(toDraft(state)));
         else sessionStorage.removeItem(draftKey(orderId));
       } catch { /* 隱私模式不能寫 sessionStorage：沒有草稿功能，不影響填表 */ }
     }, 300);
     return () => clearTimeout(t);
-  }, [state, orderId]);
+  }, [state, orderId, meaningful]);
 
   const patchItem = useCallback((productId: string, fn: (i: ItemState) => ItemState) => {
     setState(s => ({ ...s, items: { ...s.items, [productId]: fn(s.items[productId] ?? emptyItem()) } }));
@@ -110,10 +119,10 @@ export function useReviewEditor({ orderId, token, productIds, onFatal }: Args) {
   }, [patchItem]);
 
   const depsFor = useCallback((productId: string): UploadDeps => ({
-    requestSlot: async () => (await requestReviewUpload(orderId, token, productId, 1))[0],
+    requestSlot: async () => (await requestAccountReviewUpload(orderId, productId, 1))[0],
     upload: uploadReviewPhoto,
     now: Date.now,
-  }), [orderId, token]);
+  }), [orderId]);
 
   const applyResult = useCallback((productId: string, key: string, r: UploadResult) => {
     if (!alive.current) return;
@@ -215,7 +224,7 @@ export function useReviewEditor({ orderId, token, productIds, onFatal }: Args) {
   }, [patchPhoto, depsFor, applyResult]);
 
   return {
-    state, setState, notice,
+    state, setState, notice, hasUserInput,
     setRating: (id: string, rating: number) => patchItem(id, i => ({ ...i, rating })),
     setContent: (id: string, content: string) => patchItem(id, i => ({ ...i, content })),
     setNickname: (nickname: string) => setState(s => ({ ...s, nickname })),
@@ -223,7 +232,7 @@ export function useReviewEditor({ orderId, token, productIds, onFatal }: Args) {
   };
 }
 
-/** 依目前狀態組出 submit_reviews 的 p_items；overridePaths 是重傳後的新路徑 */
+/** 依目前狀態組出 submit_account_reviews 的 p_items；overridePaths 是重傳後的新路徑 */
 export function toSubmitItems(state: EditorState, overridePaths?: Record<string, string[]>): SubmitItem[] {
   return buildSubmitItems(Object.entries(state.items).map(([productId, i]) => ({
     productId, rating: i.rating, content: i.content,

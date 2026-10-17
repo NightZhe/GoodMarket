@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import { useAuth } from '../../store/AuthContext';
+import Banner from '../../components/import/Banner';
+import PrivacyNote from '../../components/auth/PrivacyNote';
+import ProviderLogin, { headingFor } from '../../components/auth/ProviderLogin';
+import { isIOS } from '../../lib/auth/inapp';
+import { signedInText } from '../../lib/auth/identity';
 
 const AVATARS = ['🏪', '🌸', '🐱', '🍰', '🎮', '👜', '🪴', '📚', '💎', '🧶'];
 const CITIES = ['臺北市', '新北市', '桃園市', '臺中市', '臺南市', '高雄市', '新竹市', '花蓮縣'];
@@ -52,6 +58,7 @@ const inputClass = 'mt-1 w-full rounded-sm border px-3 py-2.5 outline-none focus
 
 function AuthForm() {
   const { signIn, signUp } = useStore();
+  const { inApp, loginError, providers } = useAuth();
   const [mode, setMode] = useState<'in' | 'up'>('in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -97,8 +104,18 @@ function AuthForm() {
     );
   }
 
+  const inAppHeading = inApp ? headingFor({ trigger: null, expired: false, inApp, ios: isIOS(navigator.userAgent) }) : null;
+
   return (
-    <form onSubmit={submit} className="rounded-lg bg-white p-6 shadow-xl">
+    <div className="rounded-lg bg-white p-6 shadow-xl">
+      {/* Google、Apple 一鍵登入（D5＝C）：email 密碼登入與註冊照常開放，在下面 */}
+      {inAppHeading && <div className="mb-4"><Banner kind="info" title={inAppHeading.title}>{inAppHeading.description}</Banner></div>}
+      <ProviderLogin trigger={{ kind: 'goto' }} inApp={inApp} error={loginError} providers={providers} summary={false} />
+      <p className="mt-3 text-xs text-muted">第一次登入後，接著填寫商店資料就能開店。</p>
+      <p className="my-5 flex items-center gap-3 text-xs text-muted" aria-hidden="true">
+        <span className="h-px flex-1 bg-line" />或使用 Email<span className="h-px flex-1 bg-line" />
+      </p>
+    <form onSubmit={submit}>
       <div className="flex gap-4 border-b border-line">
         {([['in', '登入'], ['up', '註冊開店']] as const).map(([id, label]) => (
           <button key={id} type="button" onClick={() => { setMode(id); setError(''); }}
@@ -130,6 +147,8 @@ function AuthForm() {
         {mode === 'in' ? '還沒有帳號？點上面的「註冊開店」。' : '註冊後會寄一封確認信到你的信箱。'}
       </p>
     </form>
+      {!inApp && <PrivacyNote className="mt-3" />}
+    </div>
   );
 }
 
@@ -163,7 +182,7 @@ function ShopForm() {
   return (
     <form onSubmit={submit} className="rounded-lg bg-white p-6 shadow-xl">
       <h2 className="text-lg font-bold">建立我的商店</h2>
-      <p className="mt-1 text-xs text-muted">以 {user?.email} 登入中・<button type="button" onClick={() => void signOut()} className="text-brand">換帳號</button></p>
+      <p className="mt-1 text-xs text-muted">{user ? signedInText(user, true) : ''}・<button type="button" onClick={() => void signOut()} className="text-brand">換帳號</button></p>
 
       <label className="mt-4 block text-sm">
         商店名稱

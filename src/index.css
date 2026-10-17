@@ -58,7 +58,10 @@ button:disabled { cursor: not-allowed; }
 .animate-sheet { animation: sheet-up .28s cubic-bezier(.2,.8,.2,1); }
 .animate-fade { animation: fade-in .2s ease-out; }
 .animate-toast { animation: toast var(--toast-ms, 1.8s) ease-out forwards; }
+/* 登入面板：手機從底部滑上來；桌機是置中對話框，只淡入（跟遮罩一樣） */
+.animate-auth-panel { animation: fade-in .2s ease-out; }
+@media (max-width: 767px) { .animate-auth-panel { animation: sheet-up .28s cubic-bezier(.2,.8,.2,1); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-sheet, .animate-fade, .animate-toast { animation: none; }
+  .animate-sheet, .animate-fade, .animate-toast, .animate-auth-panel { animation: none; }
 }

@@ -1,7 +1,10 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { Navigate, Outlet, Route, RouterProvider, createHashRouter, createRoutesFromElements } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { StoreProvider } from './store/StoreContext';
+import { AuthProvider } from './store/AuthContext';
+import AuthBoot from './components/auth/AuthBoot';
+import PendingRunner from './components/auth/PendingRunner';
 import { isConfigured } from './lib/supabase';
 import SetupNotice from './pages/SetupNotice';
 import { ToastProvider } from './components/Toast';
@@ -16,6 +19,8 @@ import Orders from './pages/buyer/Orders';
 import ShopPage from './pages/buyer/ShopPage';
 import ReviewForm from './pages/buyer/ReviewForm';
 import ReviewsOverview from './pages/buyer/ReviewsOverview';
+import Account from './pages/buyer/Account';
+import Privacy from './pages/buyer/Privacy';
 import { ReviewsProvider } from './store/ReviewsContext';
 import SellerGate from './pages/seller/SellerGate';
 import SellerLayout from './pages/seller/SellerLayout';
@@ -32,6 +37,7 @@ function Root() {
   return (
     <>
       <ScrollToTop />
+      <PendingRunner />
       <Outlet />
     </>
   );
@@ -48,7 +54,8 @@ function PageLoading() {
 
 // 用 data router 才有 useBlocker：匯入進行中，站內導覽（側欄、返回鍵）要先經過離開確認
 // GitHub Pages 是純靜態主機，沒有 SPA fallback，所以用 hash（網址會是 /#/product/p001）
-const router = createHashRouter(createRoutesFromElements(
+// 路由器要等登入回跳處理完才建立（見 AuthBoot）：它建立時才讀網址的 hash，那時 hash 已經是要回去的那一頁
+const createRouter = () => createHashRouter(createRoutesFromElements(
   <Route element={<Root />}>
     {/* 買家前台 */}
     <Route element={<BuyerLayout />}>
@@ -61,6 +68,8 @@ const router = createHashRouter(createRoutesFromElements(
       <Route path="checkout" element={<Checkout />} />
       <Route path="orders" element={<Orders />} />
       <Route path="orders/:orderId/review" element={<ReviewForm />} />
+      <Route path="account" element={<Account />} />
+      <Route path="privacy" element={<Privacy />} />
     </Route>
 
     {/* 賣家中心（後台） */}
@@ -80,17 +89,26 @@ const router = createHashRouter(createRoutesFromElements(
   </Route>,
 ));
 
+function Routed() {
+  const [router] = useState(createRouter);
+  return <RouterProvider router={router} />;
+}
+
 export default function App() {
   // 沒設定後端金鑰就不要讓整站壞在看不懂的錯誤上
   if (!isConfigured) return <SetupNotice />;
 
   return (
-    <StoreProvider>
-      <ReviewsProvider>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
-      </ReviewsProvider>
-    </StoreProvider>
+    <AuthBoot>
+      <StoreProvider>
+        <ReviewsProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <Routed />
+            </AuthProvider>
+          </ToastProvider>
+        </ReviewsProvider>
+      </StoreProvider>
+    </AuthBoot>
   );
 }

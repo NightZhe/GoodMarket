@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Store, TriangleAlert } from 'lucide-react';
+import { ChevronDown, LoaderCircle, Store, TriangleAlert, WifiOff } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import LoginRequired from '../../components/auth/LoginRequired';
+import { useToast } from '../../components/Toast';
+import { accountErrorText, toAccountError } from '../../lib/account/errors';
+import { btnOutline } from '../../components/import/ui';
 import { useRefreshOnVisible, useReviews } from '../../store/ReviewsContext';
 import OrderReviewRow, { OrderReviewRowSkeleton } from '../../components/reviews/OrderReviewRow';
 import ProductImage from '../../components/ProductImage';
@@ -19,16 +23,48 @@ const TABS: { id: OrderStatus | 'all'; label: string }[] = [
   { id: 'completed', label: '完成' }, { id: 'cancelled', label: '不成立' },
 ];
 
-// 買家不需要帳號：下單時拿到的憑證存在這台瀏覽器，用它回來查自己的訂單
+// 我的訂單：要先登入，只看得到自己帳號的訂單，換裝置登入也看得到（D1、D16）
 export default function Orders() {
-  const { myOrders, getShop, cancelMyOrder, completeMyOrder, refreshMyOrders } = useStore();
+  return (
+    <LoginRequired kind="orders">
+      <OrdersView />
+    </LoginRequired>
+  );
+}
+
+function OrderSkeleton() {
+  return (
+    <div aria-busy="true" className="space-y-2 md:space-y-3">
+      <p role="status" className="sr-only">載入中</p>
+      {[0, 1].map(i => (
+        <div key={i} aria-hidden="true" className="bg-white md:rounded-md">
+          <div className="border-b border-line px-4 py-3"><div className="h-4 w-28 rounded-sm bg-line motion-safe:animate-pulse" /></div>
+          <div className="flex gap-3 px-4 py-3">
+            <span className="h-16 w-16 shrink-0 rounded-sm bg-line motion-safe:animate-pulse" />
+            <div className="flex-1 space-y-2 pt-1">
+              <div className="h-3.5 w-3/4 rounded-sm bg-line motion-safe:animate-pulse" />
+              <div className="h-3 w-1/3 rounded-sm bg-line motion-safe:animate-pulse" />
+            </div>
+          </div>
+          <div className="border-t border-line px-4 py-3"><div className="h-4 w-1/2 rounded-sm bg-line motion-safe:animate-pulse" /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OrdersView() {
+  const { myOrders, myOrdersState, myOrdersIssue, getShop, cancelMyOrder, completeMyOrder, refreshMyOrders } = useStore();
+  const toast = useToast();
+  const [busy, setBusy] = useState<{ id: string; kind: 'cancel' | 'complete' } | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const [tab, setTab] = useState<OrderStatus | 'all'>('all');
   const [openId, setOpenId] = useState<string | null>(null);
   const { statusState, statusOf, refreshStatus } = useReviews();
   const list = myOrders.filter(o => tab === 'all' || o.status === tab);
   const hasCompleted = list.some(o => o.status === 'completed');
 
-  useEffect(() => { void refreshMyOrders(); }, [refreshMyOrders]);
+  useEffect(() => { void refreshMyOrders(true); }, [refreshMyOrders]);
   // 評價期限會隨時間跨過：進頁與從背景回來都重新取得（保留舊畫面，不閃骨架）。
   // 「已完成」的訂單集合變了（按了「完成訂單」）也要重新取得，否則剛完成的訂單要重新整理才有評價列
   const completedKey = myOrders.filter(o => o.status === 'completed').map(o => o.id).join(',');
@@ -38,7 +74,26 @@ export default function Orders() {
     void refreshStatus(true).then(() => { if (current) setCheckedKey(completedKey); });
     return () => { current = false; };
   }, [refreshStatus, completedKey]);
-  useRefreshOnVisible(() => { void refreshStatus(true); });
+  useRefreshOnVisible(() => { void refreshStatus(true); void refreshMyOrders(true); });
+
+  // 取消、完成：處理中不能重複按；狀態已經變了（賣家剛出貨）時資料庫會回錯誤，說明並讓畫面追上
+  const act = async (id: string, kind: 'cancel' | 'complete') => {
+    if (busy) return;
+    setBusy({ id, kind });
+    try {
+      await (kind === 'cancel' ? cancelMyOrder(id) : completeMyOrder(id));
+    } catch (e) {
+      const err = toAccountError(e);
+      toast(
+        err.code === 'ORDER_STATE_CHANGED'
+          ? (kind === 'cancel' ? '這筆訂單已經出貨，無法取消。畫面已更新。' : '這筆訂單的狀態已經改變，無法完成。畫面已更新。')
+          : accountErrorText(err, '操作失敗，請稍後再試'),
+        'error',
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-4xl md:px-4 md:pt-6">
@@ -63,7 +118,21 @@ export default function Orders() {
         </div>
       )}
       <div className="mt-2 space-y-2 md:mt-3 md:space-y-3">
-        {list.length === 0 ? (
+        {myOrdersState === 'idle' || myOrdersState === 'loading' ? (
+          <OrderSkeleton />
+        ) : myOrdersState === 'error' ? (
+          <div className="bg-white px-4 py-16 text-center md:rounded-md">
+            <WifiOff size={40} className="mx-auto text-muted" aria-hidden="true" />
+            <p role="alert" className="mt-4 font-medium">訂單暫時無法載入</p>
+            <p className="mt-1 text-sm text-muted">{myOrdersIssue === 'backend_missing' ? '請稍後再試。' : '請檢查網路後再試一次。'}</p>
+            <button
+              type="button" aria-disabled={retrying || undefined} className={`${btnOutline} mt-5 h-11 px-6`}
+              onClick={() => { if (retrying) return; setRetrying(true); void refreshMyOrders().finally(() => setRetrying(false)); }}
+            >
+              重試
+            </button>
+          </div>
+        ) : list.length === 0 ? (
           <EmptyState icon="🧾" title="還沒有訂單" action={<Link to="/" className="text-brand">去逛逛</Link>} />
         ) : list.map(o => (
           <article key={o.id} className="bg-white md:rounded-md">
@@ -110,10 +179,14 @@ export default function Orders() {
               <div className="flex items-center gap-3">
                 <span className="text-sm">訂單金額 <span className="text-lg text-brand">{money(o.total)}</span></span>
                 {o.status === 'to_ship' && (
-                  <button onClick={() => void cancelMyOrder(o.id)} className="rounded-sm border border-line px-3 py-1.5 text-sm">取消訂單</button>
+                  busy?.id === o.id ? <BusyButton label="取消中…" /> : (
+                    <button onClick={() => void act(o.id, 'cancel')} aria-disabled={busy ? true : undefined} className="inline-flex min-h-11 items-center rounded-sm border border-line px-3 text-sm">取消訂單</button>
+                  )
                 )}
                 {o.status === 'shipping' && (
-                  <button onClick={() => void completeMyOrder(o.id)} className="rounded-sm bg-brand px-3 py-1.5 text-sm text-white">完成訂單</button>
+                  busy?.id === o.id ? <BusyButton label="完成中…" /> : (
+                    <button onClick={() => void act(o.id, 'complete')} aria-disabled={busy ? true : undefined} className="inline-flex min-h-11 items-center rounded-sm bg-brand px-3 text-sm text-white">完成訂單</button>
+                  )
                 )}
               </div>
             </footer>
@@ -121,5 +194,13 @@ export default function Orders() {
         ))}
       </div>
     </div>
+  );
+}
+
+function BusyButton({ label }: { label: string }) {
+  return (
+    <span role="status" className="inline-flex min-h-11 items-center gap-1.5 rounded-sm border border-line px-3 text-sm text-muted">
+      <LoaderCircle size={16} className="motion-safe:animate-spin" aria-hidden="true" />{label}
+    </span>
   );
 }

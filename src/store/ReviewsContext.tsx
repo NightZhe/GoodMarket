@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { getMyReviewStatus, getReviewSummary } from '../lib/reviews/api';
+import { getAccountReviewStatus, getReviewSummary } from '../lib/reviews/api';
 import type { OrderReviewStatus, RatingStat, ReviewSummaryData } from '../lib/reviews/types';
 import { useStore } from './StoreContext';
 
 // 評價的全站資料：
 //  - summary：每件商品、每家店的 {count, avg}，一次取回（資料庫算好，賣家改不到）。
 //    前台所有顯示評分的地方都讀這裡，不再讀 products.rating、shops.rating。
-//  - status：這台瀏覽器裡每張已完成訂單的評價狀態（期限、哪些商品評過了）。
+//  - status：目前登入的帳號每張已完成訂單的評價狀態（期限、哪些商品評過了）。
 // 兩者都保留「上一次的資料」：重新取得期間不閃畫面，失敗時舊資料仍可用。
 
 export type LoadState = 'loading' | 'ready' | 'error';
@@ -30,7 +30,8 @@ interface Ctx {
 const ReviewsCtx = createContext<Ctx | null>(null);
 
 export function ReviewsProvider({ children }: { children: ReactNode }) {
-  const { orderKeys } = useStore();
+  const { user } = useStore();
+  const userId = user?.id ?? null;
 
   const [summary, setSummary] = useState<ReviewSummaryData | null>(null);
   const [summaryState, setSummaryState] = useState<LoadState>('loading');
@@ -53,19 +54,20 @@ export function ReviewsProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void refreshSummary(); }, [refreshSummary]);
 
   const [statusList, setStatusList] = useState<OrderReviewStatus[]>([]);
-  const [statusState, setStatusState] = useState<LoadState>(orderKeys.length === 0 ? 'ready' : 'loading');
+  const [statusState, setStatusState] = useState<LoadState>('ready');
   const statusSeq = useRef(0);
 
   const refreshStatus = useCallback(async (silent = false) => {
     const seq = ++statusSeq.current;
     if (!silent) setStatusState(prev => (prev === 'error' ? 'loading' : prev));
-    if (orderKeys.length === 0) {
+    // 沒登入就沒有訂單，也不呼叫資料庫（遊客瀏覽不碰帳號版的結構）
+    if (!userId) {
       setStatusList([]);
       setStatusState('ready');
       return true;
     }
     try {
-      const data = await getMyReviewStatus(orderKeys);
+      const data = await getAccountReviewStatus();
       if (seq !== statusSeq.current) return true;
       setStatusList(data);
       setStatusState('ready');
@@ -75,9 +77,14 @@ export function ReviewsProvider({ children }: { children: ReactNode }) {
       if (!silent) setStatusState('error');
       return false;
     }
-  }, [orderKeys]);
+  }, [userId]);
 
-  useEffect(() => { void refreshStatus(); }, [refreshStatus]);
+  // 登入、登出、換帳號：先清掉上一個帳號的資料（不能讓下一個人看到），再重新取得
+  useEffect(() => {
+    setStatusList([]);
+    setStatusState(userId ? 'loading' : 'ready');
+    void refreshStatus();
+  }, [userId, refreshStatus]);
 
   const value = useMemo<Ctx>(() => ({
     summaryState,

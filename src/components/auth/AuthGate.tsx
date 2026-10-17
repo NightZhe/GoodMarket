@@ -1,0 +1,49 @@
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { ClipboardList, PenLine, ShoppingCart, UserRound } from 'lucide-react';
+import { useAuth } from '../../store/AuthContext';
+import { isIOS } from '../../lib/auth/inapp';
+import Banner from '../import/Banner';
+import PrivacyNote from './PrivacyNote';
+import ProviderLogin, { headingFor } from './ProviderLogin';
+
+export type GateKind = 'cart' | 'checkout' | 'orders' | 'review' | 'account';
+
+const GATES: Record<GateKind, { icon: ReactNode; title: string; description: string }> = {
+  cart: { icon: <ShoppingCart size={28} />, title: '登入後查看購物車', description: '購物車和訂單會跟著帳號走，換手機也看得到。' },
+  checkout: { icon: <ShoppingCart size={28} />, title: '登入後結帳', description: '登入後就能填寫收件資料並下訂單。' },
+  orders: { icon: <ClipboardList size={28} />, title: '登入後查看訂單', description: '你的訂單會跟著帳號走，換手機也看得到。' },
+  review: { icon: <PenLine size={28} />, title: '登入後撰寫評價', description: '評價要用下單時的帳號來寫。' },
+  account: { icon: <UserRound size={28} />, title: '登入後查看帳號', description: '登入後可以查看登入方式、登出，或申請刪除帳號。' },
+};
+
+/**
+ * C-5 路由層級的登入閘門：#/cart、#/orders、#/account 這類頁面，沒登入時頁面本身就是登入畫面（沒有彈窗）。
+ * 登入完回到這一頁（待辦動作是「回到目前頁面」）。登入過期時多一則說明。
+ */
+export default function AuthGate({ kind, expired = false }: { kind: GateKind; expired?: boolean }) {
+  const { inApp, loginError, providers } = useAuth();
+  const g = GATES[kind];
+  const ios = isIOS(navigator.userAgent);
+  const inAppHeading = inApp ? headingFor({ trigger: null, expired: false, inApp, ios }) : null;
+  return (
+    <div className="mx-auto max-w-md md:px-4 md:py-12">
+      <div className="bg-white px-4 py-8 text-center md:rounded-md md:px-8 md:py-10">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-canvas text-muted" aria-hidden="true">{g.icon}</div>
+        <h1 tabIndex={-1} className="mt-4 text-xl font-bold outline-none">{inAppHeading?.title ?? g.title}</h1>
+        <p className="mt-1 text-sm text-muted">{inAppHeading?.description ?? g.description}</p>
+        {expired && (
+          <div className="mt-4 text-left">
+            <Banner kind="info" role="status" title="登入已過期">請重新登入。</Banner>
+          </div>
+        )}
+        <div className="mt-6 text-left">
+          <ProviderLogin trigger={{ kind: 'goto' }} inApp={inApp} error={loginError} providers={providers} summary={false} />
+        </div>
+        {!inApp && <PrivacyNote className="mt-4 text-left" />}
+        <Link to="/" className="mt-2 inline-flex min-h-11 items-center px-2 text-sm text-ink underline underline-offset-2">先逛逛，晚點再登入</Link>
+      </div>
+    </div>
+  );
+}
+
