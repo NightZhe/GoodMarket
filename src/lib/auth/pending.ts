@@ -13,20 +13,36 @@ export const PENDING_KEY = 'goodmarket_pending_action';
 export const PENDING_TTL_MS = 60 * 60 * 1000;
 
 export type PaymentMethod = Order['payment'];
-export type BuyerDraft = Order['buyer'];
+
+/**
+ * 結帳頁的收件資料快照（P-A，7.5）。結構化欄位，不是只有地址編號：登入期間那筆地址即使被刪了也能還原（AC-A25）。
+ * source：book＝地址簿的某一筆（bookId 是它的編號，只用來在更換清單裡重新選中）；manual＝手動填寫。
+ * saveToBook＝「存到我的地址」勾選狀態（只有地址簿是空的情況會用到）。
+ */
+export interface CheckoutAddress {
+  source: 'book' | 'manual';
+  bookId: string | null;
+  name: string;
+  phone: string;
+  zip: string;
+  city: string;
+  district: string;
+  detail: string;
+  saveToBook: boolean;
+}
 
 export type PendingAction =
   | { kind: 'add_to_cart'; productId: string; variantId: string; qty: number; returnTo: string; createdAt: number }
   | { kind: 'buy_now'; productId: string; variantId: string; qty: number; returnTo: string; createdAt: number }
   /** 結帳時 session 過期：品項、是否來自購物車、付款方式、已填的收件資料都要還原 */
-  | { kind: 'checkout'; items: CartItem[]; fromCart: boolean; payment: PaymentMethod; buyer: BuyerDraft; returnTo: string; createdAt: number }
+  | { kind: 'checkout'; items: CartItem[]; fromCart: boolean; payment: PaymentMethod; address: CheckoutAddress; returnTo: string; createdAt: number }
   /** 沒有動作要做，只是登入完回到某一頁 */
   | { kind: 'goto'; returnTo: string; createdAt: number };
 
 /** 呼叫端只給「是什麼動作」，回到哪一頁與建立時間由存取層補上 */
 export type PendingInput =
   | { kind: 'add_to_cart' | 'buy_now'; productId: string; variantId: string; qty: number }
-  | { kind: 'checkout'; items: CartItem[]; fromCart: boolean; payment: PaymentMethod; buyer: BuyerDraft }
+  | { kind: 'checkout'; items: CartItem[]; fromCart: boolean; payment: PaymentMethod; address: CheckoutAddress }
   | { kind: 'goto' };
 
 export interface StorageLike {
@@ -59,6 +75,21 @@ function parseItems(v: unknown): CartItem[] | null {
   return out;
 }
 
+const str = (v: unknown, max: number): string | null => (typeof v === 'string' ? v.slice(0, max) : null);
+
+function parseAddress(v: unknown): CheckoutAddress | null {
+  if (!isObj(v) || (v.source !== 'book' && v.source !== 'manual') || typeof v.saveToBook !== 'boolean') return null;
+  if (v.bookId !== null && !isId(v.bookId)) return null;
+  const name = str(v.name, 100);
+  const phone = str(v.phone, 30);
+  const zip = str(v.zip, 5);
+  const city = str(v.city, 20);
+  const district = str(v.district, 20);
+  const detail = str(v.detail, 300);
+  if (name === null || phone === null || zip === null || city === null || district === null || detail === null) return null;
+  return { source: v.source, bookId: v.bookId, name, phone, zip, city, district, detail, saveToBook: v.saveToBook };
+}
+
 /** 讀回來的資料一律當作不可信：任何一個欄位不對就整筆丟掉，不要拿壞資料去執行動作 */
 export function parsePending(raw: string | null): PendingAction | null {
   if (!raw) return null;
@@ -73,13 +104,10 @@ export function parsePending(raw: string | null): PendingAction | null {
       return { kind: data.kind, productId: data.productId, variantId: data.variantId, qty: data.qty, ...base };
     case 'checkout': {
       const items = parseItems(data.items);
-      const b = data.buyer;
+      const a = parseAddress(data.address);
       if (!items || typeof data.fromCart !== 'boolean' || typeof data.payment !== 'string' || !PAYMENTS.includes(data.payment)) return null;
-      if (!isObj(b) || typeof b.name !== 'string' || typeof b.phone !== 'string' || typeof b.address !== 'string') return null;
-      return {
-        kind: 'checkout', items, fromCart: data.fromCart, payment: data.payment as PaymentMethod,
-        buyer: { name: b.name.slice(0, 100), phone: b.phone.slice(0, 30), address: b.address.slice(0, 300) }, ...base,
-      };
+      if (!a) return null;
+      return { kind: 'checkout', items, fromCart: data.fromCart, payment: data.payment as PaymentMethod, address: a, ...base };
     }
     case 'goto':
       return { kind: 'goto', ...base };

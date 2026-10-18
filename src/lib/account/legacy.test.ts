@@ -10,10 +10,17 @@ const store = (init: Record<string, string> = {}) => {
 };
 
 describe('cleanLegacyStorage（D16、D17＝B）', () => {
-  it('舊購物車與訂單憑證每次載入都清掉；收件資料與帳號相關資料不動', () => {
-    const local = store({ goodmarket_cart: '[1]', goodmarket_order_keys: '[2]', goodmarket_buyer: '{}' });
+  it('舊購物車、訂單憑證、舊收件資料每次載入都清掉；其他帳號相關資料不動（R-A10、AC-A26）', () => {
+    const local = store({ goodmarket_cart: '[1]', goodmarket_order_keys: '[2]', goodmarket_buyer: '{"name":"王小明"}', goodmarket_pending_action: '{}' });
     cleanLegacyStorage(local, store());
-    expect([...local.m.keys()].sort()).toEqual(['goodmarket_buyer', LEGACY_CLEANED_KEY].sort());
+    expect([...local.m.keys()].sort()).toEqual(['goodmarket_pending_action', LEGACY_CLEANED_KEY].sort());
+  });
+  it('舊收件資料不是只清一次：舊版分頁之後又寫進來，下次載入仍會清掉', () => {
+    const local = store();
+    cleanLegacyStorage(local, store());
+    local.setItem('goodmarket_buyer', '{"name":"王小明"}');
+    cleanLegacyStorage(local, store());
+    expect(local.getItem('goodmarket_buyer')).toBeNull();
   });
   it('舊的評價草稿只清第一次；之後新寫的草稿要留著（Safari 回收頁面後靠它還原）', () => {
     const local = store(); const session = store({ 'goodmarket_review_draft:old': 'x', other: 'y' });

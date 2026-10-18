@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CheckCircle2, Loader2, MapPin, Store, UserRound } from 'lucide-react';
 import { shippingFor, useStore } from '../../store/StoreContext';
@@ -6,9 +6,18 @@ import { useAuth } from '../../store/AuthContext';
 import LoginRequired from '../../components/auth/LoginRequired';
 import Banner from '../../components/import/Banner';
 import { btnOutline } from '../../components/import/ui';
+import AddressFields from '../../components/account/AddressFields';
+import AddressSheet from '../../components/account/AddressSheet';
+import { AddressSummary, snapshotLine, snapshotPhone } from '../../components/account/AddressView';
+import { focusFirstError, useAddressForm } from '../../components/account/useAddressForm';
+import { Bone, CheckRow } from '../../components/account/ui';
+import { EMPTY_DRAFT, normalizePhone, type AddressDraft } from '../../lib/account/address';
+import { saveAddress } from '../../lib/account/addresses';
+import { addressFromDraft, buyerOf, pickBookAddress } from '../../lib/account/checkoutAddress';
 import { accountErrorText, toAccountError } from '../../lib/account/errors';
+import { useAddressBook } from '../../lib/account/useAddressBook';
 import { signedInText } from '../../lib/auth/identity';
-import { BUYER_KEY } from '../../lib/site';
+import type { CheckoutAddress } from '../../lib/auth/pending';
 import ProductImage from '../../components/ProductImage';
 import EmptyState from '../../components/EmptyState';
 import { money } from '../../lib/format';
@@ -19,6 +28,9 @@ const PAYMENTS: { id: Order['payment']; label: string }[] = [
   { id: 'card', label: '信用卡（示範）' },
   { id: 'transfer', label: 'ATM 轉帳' },
 ];
+
+/** 地址簿超過這麼久沒回應就當作讀不到，改手動填寫（A-19） */
+const BOOK_TIMEOUT_MS = 5_000;
 
 /** 結帳頁要先登入。sticky：登入在填寫途中過期時，頁面不能被換掉（收件資料、付款方式會消失），改開登入面板蓋在上面 */
 export default function Checkout() {
@@ -32,24 +44,50 @@ export default function Checkout() {
   );
 }
 
-interface CheckoutState { items?: CartItem[]; fromCart?: boolean; payment?: Order['payment']; buyer?: Order['buyer']; reauth?: boolean }
+interface CheckoutState { items?: CartItem[]; fromCart?: boolean; payment?: Order['payment']; address?: CheckoutAddress; reauth?: boolean }
+
+const draftOfSnapshot = (a: CheckoutAddress): AddressDraft => ({ recipient: a.name, phone: a.phone, city: a.city, district: a.district, detail: a.detail });
 
 function CheckoutView() {
   const { state } = useLocation() as { state: CheckoutState | null };
   const { getProduct, getShop, checkout, user } = useStore();
   const { openLogin } = useAuth();
-  const [buyer, setBuyer] = useState<Order['buyer']>(() => {
-    // 重新登入回來時，登入前填的收件資料以待辦動作帶回來的為準
-    if (state?.buyer) return state.buyer;
-    try { return JSON.parse(localStorage.getItem(BUYER_KEY) ?? '') } catch { return { name: '', phone: '', address: '' }; }
-  });
+
+  // 重新登入回來時，登入前的收件資料以待辦動作帶回來的快照為準（地址簿那筆即使已被刪也照樣還原，AC-A25）
+  const restored = state?.address ?? null;
+  const frozen = restored?.source === 'book' ? restored : null;
+  const manualRestored = restored?.source === 'manual' ? restored : null;
+
+  const book = useAddressBook({ timeoutMs: BOOK_TIMEOUT_MS });
+  const { rows, phase } = book;
+  const form = useAddressForm(manualRestored ? draftOfSnapshot(manualRestored) : EMPTY_DRAFT, false);
+  const [saveBox, setSaveBox] = useState(manualRestored?.saveToBook ?? true);
+  const [pickId, setPickId] = useState<string | null>(frozen?.bookId ?? null);
+  // 地址簿讀不到時使用者開始手填：之後即使地址簿讀到了，也不能把填到一半的內容換掉
+  const [manualLocked, setManualLocked] = useState(Boolean(manualRestored));
+  const [degraded, setDegraded] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [announce, setAnnounce] = useState('');
+  const [saveWarning, setSaveWarning] = useState(false);
+  const summaryRef = useRef<HTMLDivElement>(null);
+  const [focusSummary, setFocusSummary] = useState(false);
+
   const [reauthNotice, setReauthNotice] = useState(Boolean(state?.reauth));
   const [payment, setPayment] = useState<Order['payment']>(state?.payment ?? 'cod');
-  const [touched, setTouched] = useState(false);
   const [done, setDone] = useState<Order[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [ownShopError, setOwnShopError] = useState(false);
+
+  useEffect(() => { if (phase === 'error') setDegraded(true); }, [phase]);
+
+  // 選好地址後焦點回到收件資訊摘要（R-A17）。要等抽屜卸載、它把焦點還給「更換」鈕之後再移，所以放在 effect 裡
+  useEffect(() => {
+    if (!focusSummary || sheetOpen) return;
+    summaryRef.current?.focus();
+    setFocusSummary(false);
+  }, [focusSummary, sheetOpen]);
 
   const items = state?.items ?? [];
 
@@ -69,6 +107,15 @@ function CheckoutView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 收件資訊的三種情況（設計 7）：a 地址簿有資料＝摘要；b 地址簿是空的＝表單＋「存到我的地址」；c 讀不到＝表單＋重試
+  const bookAddr = pickBookAddress(rows, pickId, frozen);
+  const bookEmpty = rows !== null && rows.length === 0;
+  const showSummary = bookAddr !== null && !manualLocked;
+  const showForm = !showSummary && (manualLocked || bookEmpty || (rows === null && degraded));
+  const loadingBook = !showSummary && !showForm;
+  const offerSave = showForm && bookEmpty;
+  const savedBookArrived = showForm && manualLocked && rows !== null && rows.length > 0;
+
   if (done) {
     return (
       <div className="mx-auto max-w-lg p-3 md:py-12">
@@ -76,6 +123,13 @@ function CheckoutView() {
           <CheckCircle2 size={64} className="text-success" strokeWidth={1.5} />
           <h1 className="text-xl font-bold">訂單成立！</h1>
           <p className="text-sm text-muted">共 {done.length} 筆訂單（依商店分開出貨），賣家會盡快為你出貨。</p>
+          {saveWarning && (
+            <div className="w-full text-left">
+              <Banner kind="warning" role="status" title="訂單已成立，但這組地址沒有存進「我的地址」">
+                可以到「我的帳號 › 地址」再新增。
+              </Banner>
+            </div>
+          )}
           <div className="mt-4 flex gap-3">
             <Link to="/orders" className="rounded-sm border border-brand px-6 py-2.5 text-sm text-brand">查看訂單</Link>
             <Link to="/" className="rounded-sm bg-brand px-6 py-2.5 text-sm text-white">繼續購物</Link>
@@ -95,30 +149,79 @@ function CheckoutView() {
 
   const subtotal = groups.reduce((s, g) => s + g.subtotal, 0);
   const shipping = groups.reduce((s, g) => s + g.shipping, 0);
-  const valid = buyer.name.trim() && /^09\d{2}-?\d{3}-?\d{3}$/.test(buyer.phone.trim()) && buyer.address.trim().length >= 6;
 
   // 登入過期：收件資料、付款方式、品項都留在頁面上；登入後由待辦動作原樣還原，按一次「下訂單」即可
-  const askRelogin = () => openLogin({
+  const askRelogin = (address: CheckoutAddress) => openLogin({
     expired: true,
-    trigger: { kind: 'checkout', items, fromCart: !!state?.fromCart, payment, buyer },
+    trigger: { kind: 'checkout', items, fromCart: !!state?.fromCart, payment, address },
   });
 
+  const retryBook = async () => {
+    setRetrying(true);
+    await book.reload();
+    setRetrying(false);
+  };
+
+  const adoptBook = () => {
+    form.reset(EMPTY_DRAFT);
+    setManualLocked(false);
+    setPickId(null);
+  };
+
+  const onFormChange = (d: AddressDraft) => {
+    form.change(d);
+    if (rows === null) setManualLocked(true);
+  };
+
+  const useRow = (id: string) => {
+    const row = rows?.find(r => r.id === id);
+    setPickId(id);
+    setSheetOpen(false);
+    if (row) setAnnounce(`已改選 ${row.recipient} 的地址`);
+    setFocusSummary(true);
+  };
+
   const submit = async () => {
-    setTouched(true);
-    if (!valid) return;
-    if (!user) { askRelogin(); return; }
+    if (submitting) return;
+    let address: CheckoutAddress;
+    if (showSummary && bookAddr) {
+      address = bookAddr;
+    } else {
+      // 讀取中就按「下訂單」＝沒有收件資料：直接轉成手動表單並報錯誤（設計 7.4）
+      if (loadingBook) { setManualLocked(true); setDegraded(true); }
+      const errs = form.validateAll();
+      if (Object.keys(errs).length > 0) {
+        requestAnimationFrame(() => focusFirstError(errs, 'ck'));
+        return;
+      }
+      address = addressFromDraft(form.draft, saveBox);
+    }
+    if (!user) { askRelogin(address); return; }
     setSubmitting(true);
     setSubmitError('');
     setOwnShopError(false);
     try {
-      const orders = await checkout({ items, buyer, payment, fromCart: !!state?.fromCart });
-      localStorage.setItem(BUYER_KEY, JSON.stringify(buyer));
+      const orders = await checkout({ items, buyer: buyerOf(address), payment, fromCart: !!state?.fromCart });
       setDone(orders);
       window.scrollTo(0, 0);
+      // 先建訂單、再存地址：存地址失敗（網路、上限…）訂單照樣成立，只提醒一聲，不重試也不阻擋
+      if (address.source === 'manual' && offerSave && saveBox) {
+        const phone = normalizePhone(address.phone);
+        if (!phone) { setSaveWarning(true); } else {
+          try {
+            await saveAddress({
+              id: null, recipient: address.name, phone, city: address.city, district: address.district,
+              zip: address.zip, detail: address.detail, isDefault: false,
+            });
+          } catch {
+            setSaveWarning(true);
+          }
+        }
+      }
     } catch (err) {
       const e = toAccountError(err);
       if (e.kind === 'auth') {
-        askRelogin();
+        askRelogin(address);
       } else if (e.code === 'OWN_SHOP') {
         setSubmitError('購物車有自己商店的商品，無法下單');
         setOwnShopError(true);
@@ -130,19 +233,6 @@ function CheckoutView() {
       setSubmitting(false);
     }
   };
-
-  const field = (key: keyof Order['buyer'], label: string, placeholder: string, bad: boolean, hint: string) => (
-    <label className="block">
-      <span className="text-sm text-muted">{label}</span>
-      <input
-        value={buyer[key]}
-        onChange={e => setBuyer(b => ({ ...b, [key]: e.target.value }))}
-        placeholder={placeholder}
-        className={`mt-1 w-full rounded-sm border px-3 py-2.5 text-sm outline-none focus:border-ink ${touched && bad ? 'border-error-border' : 'border-line'}`}
-      />
-      {touched && bad && <span className="mt-1 block text-xs text-error">{hint}</span>}
-    </label>
-  );
 
   // 金額三列：手機顯示在付款方式下面，桌機顯示在右側摘要卡
   const summaryRows = (
@@ -166,18 +256,71 @@ function CheckoutView() {
       )}
       <section className="bg-white p-4 md:rounded-md md:p-6">
         <div className="-mx-4 -mt-4 mb-4 h-1 bg-[repeating-linear-gradient(45deg,#6fa6d6_0,#6fa6d6_33px,transparent_0,transparent_41px,#f18d9b_0,#f18d9b_74px,transparent_0,transparent_82px)] md:-mx-6 md:-mt-6 md:rounded-t-md" />
-        <h2 className="mb-4 flex items-center gap-1.5 text-brand">
-          <MapPin size={18} /> 收件資訊
+        <h2 className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-brand">
+          <span className="flex items-center gap-1.5 whitespace-nowrap"><MapPin size={18} aria-hidden="true" /> 收件資訊</span>
           <span className="ml-auto flex min-w-0 items-center gap-1 text-xs font-normal text-muted">
             <UserRound size={14} className="shrink-0" aria-hidden="true" />
             <span className="truncate">{user ? signedInText(user) : '登入已過期'}</span>
           </span>
         </h2>
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_2fr]">
-          {field('name', '收件人', '王小明', !buyer.name.trim(), '請填寫收件人')}
-          {field('phone', '手機號碼', '0912-345-678', !/^09\d{2}-?\d{3}-?\d{3}$/.test(buyer.phone.trim()), '請填寫 09 開頭的手機號碼')}
-          {field('address', '收件地址', '臺北市大安區…', buyer.address.trim().length < 6, '請填寫完整地址')}
-        </div>
+        <p role="status" className="sr-only">{announce}</p>
+
+        {loadingBook && (
+          <div aria-busy="true">
+            <p role="status" className="sr-only">正在讀取你的地址</p>
+            <Bone className="h-5 w-48" />
+            <Bone className="mt-2 h-4 w-full" />
+          </div>
+        )}
+
+        {showSummary && bookAddr && (
+          <div ref={summaryRef} role="group" aria-label="收件地址" tabIndex={-1} className="flex flex-wrap items-start gap-x-3 gap-y-2 outline-none">
+            <div className="min-w-0 flex-1 basis-48">
+              <AddressSummary
+                name={bookAddr.name} phone={snapshotPhone(bookAddr)} line={snapshotLine(bookAddr)}
+                isDefault={Boolean(rows?.find(r => r.id === bookAddr.bookId)?.is_default)}
+              />
+            </div>
+            <button
+              type="button" aria-haspopup="dialog" aria-label="更換收件地址" onClick={() => setSheetOpen(true)}
+              className={`${btnOutline} shrink-0`}
+            >
+              更換
+            </button>
+          </div>
+        )}
+
+        {showForm && (
+          <div>
+            {rows === null && degraded && (
+              <div className="mb-4">
+                <Banner
+                  kind="warning" role="status" title="讀不到你的地址，先手動填寫"
+                  actions={<button type="button" className={btnOutline} aria-disabled={retrying || undefined} aria-busy={retrying || undefined} onClick={() => { if (!retrying) void retryBook(); }}>{retrying ? '重試中…' : '重試'}</button>}
+                >
+                  這次填的資料不會自動存進「我的地址」。
+                </Banner>
+              </div>
+            )}
+            {savedBookArrived && (
+              <div className="mb-4">
+                <Banner
+                  kind="info" role="status" title="已讀到你的地址"
+                  actions={<button type="button" className={btnOutline} onClick={adoptBook}>改用已存的地址</button>}
+                >
+                  你填的內容還在。要改用已存的地址嗎？
+                </Banner>
+              </div>
+            )}
+            <AddressFields value={form.draft} errors={form.errors} idPrefix="ck" onChange={onFormChange} onBlurField={form.blur} />
+            {offerSave && (
+              <CheckRow
+                id="ck-save" label="存到我的地址" checked={saveBox} onChange={setSaveBox}
+                note="存起來之後，下次結帳會自動帶入，也可以在「我的帳號 › 地址」管理。"
+              />
+            )}
+          </div>
+        )}
       </section>
 
       {groups.map(g => (
@@ -243,6 +386,15 @@ function CheckoutView() {
           下訂單
         </button>
       </div>
+
+      {sheetOpen && (
+        <AddressSheet
+          rows={rows ?? []} selectedId={bookAddr?.bookId ?? null}
+          reload={() => book.reload(true)}
+          onUse={useRow} onClose={() => setSheetOpen(false)}
+          onAuthLost={() => { setSheetOpen(false); if (bookAddr) askRelogin(bookAddr); }}
+        />
+      )}
     </div>
   );
 }

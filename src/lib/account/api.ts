@@ -6,13 +6,13 @@ import type { BuyerOrderRow } from '../supabase';
 // 帳號版的資料庫呼叫都集中在這裡（介面見 .work/buyer-auth/interface.md）。
 // 錯誤一律轉成 AccountError：呼叫端只看 kind（登入失效／後端未升級／網路／被拒絕）。
 
-async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
+export async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
   if (error) throw classifyAccountError(error);
   return data as T;
 }
 
-const fail = (error: { message: string; code?: string | null; hint?: string | null }): never => {
+export const fail = (error: { message: string; code?: string | null; hint?: string | null }): never => {
   throw classifyAccountError(error);
 };
 

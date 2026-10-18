@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   PENDING_KEY, PENDING_TTL_MS, buildPending, canPersist, clearPending, isSafeRoute, parsePending, paramsToPending,
-  peekPending, pendingToParams, savePending, takePending, type PendingAction, type StorageLike,
+  peekPending, pendingToParams, savePending, takePending, type CheckoutAddress, type PendingAction, type StorageLike,
 } from './pending';
 
 const mem = (opts: { failWrite?: boolean } = {}): StorageLike & { data: Map<string, string> } => {
@@ -15,12 +15,16 @@ const mem = (opts: { failWrite?: boolean } = {}): StorageLike & { data: Map<stri
 };
 
 const NOW = 1_800_000_000_000;
+const ADDRESS: CheckoutAddress = {
+  source: 'book', bookId: 'a-1', name: '王小明', phone: '0912345678',
+  zip: '106', city: '臺北市', district: '大安區', detail: '忠孝東路四段1號5樓', saveToBook: false,
+};
 const cart = (over: Partial<PendingAction> = {}) =>
   ({ ...buildPending({ kind: 'add_to_cart', productId: 'p1', variantId: 'v1', qty: 3 }, '/', NOW), ...over }) as PendingAction;
 const checkout = () => buildPending({
   kind: 'checkout', fromCart: true, payment: 'transfer',
   items: [{ productId: 'p1', variantId: 'v1', qty: 2 }, { productId: 'p2', variantId: 'v9', qty: 1 }],
-  buyer: { name: '王小明', phone: '0912345678', address: '臺北市大安區' },
+  address: ADDRESS,
 }, '/checkout', NOW);
 
 describe('buildPending', () => {
@@ -105,7 +109,10 @@ describe('壞資料一律丟掉', () => {
     ['結帳品項是空的', JSON.stringify({ ...checkout(), items: [] })],
     ['結帳品項有壞資料', JSON.stringify({ ...checkout(), items: [{ productId: 'p', variantId: 'v', qty: 0 }] })],
     ['結帳 fromCart 不是布林', JSON.stringify({ ...checkout(), fromCart: 'yes' })],
-    ['結帳沒有收件資料', JSON.stringify({ ...checkout(), buyer: null })],
+    ['結帳沒有收件資料', JSON.stringify({ ...checkout(), address: null })],
+    ['結帳收件資料來源不認得', JSON.stringify({ ...checkout(), address: { ...ADDRESS, source: 'cloud' } })],
+    ['結帳收件資料欄位不是字串', JSON.stringify({ ...checkout(), address: { ...ADDRESS, zip: 106 } })],
+    ['結帳收件資料還是舊格式（單一地址字串）', JSON.stringify({ ...checkout(), address: undefined, buyer: { name: '甲', phone: '0912345678', address: '某地' } })],
   ])('%s', (_l, raw) => {
     expect(parsePending(raw)).toBeNull();
   });
@@ -125,8 +132,20 @@ describe('結帳狀態完整保存', () => {
     expect(got).toMatchObject({
       kind: 'checkout', fromCart: true, payment: 'transfer',
       items: [{ productId: 'p1', variantId: 'v1', qty: 2 }, { productId: 'p2', variantId: 'v9', qty: 1 }],
-      buyer: { name: '王小明', phone: '0912345678', address: '臺北市大安區' },
+      address: ADDRESS,
     });
+  });
+  it('手填的收件資料與「存到我的地址」勾選狀態也原樣還原（R-A16、7.5）', () => {
+    const a = mem();
+    const manual: CheckoutAddress = { ...ADDRESS, source: 'manual', bookId: null, saveToBook: true, zip: '', district: '' };
+    savePending([a], buildPending({ kind: 'checkout', fromCart: false, payment: 'cod', items: [{ productId: 'p1', variantId: 'v1', qty: 1 }], address: manual }, '/checkout', NOW));
+    expect(takePending([a], NOW)!.action).toMatchObject({ kind: 'checkout', address: manual });
+  });
+  it('地址簿那筆事後被刪了，快照仍完整（AC-A25：還原不靠地址編號）', () => {
+    const a = mem();
+    savePending([a], checkout());
+    const got = takePending([a], NOW)!.action;
+    expect(got.kind === 'checkout' && got.address).toMatchObject({ name: '王小明', zip: '106', city: '臺北市', district: '大安區', detail: '忠孝東路四段1號5樓' });
   });
   it('收件資料不放網址：結帳不能編成外開參數', () => {
     expect(pendingToParams(checkout())).toBeNull();

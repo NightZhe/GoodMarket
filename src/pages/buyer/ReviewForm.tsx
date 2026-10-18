@@ -13,6 +13,8 @@ import { useLightbox } from '../../components/reviews/useLightbox';
 import { submitAccountReviews } from '../../lib/reviews/api';
 import LoginRequired from '../../components/auth/LoginRequired';
 import { accountLabel, nicknamePrefillFor } from '../../lib/auth/identity';
+import { resolveNicknamePrefill } from '../../lib/account/nickname';
+import { useSavedNickname } from '../../lib/account/useSavedNickname';
 import {
   NICKNAME_HINT_ERROR, ReviewError, needsStatusRefresh, submitErrorMessage, SUBMIT_FALLBACK,
 } from '../../lib/reviews/errors';
@@ -38,6 +40,8 @@ function ReviewFormView() {
   const { statusState, statusOf, refreshStatus } = useReviews();
   const [retrying, setRetrying] = useState(false);
   const status = statusOf(orderId);
+  // 暱稱預填順序：個人檔案的暱稱 → Google 名稱 → 空白。預填值只在表單建立時使用，所以先等個人檔案的暱稱讀回來
+  const saved = useSavedNickname();
 
   useRefreshOnVisible(() => { void refreshStatus(true); });
   useEffect(() => { void refreshStatus(true); }, [refreshStatus]);
@@ -68,7 +72,9 @@ function ReviewFormView() {
     } else if (gate.kind === 'empty') {
       content = <Notice icon="🧾" title="這筆訂單沒有可以評價的商品" />;
     } else {
-      content = <FormBody key={orderId} status={status} editable={gate.kind === 'form'} />;
+      content = saved.state === 'loading'
+        ? <FormSkeleton />
+        : <FormBody key={orderId} status={status} editable={gate.kind === 'form'} savedNickname={saved.nickname} />;
     }
   }
 
@@ -154,12 +160,12 @@ function useOnline() {
   return online;
 }
 
-interface BodyProps { status: OrderReviewStatus; editable: boolean }
+interface BodyProps { status: OrderReviewStatus; editable: boolean; savedNickname: string | null | undefined }
 
-function FormBody({ status, editable }: BodyProps) {
+function FormBody({ status, editable, savedNickname }: BodyProps) {
   const navigate = useNavigate();
   const { user } = useStore();
-  const prefill = useMemo(() => nicknamePrefillFor(user), [user]);
+  const prefill = useMemo(() => resolveNicknamePrefill(savedNickname, nicknamePrefillFor(user)), [savedNickname, user]);
   const toast = useToast();
   const { refreshStatus, refreshSummary } = useReviews();
   const online = useOnline();
@@ -376,10 +382,14 @@ function FormBody({ status, editable }: BodyProps) {
               <p id="nickname-prefill" className="mt-3 flex gap-2 rounded-sm bg-subtle p-2.5 text-xs leading-5">
                 <Info size={14} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
                 <span>
-                  {prefill.adjusted
-                    ? `已把你的 Google 名稱「${prefill.original}」調整成符合暱稱規則的格式（去掉空格與符號）。`
-                    : '已填入你的 Google 名稱。'}
-                  Google 名稱可能是你的真實姓名，賣家會看到完整暱稱。不想用就直接修改或清空。
+                  {prefill.source === 'profile'
+                    ? '已填入你在個人檔案設定的暱稱。賣家會看到完整暱稱。不想用就直接修改或清空，改的只影響這則評價。'
+                    : <>
+                        {prefill.adjusted
+                          ? `已把你的 Google 名稱「${prefill.original}」調整成符合暱稱規則的格式（去掉空格與符號）。`
+                          : '已填入你的 Google 名稱。'}
+                        Google 名稱可能是你的真實姓名，賣家會看到完整暱稱。不想用就直接修改或清空。
+                      </>}
                 </span>
               </p>
             )}

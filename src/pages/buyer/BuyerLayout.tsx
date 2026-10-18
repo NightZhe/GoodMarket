@@ -34,8 +34,9 @@ export default function BuyerLayout() {
 
   // 商品頁、結帳頁在手機上有自己的底部操作列，不顯示全站導覽
   // 評價表單（/orders/:id/review）手機底部有自己的送出列，也不顯示全站導覽
+  // 地址新增／編輯頁（/account/addresses/new、/account/addresses/:id）有鍵盤，固定的底部分頁在 iOS Safari 鍵盤開關時會跳
   const hideTabBar = pathname.startsWith('/product/') || pathname === '/checkout' || pathname === '/cart'
-    || /^\/orders\/[^/]+\/review$/.test(pathname);
+    || /^\/orders\/[^/]+\/review$/.test(pathname) || pathname.startsWith('/account/addresses/');
 
   return (
     <div className="flex min-h-dvh flex-col">

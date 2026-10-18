@@ -20,6 +20,9 @@ import ShopPage from './pages/buyer/ShopPage';
 import ReviewForm from './pages/buyer/ReviewForm';
 import ReviewsOverview from './pages/buyer/ReviewsOverview';
 import Account from './pages/buyer/Account';
+import AccountProfile from './pages/buyer/AccountProfile';
+import AccountAddresses from './pages/buyer/AccountAddresses';
+import AccountAddressForm from './pages/buyer/AccountAddressForm';
 import Privacy from './pages/buyer/Privacy';
 import { ReviewsProvider } from './store/ReviewsContext';
 import SellerGate from './pages/seller/SellerGate';
@@ -69,6 +72,10 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
       <Route path="orders" element={<Orders />} />
       <Route path="orders/:orderId/review" element={<ReviewForm />} />
       <Route path="account" element={<Account />} />
+      <Route path="account/profile" element={<AccountProfile />} />
+      <Route path="account/addresses" element={<AccountAddresses />} />
+      <Route path="account/addresses/new" element={<AccountAddressForm />} />
+      <Route path="account/addresses/:id" element={<AccountAddressForm />} />
       <Route path="privacy" element={<Privacy />} />
     </Route>
 

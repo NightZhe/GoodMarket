@@ -48,7 +48,7 @@ describe('buildExternalUrl', () => {
     expect(buildExternalUrl(loc, null, false)).toBe('https://nightzhe.github.io/GoodMarket/#/product/p1');
   });
   it('結帳資料不放網址', () => {
-    const co = buildPending({ kind: 'checkout', items: [{ productId: 'p', variantId: 'v', qty: 1 }], fromCart: true, payment: 'cod', buyer: { name: '甲', phone: '0912345678', address: '某地址某地址' } }, '/checkout', NOW);
+    const co = buildPending({ kind: 'checkout', items: [{ productId: 'p', variantId: 'v', qty: 1 }], fromCart: true, payment: 'cod', address: { source: 'manual', bookId: null, name: '甲', phone: '0912345678', zip: '106', city: '臺北市', district: '大安區', detail: '某地址某地址', saveToBook: false } }, '/checkout', NOW);
     expect(buildExternalUrl(loc, co, true)).not.toContain('0912345678');
   });
 });

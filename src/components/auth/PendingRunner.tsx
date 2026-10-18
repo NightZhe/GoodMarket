@@ -65,7 +65,7 @@ export default function PendingRunner() {
       }
       navigate('/checkout', {
         replace: true,
-        state: { items: action.items, fromCart: action.fromCart, payment: action.payment, buyer: action.buyer, reauth: true },
+        state: { items: action.items, fromCart: action.fromCart, payment: action.payment, address: action.address, reauth: true },
       });
       return;
     }
