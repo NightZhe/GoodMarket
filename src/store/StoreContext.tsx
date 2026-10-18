@@ -18,6 +18,10 @@ import type { AccountErrorKind } from '../lib/account/errors';
 import { ImportCallError, toCallError } from '../lib/import/errors';
 import { UPLOAD_TIMEOUT_MS, abortError, withTimeout } from '../lib/import/images';
 import type { ImportApi } from '../lib/import/runner';
+import { withAbortTimeout } from '../lib/rpcTimeout';
+import {
+  QuickEditError, failureText, settleConflict, toQuickEditFailure, type QuickChange, type QuickEditFailureKind, type QuickEditResult,
+} from '../lib/products/quickEdit';
 
 // 資料都存在 Supabase：商品所有人看得到；購物車、訂單屬於登入的帳號（買家只能用 Google／Apple 登入）。
 // 瀏覽器裡只剩「結帳頁記住的收件資料」（登出時才清）與登入流程的暫存（見 lib/auth/pending.ts）。
@@ -74,6 +78,9 @@ async function fetchAllProducts(): Promise<{ data: ProductRow[] | null; error: {
     if (data.length < PRODUCT_PAGE) return { data: rows, error: null };
   }
 }
+
+/** 列表快改送出後最久等多久（5.8）；逾時保留輸入，不自動重送 */
+const QUICK_EDIT_TIMEOUT_MS = 15_000;
 
 /** 匯入相關的 RPC 呼叫逾時；網路卡住時要能轉成「可重新嘗試」，不能無限等 */
 const IMPORT_CALL_TIMEOUT_MS = 60_000;
@@ -167,6 +174,15 @@ interface Store {
 
   // 賣家商品與訂單
   saveProduct: (product: Product) => Promise<void>;
+  /** 只改上下架狀態（不碰規格）：列表的上下架鈕用它，才不會把畫面上舊的庫存蓋回資料庫 */
+  setProductStatus: (id: string, status: Product['status']) => Promise<void>;
+  /**
+   * 列表快改（資料庫函式 quick_edit_product）。成功時只更新這一件商品的規格與狀態，不重抓全部。
+   * conflict／invalid 以回傳值交給呼叫端處理（資料庫沒有寫入、本機資料也不動）；呼叫失敗丟 QuickEditError。
+   */
+  quickEditProduct: (productId: string, changes: QuickChange[]) => Promise<QuickEditResult>;
+  /** 把資料庫目前的規格與狀態（快改衝突時回傳的）寫回這件商品，列表才不會停在舊值 */
+  syncProductSnapshot: (productId: string, variants: Product['variants'], status: Product['status']) => void;
   deleteProduct: (id: string) => Promise<void>;
   shopOrders: Order[];
   refreshShopOrders: () => Promise<void>;
@@ -377,6 +393,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     await reload();
   }, [myShop, products, reload]);
 
+  const setProductStatus = useCallback(async (id: string, status: Product['status']) => {
+    const { error } = await supabase.from('products').update({ status }).eq('id', id);
+    if (error) throw new Error(error.message);
+    setProducts(prev => prev.map(p => (p.id === id ? { ...p, status } : p)));
+  }, []);
+
+  const syncProductSnapshot = useCallback((productId: string, variants: Product['variants'], status: Product['status']) => {
+    setProducts(prev => prev.map(p => (p.id === productId ? { ...p, variants, status } : p)));
+  }, []);
+
+  const productsRef = useRef(products);
+  productsRef.current = products;
+  const quickEditProduct = useCallback(async (productId: string, changes: QuickChange[]): Promise<QuickEditResult> => {
+    const fail = (kind: QuickEditFailureKind) => {
+      // 伺服器說沒登入：登入已失效，走既有的登入過期處理（跟結帳同一條）
+      if (kind === 'auth') handleAuthLost();
+      return new QuickEditError(kind, failureText(kind));
+    };
+    let outcome;
+    try {
+      outcome = await withAbortTimeout(QUICK_EDIT_TIMEOUT_MS, signal =>
+        supabase.rpc('quick_edit_product', { p_product_id: productId, p_changes: changes }).abortSignal(signal));
+    } catch (e) {
+      throw fail(toQuickEditFailure({ message: e instanceof Error ? e.message : String(e) }, false));
+    }
+    if (outcome.timedOut || !outcome.value) throw fail('timeout');
+    const { data, error } = outcome.value;
+    if (error) throw fail(toQuickEditFailure(error, false));
+    let result = data as QuickEditResult;
+    // 前一次逾時但其實已寫入：重試看到的「衝突」是自己的值，當成功
+    if (result.outcome === 'conflict') {
+      const wasActive = productsRef.current.find(p => p.id === productId)?.status === 'active';
+      result = settleConflict(result, changes, wasActive) ?? result;
+    }
+    if (result.outcome === 'ok') {
+      const ok = result;
+      setProducts(prev => prev.map(p => (p.id === productId ? { ...p, variants: ok.variants, status: ok.status } : p)));
+    }
+    return result;
+  }, [handleAuthLost]);
+
   const deleteProduct = useCallback(async (id: string) => {
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (error) throw new Error(error.message);
@@ -478,14 +535,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart, addToCart, setCartQty, removeFromCart, retryCartSync,
     checkout, myOrders, myOrdersState, myOrdersIssue, refreshMyOrders, cancelMyOrder, completeMyOrder,
     user, authReady, sessionExpired, shopReady, myShop, signUp, signIn, signOut, signOutBuyer, createShop,
-    saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
+    saveProduct, setProductStatus, quickEditProduct, syncProductSnapshot, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
     getImportIndex, importApi, uploadImportImage,
   }), [
     shops, products, loading, loadError, reload, cart, cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart,
     addToCart, setCartQty, removeFromCart, retryCartSync,
     checkout, myOrders, myOrdersState, myOrdersIssue, refreshMyOrders, cancelMyOrder, completeMyOrder,
     user, authReady, sessionExpired, shopReady, myShop, signUp, signIn, signOut, signOutBuyer, createShop,
-    saveProduct, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
+    saveProduct, setProductStatus, quickEditProduct, syncProductSnapshot, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
     getImportIndex, importApi, uploadImportImage,
   ]);
 
