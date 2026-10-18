@@ -53,6 +53,9 @@ describe('手動表單 → 快照', () => {
       city: '臺北市', district: '大安區', detail: '忠孝東路四段1號5樓', saveToBook: true,
     });
   });
+  it('詳細地址的換行與連續空白整理成單一空白', () => {
+    expect(addressFromDraft({ ...draft, detail: '忠孝東路\n  四段1號' }, false).detail).toBe('忠孝東路 四段1號');
+  });
   it('還沒選區：郵遞區號是空字串（待辦動作要能存下填到一半的表單）', () => {
     expect(addressFromDraft({ ...draft, district: '' }, false).zip).toBe('');
   });

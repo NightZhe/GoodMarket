@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ADDRESS_TOTAL_MAX, addressLength, fieldOfServerError, composeAddress, detailRepeatsRegion, formatPhone, normalizePhone,
-  oneLine, selectCity, validateAddress, type AddressDraft,
+  oneLine, selectCity, tidyDetail, validateAddress, type AddressDraft,
 } from './address';
 
 const ok: AddressDraft = { recipient: '王小明', phone: '0912-345-678', city: '臺北市', district: '大安區', detail: '忠孝東路四段1號5樓' };
@@ -129,5 +129,29 @@ describe('fieldOfServerError', () => {
     for (const c of ['ADDRESS_LIMIT_REACHED', 'ADDRESS_NOT_FOUND', 'ADDRESS_DEFAULT_PROTECTED', 'NOT_AUTHENTICATED', null]) {
       expect(fieldOfServerError(c), String(c)).toBeNull();
     }
+  });
+});
+
+// 伺服器對含換行的詳細地址只會回「至少需要 2 個字」（原因不符）：送出前先整理成單一空白，不讓換行到伺服器
+describe('tidyDetail：送出前整理詳細地址', () => {
+  it('換行、tab、連續空白（含全形與 NBSP）整理成單一空白，去頭尾', () => {
+    expect(tidyDetail(' 忠孝東路\n四段1號\r\n\n5樓 ')).toBe('忠孝東路 四段1號 5樓');
+    expect(tidyDetail('忠孝東路   四段\u00a0\u30001號')).toBe('忠孝東路 四段 1號');
+    expect(tidyDetail('忠孝東路\t四段')).toBe('忠孝東路 四段');
+  });
+  it('其他控制字元（伺服器也拒絕）一併轉成空白', () => {
+    expect(tidyDetail('忠孝\u0000東路\u007f四段')).toBe('忠孝 東路 四段');
+  });
+  it('一般地址不變', () => {
+    expect(tidyDetail('忠孝東路四段1號5樓')).toBe('忠孝東路四段1號5樓');
+  });
+  it('字數與驗證都以整理後的結果為準：含換行的 2 字地址不會被當成 1 字，也不會多算', () => {
+    const d = { ...ok, detail: '路\n\n一' };
+    expect(addressLength(d)).toBe(3 + 3 + 3);
+    expect(validateAddress(d).detail).toBeUndefined();
+    expect(validateAddress({ ...ok, detail: '路\n' }).detail).toBe('詳細地址至少 2 個字');
+  });
+  it('組成訂單地址時也用整理後的詳細地址', () => {
+    expect(composeAddress({ zip: '106', city: '臺北市', district: '大安區', detail: '忠孝東路\n四段1號' })).toBe('106 臺北市大安區忠孝東路 四段1號');
   });
 });

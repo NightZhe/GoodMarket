@@ -9,7 +9,7 @@ import AddressFields from '../../components/account/AddressFields';
 import { focusFirstError, useAddressForm } from '../../components/account/useAddressForm';
 import { useRelogin, useRestoreFormDraft } from '../../components/account/useFormDraft';
 import { Bone, CheckRow, SubHeader, SubPage, Spinner, bigBtn, savingBtn } from '../../components/account/ui';
-import { ADDRESS_LIMIT, EMPTY_DRAFT, fieldOfServerError, formatPhone, normalizePhone, validateAddress, type AddressDraft } from '../../lib/account/address';
+import { ADDRESS_LIMIT, EMPTY_DRAFT, fieldOfServerError, formatPhone, normalizePhone, tidyDetail, validateAddress, type AddressDraft } from '../../lib/account/address';
 import { saveAddress, type AddressRow } from '../../lib/account/addresses';
 import { toAccountError } from '../../lib/account/errors';
 import { hasRegion, zipOf } from '../../lib/account/regions';
@@ -105,7 +105,7 @@ function FormView() {
     try {
       await saveAddress({
         id: id ?? null, recipient: draft.recipient.trim(), phone, city: draft.city, district: draft.district,
-        zip, detail: draft.detail.trim(), isDefault: asDefault,
+        zip, detail: tidyDetail(draft.detail), isDefault: asDefault,
       });
       toast(editing ? '已儲存地址' : '已新增地址');
       navigate('/account/addresses');

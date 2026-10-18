@@ -24,7 +24,13 @@ export function headingFor(a: { trigger: PendingInput | null; expired: boolean; 
     : p.google ? '用 Google 一鍵登入，不用設密碼。'
     : p.apple ? '用 Apple 一鍵登入，不用設密碼。'
     : '登入功能暫時無法使用，請稍後再試。';
-  if (a.expired) return { title: '登入已過期', description: '請重新登入。你填的收件資料、付款方式和商品都還在。' };
+  if (a.expired) {
+    // 只有結帳會還原收件資料、付款方式與商品；個人檔案、地址表單過期時只保留剛才填的內容
+    const description = a.trigger?.kind === 'checkout'
+      ? '請重新登入。你填的收件資料、付款方式和商品都還在。'
+      : '請重新登入。你剛才填的內容都還在。';
+    return { title: '登入已過期', description };
+  }
   if (a.trigger?.kind === 'add_to_cart') return { title: '登入後才能加入購物車', description };
   if (a.trigger?.kind === 'buy_now') return { title: '登入後才能購買', description };
   return { title: '登入好物集', description };

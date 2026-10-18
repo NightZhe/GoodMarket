@@ -1,6 +1,6 @@
 import type { CheckoutAddress } from '../auth/pending';
 import type { Order } from '../../types';
-import { composeAddress, formatPhone, normalizePhone, type AddressDraft } from './address';
+import { composeAddress, formatPhone, normalizePhone, tidyDetail, type AddressDraft } from './address';
 import type { AddressRow } from './addresses';
 import { zipOf } from './regions';
 
@@ -14,7 +14,7 @@ export const addressFromRow = (r: AddressRow): CheckoutAddress => ({
 
 export const addressFromDraft = (d: AddressDraft, saveToBook: boolean): CheckoutAddress => ({
   source: 'manual', bookId: null, name: d.recipient.trim(), phone: d.phone.trim(),
-  zip: zipOf(d.city, d.district) ?? '', city: d.city, district: d.district, detail: d.detail.trim(), saveToBook,
+  zip: zipOf(d.city, d.district) ?? '', city: d.city, district: d.district, detail: tidyDetail(d.detail), saveToBook,
 });
 
 /**

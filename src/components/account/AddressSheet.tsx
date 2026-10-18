@@ -9,7 +9,7 @@ import { rowSummary } from './AddressView';
 import { focusFirstError, useAddressForm } from './useAddressForm';
 import { CheckRow, Spinner, bigBtn, savingBtn, textActionCls } from './ui';
 import {
-  ADDRESS_LIMIT, EMPTY_DRAFT, fieldOfServerError, formatPhone, normalizePhone, validateAddress, type AddressDraft,
+  ADDRESS_LIMIT, EMPTY_DRAFT, fieldOfServerError, formatPhone, normalizePhone, tidyDetail, validateAddress, type AddressDraft,
 } from '../../lib/account/address';
 import { saveAddress, type AddressRow } from '../../lib/account/addresses';
 import { toAccountError } from '../../lib/account/errors';
@@ -179,7 +179,7 @@ function SheetForm({ row, isFirst, currentDefault, titleRef, onBack, onClose, on
     try {
       const saved = await saveAddress({
         id: row?.id ?? null, recipient: draft.recipient.trim(), phone, city: draft.city, district: draft.district,
-        zip, detail: draft.detail.trim(), isDefault: isFirst || isCurrentDefault || isDefault,
+        zip, detail: tidyDetail(draft.detail), isDefault: isFirst || isCurrentDefault || isDefault,
       });
       await onSaved(saved, !editing);
     } catch (e) {

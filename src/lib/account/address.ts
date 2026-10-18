@@ -37,9 +37,15 @@ export function normalizePhone(raw: string): string | null {
 export const formatPhone = (digits: string): string =>
   /^\d{10}$/.test(digits) ? `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}` : digits;
 
+/**
+ * 送出用的詳細地址：換行、tab、連續空白（含全形與 NBSP）與其他控制字元整理成單一空白，去頭尾。
+ * 伺服器遇到換行或控制字元只會回「至少需要 2 個字」（原因不符），所以前端先整理，不讓它們到伺服器。
+ */
+export const tidyDetail = (s: string): string => s.replace(/[\s\u0000-\u001f\u007f]+/g, ' ').trim();
+
 /** 縣市＋區＋詳細地址（去前後空白）的字數；縣市、區還沒選時只算已有的部分 */
 export const addressLength = (d: Pick<AddressDraft, 'city' | 'district' | 'detail'>): number =>
-  len(d.city) + len(d.district) + len(d.detail.trim());
+  len(d.city) + len(d.district) + len(tidyDetail(d.detail));
 
 export function validateAddress(d: AddressDraft): AddressErrors {
   const e: AddressErrors = {};
@@ -55,7 +61,7 @@ export function validateAddress(d: AddressDraft): AddressErrors {
   if (d.city === '') e.city = '請選擇縣市';
   else if (!hasRegion(d.city, d.district)) e.district = '請選擇鄉鎮市區';
 
-  const detail = d.detail.trim();
+  const detail = tidyDetail(d.detail);
   if (detail === '') e.detail = '請填寫詳細地址';
   else if (len(detail) < DETAIL_MIN) e.detail = `詳細地址至少 ${DETAIL_MIN} 個字`;
   else if (addressLength(d) > ADDRESS_TOTAL_MAX) {
@@ -77,7 +83,7 @@ export const fieldOfServerError = (code: string | null): AddressField | null => 
 
 /** 詳細地址開頭又打了已選的縣市或區：提示就好，不擋儲存 */
 export function detailRepeatsRegion(d: Pick<AddressDraft, 'city' | 'district' | 'detail'>): boolean {
-  const detail = d.detail.trim();
+  const detail = tidyDetail(d.detail);
   return [d.city, d.district].some(x => x !== '' && detail.startsWith(x));
 }
 
@@ -91,4 +97,4 @@ export const oneLine = (s: string): string => s.replace(/[\r\n\t]+/g, ' ');
 export interface AddressParts { zip: string; city: string; district: string; detail: string }
 
 /** R-A19：訂單收件地址快照＝「郵遞區號 縣市區詳細地址」 */
-export const composeAddress = (p: AddressParts): string => `${p.zip} ${p.city}${p.district}${p.detail.trim()}`;
+export const composeAddress = (p: AddressParts): string => `${p.zip} ${p.city}${p.district}${tidyDetail(p.detail)}`;
