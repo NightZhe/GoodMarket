@@ -51,7 +51,12 @@
 庫存全 0 自動下架、留 `product_change_log` 異動紀錄；列表斷點改 1024；上下架改只寫 status）。
 每個功能的決策、規格、驗收報告、上線紀錄都在 `.work/<功能>/`（不進版控）：
 `product-reviews/`、`picked-up-complete/`、`buyer-auth/`、`list-quick-edit/`（含 `prod-runbook.md`、`prod-apply-log.md`、`tools/metrics/` 成功指標查詢）。
-同日另有「帳號頁子選單＋地址簿」（`account-payment-methods/`）與「手機號碼登入」（`phone-otp-auth/`，分支 `phone-otp-auth`）兩條線由其他 session 進行。
+**帳號頁「我的帳戶」＋個人檔案（暱稱，預填評價）＋地址簿**（2026-10-18 晚間上線，`account-payment-methods/`：縣市／鄉鎮市區下拉＋郵遞區號自動帶出、每帳號最多 10 筆、唯一預設；
+結帳改從地址簿選，地址簿空時填表並預設「存到我的地址」；裝置上的舊收件資料 `goodmarket_buyer` 新前端啟動時清掉；資料表 `profiles`／`addresses`／`tw_districts` 寫入只走 RPC，
+行政區清單由 `scripts/gen-tw-districts.mts` 從中華郵政 3 碼檔產生，`src/data/tw-districts.json` 與資料庫同源）。隱私政策生效日改為 2026/10/18。
+**刪帳號工具已更新**（會一併刪地址與個人檔案；舊版備份在 `account-payment-methods/tools/pre-A-T4-account-tool/`）。
+同一資料夾的 `spec.md`／`spec-review-payment.md` 是**付款（P-B）與賣家收款（P-C）**的規格：方向為 PAYUNi 代理商模式（本站不經手錢），等使用者問完 PAYUNi 業務、拍板 D18～D25 才開工。
+「手機號碼登入」（`phone-otp-auth/`，分支 `phone-otp-auth`）由另一 session 進行。
 
 下一個該做的：**結帳比價**（`.work/checkout-price-check/`，使用者已拍板流程：下單時伺服器比對買家看到的價格，不一致就不建單、顯示下單失敗並導回賣家商品頁）。
 快改上線後改價會變多，這個缺口要盡快補。
@@ -64,4 +69,4 @@
 
 已知小問題（不急）：登入方式設定讀取超過 5 秒會先顯示兩顆按鈕；平板寬度賣家首頁與商品頁有橫向捲軸；
 購物車兩次更新間隔 3 秒內讀屏可能不重念；賣家中心頂欄在 188px 寬（手機 200%）橫向溢出，快改面板的關閉鈕會被擠出；
-`.claude/agents/qa.md` 沒有「交件前必跑關卡」表（其他四個角色都有）；快改的 iPhone Safari／LINE 實機驗收待使用者。
+`.claude/agents/qa.md` 沒有「交件前必跑關卡」表（其他四個角色都有）；快改與帳號頁地址簿的 iPhone Safari／LINE 實機驗收待使用者；離線按登出時「登出失敗」訊息與實際已登出矛盾（既有）；「我的訂單」不顯示收件地址（既有）；隱私頁與結帳底欄在 188px 寬有幾 px 橫向溢出（既有）。
