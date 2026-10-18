@@ -45,8 +45,8 @@ export default function SellerDashboard() {
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold md:text-2xl">嗨，{shop.name} 👋</h1>
+        <div className="min-w-0">
+          <h1 className="break-words text-xl font-bold md:text-2xl">嗨，{shop.name} 👋</h1>
           <p className="text-sm text-muted">這是你的賣場今天的狀況</p>
         </div>
         <Link to="/seller/products/new" className="flex items-center gap-1.5 rounded-sm bg-brand px-4 py-2.5 text-sm text-white hover:bg-brand-dark">
@@ -70,22 +70,25 @@ export default function SellerDashboard() {
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-[1.4fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <section className="rounded-lg bg-white p-4 md:p-5">
-          <div className="flex items-baseline justify-between">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-2">
             <h2 className="font-medium">營收</h2>
             <span className="text-xs text-muted">不含已取消訂單</span>
           </div>
-          <p className="mt-2 text-3xl font-semibold text-brand">{money(revenue)}</p>
+          <p className="mt-2 break-words text-3xl font-semibold text-brand max-[319px]:text-2xl">{money(revenue)}</p>
           <p className="text-xs text-muted">共 {valid.length} 筆訂單</p>
-          <div className="mt-5 flex h-36 items-end gap-2" role="img" aria-label="近 7 天營收長條圖">
-            {days.map(d => (
-              <div key={d.label} className="flex flex-1 flex-col items-center gap-1.5">
-                <span className="text-[10px] text-muted">{d.sum ? `$${soldText(d.sum)}` : ''}</span>
-                <div className="w-full max-w-9 rounded-t-sm bg-brand/85 transition-all" style={{ height: `${Math.max(2, (d.sum / peak) * 96)}px` }} />
-                <span className="text-[11px] text-muted">{d.label}</span>
-              </div>
-            ))}
+          {/* 窄螢幕（320、手機 200% 字級）7 根長條放不下時，只讓圖表自己橫向捲，不撐開整頁 */}
+          <div className="mt-5 overflow-x-auto">
+            <div className="flex h-36 min-w-fit items-end gap-2" role="img" aria-label="近 7 天營收長條圖">
+              {days.map(d => (
+                <div key={d.label} className="flex flex-1 flex-col items-center gap-1.5 whitespace-nowrap">
+                  <span className="text-[10px] text-muted">{d.sum ? `$${soldText(d.sum)}` : ''}</span>
+                  <div className="w-full max-w-9 rounded-t-sm bg-brand/85 transition-all" style={{ height: `${Math.max(2, (d.sum / peak) * 96)}px` }} />
+                  <span className="text-[11px] text-muted">{d.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -98,11 +101,13 @@ export default function SellerDashboard() {
           ) : (
             <ol className="mt-3 space-y-3">
               {top.map((p, i) => (
-                <li key={p.id} className="flex items-center gap-3">
-                  <span className={`w-4 text-center text-sm font-semibold ${i < 3 ? 'text-brand' : 'text-muted'}`}>{i + 1}</span>
-                  <ProductImage src={p.images[0]} alt="" size="sm" className="w-10 rounded-sm" />
-                  <p className="min-w-0 flex-1 truncate text-sm">{p.title}</p>
-                  <span className="text-xs text-muted">已售 {soldText(p.sold)}</span>
+                <li key={p.id} className="flex items-center gap-3 max-[319px]:gap-2">
+                  <span className={`w-4 shrink-0 text-center text-sm font-semibold ${i < 3 ? 'text-brand' : 'text-muted'}`}>{i + 1}</span>
+                  <ProductImage src={p.images[0]} alt="" size="sm" className="w-10 shrink-0 rounded-sm max-[319px]:hidden" />
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 break-words text-sm">{p.title}</p>
+                    <p className="mt-0.5 text-xs text-muted">已售 {soldText(p.sold)}</p>
+                  </div>
                 </li>
               ))}
             </ol>
@@ -113,14 +118,19 @@ export default function SellerDashboard() {
       {lowStock.length > 0 && (
         <section className="rounded-lg border border-warning-border bg-warning-bg p-4 md:p-5">
           <h2 className="flex items-center gap-1.5 font-medium text-warning-text"><AlertTriangle size={18} /> 庫存提醒</h2>
-          <ul className="mt-2 space-y-1.5 text-sm">
+          <ul className="mt-2 divide-y divide-warning-border text-sm md:divide-y-0">
             {lowStock.map(p => (
               <li key={p.id}>
-                <Link to={`/seller/products/${p.id}/edit`} className="flex items-center justify-between gap-2 hover:text-brand">
-                  <span className="truncate">{p.title}</span>
-                  <span className="shrink-0 text-xs text-warning-text">
-                    {p.variants.filter(v => v.stock <= 5).map(v => `${v.name} 剩 ${v.stock}`).join('、')}
-                  </span>
+                {/* 手機：名稱（最多 2 行）在上、規格 chip 換行排在下；桌機：名稱靠左一行、規格靠右 */}
+                <Link to={`/seller/products/${p.id}/edit`} className="block min-h-11 py-2 hover:text-brand md:flex md:items-center md:justify-between md:gap-3 md:py-1">
+                  <span className="line-clamp-2 min-w-0 break-words md:line-clamp-1 md:flex-1">{p.title}</span>
+                  <ul className="mt-1 flex min-w-0 flex-wrap gap-1.5 md:mt-0 md:max-w-1/2 md:shrink-0 md:justify-end">
+                    {p.variants.filter(v => v.stock <= 5).map(v => (
+                      <li key={v.id} className="min-w-0 break-words rounded-sm bg-white px-1.5 py-0.5 text-xs text-warning-text">
+                        {v.name} <span className="whitespace-nowrap">剩 {v.stock}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </Link>
               </li>
             ))}
@@ -135,9 +145,9 @@ function Todo({ to, n, label, highlight, className = '', ariaLabel }: {
   to: string; n: number | null; label: string; highlight?: boolean; className?: string; ariaLabel?: string;
 }) {
   return (
-    <Link to={to} aria-label={ariaLabel} className={`group flex flex-col items-center gap-1 bg-white py-5 transition hover:bg-brand-soft/50 ${className}`}>
-      <span className={`text-2xl font-semibold ${n === null ? 'text-muted' : highlight ? 'text-brand' : ''}`}>{n ?? '–'}</span>
-      <span className="flex items-center text-xs text-muted">{label}<ChevronRight size={12} className="opacity-0 transition group-hover:opacity-100" /></span>
+    <Link to={to} aria-label={ariaLabel} className={`group flex min-w-0 flex-col items-center gap-1 bg-white px-1 py-5 text-center transition hover:bg-brand-soft/50 ${className}`}>
+      <span className={`break-all text-2xl font-semibold ${n === null ? 'text-muted' : highlight ? 'text-brand' : ''}`}>{n ?? '–'}</span>
+      <span className="flex items-center justify-center text-xs text-muted">{label}<ChevronRight size={12} className="opacity-0 transition group-hover:opacity-100" /></span>
     </Link>
   );
 }
