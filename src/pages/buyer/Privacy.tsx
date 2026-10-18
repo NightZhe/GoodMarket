@@ -1,8 +1,32 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { CONTACT_EMAIL, DELETION_WINDOW, PRIVACY_EFFECTIVE } from '../../lib/site';
+import { ExternalLink } from 'lucide-react';
+import { CONTACT_EMAIL, DELETION_WINDOW, PRIVACY_EFFECTIVE, PRIVACY_FIRST_PUBLISHED } from '../../lib/site';
 
-const DATA: { name: string; detail: string }[] = [
-  { name: '登入帳號', detail: '帳號識別碼與電子郵件。你用 Google 或 Apple 登入時，由它們提供；如果 Apple 讓你選「隱藏我的電子郵件」，我們收到的是轉寄信箱，不是你的真實 email。' },
+/** 帳號頁 P-A（個人檔案、地址簿）上線日：已發生的修訂，不會再變 */
+const PRIVACY_P_A = '2026/10/18';
+const TURNSTILE_PRIVACY_URL = 'https://www.cloudflare.com/turnstile-privacy-policy/';
+
+const DATA: { name: string; detail: ReactNode }[] = [
+  { name: '登入帳號', detail: '帳號識別碼，以及你選用的登入方式提供的資料：用 Google 或 Apple 登入時是它們提供的電子郵件（如果 Apple 讓你選「隱藏我的電子郵件」，我們收到的是轉寄信箱，不是你的真實 email）；用手機號碼登入或綁定手機時是你的手機號碼。' },
+  { name: '驗證碼簡訊', detail: '用手機號碼登入或綁定手機時，驗證碼簡訊由簡訊服務商 Twilio（位於美國）代為傳送，它會處理你的手機號碼與簡訊內容。' },
+  {
+    name: '安全驗證',
+    detail: (
+      <>
+        為了防止機器人大量要求簡訊，傳送驗證碼前會經過 Cloudflare Turnstile 安全驗證，它會處理你的 IP 位址與瀏覽器資訊。詳見
+        <a
+          href={TURNSTILE_PRIVACY_URL} target="_blank" rel="noopener noreferrer"
+          className="-my-3 inline-flex min-h-11 items-center gap-0.5 px-0.5 text-ink underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        >
+          Cloudflare Turnstile 隱私說明
+          <ExternalLink size={12} aria-hidden="true" />
+          <span className="sr-only">（另開新分頁）</span>
+        </a>
+        。
+      </>
+    ),
+  },
   { name: 'Google 名稱與大頭貼網址', detail: '用 Google 登入時，登入服務（Supabase）會自動一併儲存。我們不會在畫面上顯示大頭貼。' },
   { name: '購物車', detail: '你加入購物車的商品、規格與數量，跟著帳號保存，換手機也看得到。' },
   { name: '收件地址', detail: '你存在「我的地址」裡的收件人姓名、手機與地址，以及每筆訂單當下使用的那一組。跟著帳號保存，你可以隨時刪除；刪除帳號時一併刪除。' },
@@ -17,9 +41,9 @@ export default function Privacy() {
     <div className="mx-auto max-w-3xl md:px-4 md:pt-6">
       <article className="bg-white px-4 py-6 md:rounded-md md:p-10">
         <h1 className="text-2xl font-bold">隱私政策</h1>
-        <p className="mt-1 text-xs text-muted">生效日期：{PRIVACY_EFFECTIVE}</p>
+        <p className="mt-1 text-xs text-muted">生效日期：{PRIVACY_EFFECTIVE}（修訂紀錄在文末）</p>
         <p className="mt-4 text-base leading-7">
-          好物集是讓人開店、也讓人購物的網站。要購買商品，你需要用 Google 或 Apple 登入；這份政策說明我們收集哪些資料、怎麼使用、誰看得到、保存多久，以及你怎麼請我們刪除。
+          好物集是讓人開店、也讓人購物的網站。要購買商品，你需要用 Google、Apple 或手機號碼登入；這份政策說明我們收集哪些資料、怎麼使用、誰看得到、保存多久，以及你怎麼請我們刪除。
         </p>
 
         <h2 className="mt-8 text-base font-bold">1. 我們收集的資料</h2>
@@ -43,7 +67,8 @@ export default function Privacy() {
         <ul className="mt-2 list-disc space-y-1 pl-5 text-base leading-7">
           <li>你下單的賣家只看得到那張訂單用的收件資料、訂單編號，以及你評價時填的完整暱稱；看不到你「我的地址」裡的其他地址。</li>
           <li>其他人只看得到遮罩後的暱稱（例如「王*****明」）。</li>
-          <li>我們不會公開你的電子郵件與帳號識別碼。</li>
+          <li>我們不會公開你的電子郵件、手機號碼與帳號識別碼。</li>
+          <li>我們不會把你登入用的手機號碼提供給賣家；賣家看到的是你下單時填寫的收件人電話。</li>
           <li>你在個人檔案設定的暱稱，不會顯示在任何公開的地方。</li>
         </ul>
 
@@ -65,6 +90,24 @@ export default function Privacy() {
           關於你的資料有任何問題，請來信：
           <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>
         </p>
+
+        <h2 className="mt-8 text-base font-bold">7. 修訂紀錄</h2>
+        <dl className="mt-2 rounded-md border border-line px-4">
+          <div className="border-t border-line py-3 first:border-t-0">
+            <dt className="text-sm font-medium tabular-nums">{PRIVACY_EFFECTIVE}</dt>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">
+              新增手機號碼登入與綁定手機：說明手機號碼的用途、驗證碼簡訊由 Twilio 傳送、傳送前會經過 Cloudflare Turnstile 安全驗證，以及登入用的手機號碼不會提供給賣家。登入方式的說明改為 Google、Apple、手機號碼三種。
+            </dd>
+          </div>
+          <div className="border-t border-line py-3">
+            <dt className="text-sm font-medium tabular-nums">{PRIVACY_P_A}</dt>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">新增「我的帳戶」：個人檔案暱稱與地址簿的用途、保存與刪除方式；賣家只看得到訂單用的那一組收件資料。</dd>
+          </div>
+          <div className="border-t border-line py-3">
+            <dt className="text-sm font-medium tabular-nums">{PRIVACY_FIRST_PUBLISHED}</dt>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">首次發佈（Google、Apple 登入）。</dd>
+          </div>
+        </dl>
 
         <Link to="/" className="mt-8 inline-flex min-h-11 items-center text-sm underline underline-offset-2">回首頁</Link>
       </article>

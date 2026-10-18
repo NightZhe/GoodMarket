@@ -1,33 +1,69 @@
 import { NICKNAME_MAX, NICKNAME_MIN } from '../reviews/types';
 import { isNicknameChar } from '../reviews/nickname';
+import { maskTwPhone, nationalFromAuthPhone } from './phone';
 
 // 從 Supabase 的 user 物件讀出「用什麼登入」「顯示什麼帳號名稱」「評價暱稱預填什麼」。
 // 只依賴 user 的幾個標準欄位，用結構型別，不 import supabase，才測得到。
 
 export interface UserLike {
   email?: string | null;
+  /** 不含 +，例 886912345678（手機帳號的 email 是空字串，不是 null） */
+  phone?: string | null;
   app_metadata?: { provider?: string } | null;
   user_metadata?: Record<string, unknown> | null;
   identities?: { provider: string; last_sign_in_at?: string | null; identity_data?: Record<string, unknown> | null }[] | null;
 }
 
-export type LoginProvider = 'google' | 'apple' | 'email' | 'other';
+export type LoginProvider = 'google' | 'apple' | 'phone' | 'email' | 'other';
 
 const asProvider = (p: string | undefined): LoginProvider =>
-  p === 'google' || p === 'apple' || p === 'email' ? p : 'other';
+  p === 'google' || p === 'apple' || p === 'phone' || p === 'email' ? p : 'other';
+
+/** session 的 amr（supabase.auth.mfa.getAuthenticatorAssuranceLevel() 的 currentAuthenticationMethods）：簡訊是 otp、Google／Apple 是 oauth、Email 密碼是 password */
+export interface AuthMethod { method: string; timestamp?: number }
+
+/** 綁定手機成功那一刻記下的「綁定前的登入方式」與時間（毫秒） */
+export interface LoginVia { provider: LoginProvider; at: number }
+const BIND_SESSION_WINDOW_MS = 30_000;
+
+/** 最新的那一筆；沒有時間的話以陣列第一筆為準 */
+const newestMethod = (methods: AuthMethod[]): AuthMethod =>
+  methods.reduce((a, b) => ((b.timestamp ?? 0) > (a.timestamp ?? 0) ? b : a));
+
+function latestIdentity(user: UserLike, only?: readonly string[]) {
+  const ids = (user.identities ?? []).filter(i => i.provider && (!only || only.includes(i.provider)));
+  return ids.length === 0 ? null : ids.reduce((a, b) => ((b.last_sign_in_at ?? '') > (a.last_sign_in_at ?? '') ? b : a));
+}
 
 /**
- * 這個帳號用什麼登入。合併過身分的帳號（email 帳號後來又用 Google 登入）app_metadata.provider 永遠是最早的那個，
- * 所以優先看「最近登入的那個身分」，沒有 identities 才退回 app_metadata。
+ * 這個帳號「這一次」用什麼登入。
+ * 簡訊登入不會更新手機身分的 last_sign_in_at（t2 F-4），所以只看身分時間，Google 帳號綁了手機之後
+ * 用手機登入也會被說成 Google。給了 session 的 amr 就以 amr 為準；amr 還沒讀到或不認得，才退回看身分：
+ * 合併過身分的帳號 app_metadata.provider 永遠是最早的那個，所以優先看「最近登入的那個身分」。
  */
-export function loginProviderOf(user: UserLike): LoginProvider {
-  const ids = (user.identities ?? []).filter(i => i.provider);
-  if (ids.length > 0) {
-    const latest = ids.reduce((a, b) => ((b.last_sign_in_at ?? '') > (a.last_sign_in_at ?? '') ? b : a));
-    return asProvider(latest.provider);
+export function loginProviderOf(user: UserLike, methods?: AuthMethod[] | null, via?: LoginVia | null): LoginProvider {
+  if (methods && methods.length > 0) {
+    const newest = newestMethod(methods);
+    // 綁定手機的驗證碼會換發一個新 session（amr 是 otp），使用者其實還是用原本的方式登入的：剛綁定完那一下維持綁定前的說法
+    if (newest.method === 'otp' && via && newest.timestamp !== undefined && Math.abs(newest.timestamp * 1000 - via.at) <= BIND_SESSION_WINDOW_MS) return via.provider;
+    switch (newest.method) {
+      case 'oauth': {
+        const oauth = latestIdentity(user, ['google', 'apple']);
+        if (oauth) return asProvider(oauth.provider);
+        break;
+      }
+      case 'otp':
+        if (user.phone || (user.identities ?? []).some(i => i.provider === 'phone')) return 'phone';
+        break;
+      case 'password': return 'email';
+    }
   }
-  return asProvider(user.app_metadata?.provider);
+  const latest = latestIdentity(user);
+  return latest ? asProvider(latest.provider) : asProvider(user.app_metadata?.provider);
 }
+
+/** 登入用的手機號碼（0912345678）；沒有、或不是台灣行動門號就是 null */
+export const phoneOf = (user: UserLike): string | null => nationalFromAuthPhone(user.phone);
 
 /** Apple 的「隱藏我的電子郵件」：每個服務拿到的是轉寄信箱，不是真實 email */
 export const isPrivateRelay = (email: string | null | undefined) =>
@@ -35,22 +71,31 @@ export const isPrivateRelay = (email: string | null | undefined) =>
 
 export const PRIVATE_RELAY_LABEL = 'Apple 帳號（已隱藏電子郵件）';
 
-/** 畫面上代表這個帳號的文字：email；隱藏信箱或沒有 email 時（Apple）顯示固定說法，不留空白 */
-export function accountLabel(user: UserLike): string {
+/**
+ * 畫面上代表這個帳號的文字：這次用手機登入，或帳號沒有 email 只有門號 → 遮罩門號 0912-***-678；
+ * 其他是 email；隱藏信箱或沒有 email 時（Apple）顯示固定說法，不留空白。
+ * provider＝這次的登入方式（有 amr 時由呼叫端算好傳進來）；不給就用 loginProviderOf 的預設判斷。
+ */
+export function accountLabel(user: UserLike, provider: LoginProvider = loginProviderOf(user)): string {
   const email = user.email?.trim();
-  if (!email || isPrivateRelay(email)) return loginProviderOf(user) === 'apple' || isPrivateRelay(email) ? PRIVATE_RELAY_LABEL : '已登入的帳號';
+  const phone = phoneOf(user);
+  if (phone && provider === 'phone') return maskTwPhone(phone);
+  if (!email || isPrivateRelay(email)) {
+    if (provider === 'apple' || isPrivateRelay(email)) return PRIVATE_RELAY_LABEL;
+    return phone ? maskTwPhone(phone) : '已登入的帳號';
+  }
   return email;
 }
 
 /** 「以 harry@gmail.com 登入」。Apple 隱藏信箱沒有 email 可顯示，用固定說法，不留空白 */
-export function signedInText(user: UserLike, progressive = false): string {
-  const label = accountLabel(user);
+export function signedInText(user: UserLike, progressive = false, provider?: LoginProvider): string {
+  const label = accountLabel(user, provider);
   if (label === PRIVATE_RELAY_LABEL) return progressive ? '以 Apple 帳號（已隱藏電子郵件）登入中' : '以 Apple 帳號登入（已隱藏電子郵件）';
   return `以 ${label} 登入${progressive ? '中' : ''}`;
 }
 
 export const providerLabel = (p: LoginProvider) =>
-  p === 'google' ? 'Google' : p === 'apple' ? 'Apple' : 'Email';
+  p === 'google' ? 'Google' : p === 'apple' ? 'Apple' : p === 'phone' ? '手機' : 'Email';
 
 // ───────── 評價暱稱預填（D10＝B、D19＝A） ─────────
 

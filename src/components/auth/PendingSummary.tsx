@@ -7,7 +7,7 @@ import type { PendingInput } from '../../lib/auth/pending';
  * C-2 待辦摘要：登入前先讓使用者看到「我選的東西還在」，以及登入後會發生什麼事（D14）。
  * 不顯示價格（待辦動作不存價格）；讀不到商品就不顯示，不要因此卡住登入。
  */
-export default function PendingSummary({ trigger }: { trigger: PendingInput | null }) {
+export default function PendingSummary({ trigger, compact = false }: { trigger: PendingInput | null; compact?: boolean }) {
   const { getProduct, getShop } = useStore();
   if (!trigger || trigger.kind === 'goto') return null;
 
@@ -27,8 +27,24 @@ export default function PendingSummary({ trigger }: { trigger: PendingInput | nu
   if (!product || !variant) return null;
   const lead = trigger.kind === 'add_to_cart' ? '登入後會自動加入購物車' : '登入後會直接前往結帳';
   const shopName = getShop(product.shopId)?.name;
+  const label = `${lead}：${product.title}，規格 ${variant.name}，數量 ${trigger.qty}${shopName ? `，${shopName}` : ''}`;
+  // C-3 精簡版：手機欄位出現後面板變高，iPhone SE（面板最高約 498px）要讓「傳送驗證碼」完整放得進去
+  if (compact) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-line bg-subtle p-2.5" role="group" aria-label={label}>
+        <div className="hidden w-10 shrink-0 min-[260px]:block" aria-hidden="true">
+          <ProductImage src={variant.image ?? product.images[0]} alt="" size="sm" className="w-10 rounded-sm border border-line" />
+        </div>
+        <div className="min-w-0" aria-hidden="true">
+          <p className="flex items-start gap-1 text-xs font-medium"><ShoppingCart size={12} className="mt-0.5 shrink-0 text-muted" />{lead}</p>
+          <p className="line-clamp-1 text-sm">{product.title}</p>
+          <p className="text-xs text-muted">規格：{variant.name}　數量：{trigger.qty}</p>
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="rounded-md border border-line bg-subtle p-3" role="group" aria-label={`${lead}：${product.title}，規格 ${variant.name}，數量 ${trigger.qty}${shopName ? `，${shopName}` : ''}`}>
+    <div className="rounded-md border border-line bg-subtle p-3" role="group" aria-label={label}>
       <p className="flex items-center gap-1.5 text-xs font-medium"><ShoppingCart size={14} className="text-muted" aria-hidden="true" />{lead}</p>
       <div className="mt-2 flex gap-3" aria-hidden="true">
         <ProductImage src={variant.image ?? product.images[0]} alt="" size="sm" className="w-12 shrink-0 self-start rounded-sm border border-line" />

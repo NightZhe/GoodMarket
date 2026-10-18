@@ -1,9 +1,10 @@
 // 登入提供者有沒有啟用：Supabase 專案裡沒啟用的提供者，按了會落在一頁英文 JSON 錯誤。
 // 啟動時讀一次公開的 /auth/v1/settings，沒啟用的那顆按鈕就不顯示；讀不到時照常顯示兩顆（寧可多顯示，也不要因為讀取失敗少一種登入方式）。
 
-export interface EnabledProviders { google: boolean; apple: boolean }
+/** phone＝手機簡訊登入（R-13：關閉時整塊手機欄位、分隔線、Turnstile 都不渲染）；email 讀得到但畫面沒有 Email 入口（R-32） */
+export interface EnabledProviders { google: boolean; apple: boolean; phone: boolean; email: boolean }
 
-export const ALL_PROVIDERS: EnabledProviders = { google: true, apple: true };
+export const ALL_PROVIDERS: EnabledProviders = { google: true, apple: true, phone: true, email: true };
 
 /** 只有明確是 false 才算沒啟用；欄位不見、型別不對、整份格式不對都當作啟用 */
 export function parseProviderSettings(json: unknown): EnabledProviders {
@@ -11,7 +12,7 @@ export function parseProviderSettings(json: unknown): EnabledProviders {
   const ext = (json as { external?: unknown }).external;
   if (typeof ext !== 'object' || ext === null) return ALL_PROVIDERS;
   const e = ext as Record<string, unknown>;
-  return { google: e.google !== false, apple: e.apple !== false };
+  return { google: e.google !== false, apple: e.apple !== false, phone: e.phone !== false, email: e.email !== false };
 }
 
 const TIMEOUT_MS = 5000;

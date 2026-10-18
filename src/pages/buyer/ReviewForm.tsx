@@ -116,7 +116,7 @@ function NotFoundCard({ account }: { account: string }) {
     <div className="mt-2 bg-white md:mt-3 md:rounded-md">
       <EmptyBlock
         icon="🧾" title="找不到這筆訂單"
-        description="這筆訂單不在你目前登入的帳號裡。請確認登入的是下單時使用的 Google 或 Apple 帳號。"
+        description="這筆訂單不在你目前登入的帳號裡。請確認登入的是下單時使用的帳號（Google、Apple 或手機號碼）。"
         action={
           <>
             {account && <p className="text-xs text-muted">目前登入：{account}</p>}

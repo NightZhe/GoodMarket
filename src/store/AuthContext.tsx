@@ -9,6 +9,8 @@ import { ALL_PROVIDERS, fetchProviderSettings, type EnabledProviders } from '../
 import { supabaseAnonKey, supabaseUrl } from '../lib/supabase';
 import { detectInApp, type InAppKind } from '../lib/auth/inapp';
 import { browserStores, clearPending, peekPending, type PendingAction, type PendingInput } from '../lib/auth/pending';
+import { clearVia } from '../lib/auth/loginVia';
+import { flowStore, isGateRoute, loadFlow } from '../lib/auth/phoneFlow';
 import { useStore } from './StoreContext';
 
 // 登入的畫面狀態：登入面板（手機抽屜、桌機對話框）、登入錯誤、回到商品頁後自動動作沒完成的說明。
@@ -46,8 +48,17 @@ interface AuthCtx {
    */
   handoff: PendingAction | null;
   clearHandoff: () => void;
-  /** Supabase 專案有啟用的登入提供者；沒啟用的按鈕不顯示。讀不到時兩顆都顯示 */
+  /** Supabase 專案有啟用的登入提供者；沒啟用的按鈕不顯示。讀不到時全部顯示 */
   providers: EnabledProviders;
+  /**
+   * 手機驗證成功（使用者按了「確認」且 verifyOtp 成功）。簡訊登入不會整頁轉址，runPendingOnLoad 永遠是 false，
+   * 所以靠這個計數叫 PendingRunner 同頁執行待辦動作（R-8）。沒有要自動完成的動作時顯示 toast「登入成功」
+   */
+  completePhoneLogin: (trigger: PendingInput | null) => void;
+  /** 這次載入內手機登入成功的次數；每一次是一個新的待辦動作執行 key */
+  phoneLoginTick: number;
+  /** 一開站就有一段沒完成的手機登入（R-25）：商品頁要還原登入前選的規格與數量 */
+  flowRestored: boolean;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -73,6 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [handoff, setHandoff] = useState<PendingAction | null>(boot.handoff);
   const clearHandoff = useCallback(() => setHandoff(null), []);
   const [providers, setProviders] = useState<EnabledProviders>(ALL_PROVIDERS);
+  const [phoneLoginTick, setPhoneLoginTick] = useState(0);
+  const [flowRestored] = useState(() => loadFlow(flowStore(), Date.now())?.step === 'login');
 
   // 啟動時讀一次哪些提供者有啟用（沒啟用的按鈕按了會落在英文錯誤頁）
   useEffect(() => {
@@ -118,15 +131,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPanel({ trigger: d === 'login_panel' ? toInput(boot.handoff) : null, expired: false });
   }, [boot.handoff, authReady, user]);
 
+  // R-25：重新整理或從簡訊 App 切回來頁面被重新載入，S-10 做到一半就回到 S-10（驗證碼欄空白）。
+  // 閘門與賣家中心頁面本身就是登入畫面，自己會還原；其他頁面這裡把面板開回來，登入前選的規格與待辦動作跟著回來
+  const handledFlow = useRef(false);
+  useEffect(() => {
+    if (handledFlow.current || !authReady) return;
+    handledFlow.current = true;
+    if (user || !flowRestored) return;
+    if (isGateRoute(routeOfHash(window.location.hash))) return;
+    const rec = peekPending(browserStores(), Date.now());
+    setPanel(p => p ?? { trigger: rec && !rec.expired ? toInput(rec.action) : null, expired: false });
+  }, [authReady, user, flowRestored]);
+
+  // 登出之後，「綁定前是用什麼登入」的紀錄就沒有用了
+  useEffect(() => { if (authReady && !user) clearVia(flowStore()); }, [authReady, user]);
+
   // 登入完成（例如另一個分頁登入）：面板不必再開著
   useEffect(() => { if (user) setPanel(null); }, [user]);
+
+  const completePhoneLogin = useCallback((trigger: PendingInput | null) => {
+    setPhoneLoginTick(n => n + 1);
+    // 加入購物車由 PendingRunner 顯示「登入成功，已加入購物車」；直接購買進結帳頁、結帳過期有自己的橫幅，都不另外跳 toast
+    if (!trigger || trigger.kind === 'goto') toast('登入成功');
+  }, [toast]);
 
   const runPendingOnLoad = mayRunPending(boot.outcome);
 
   const value = useMemo<AuthCtx>(() => ({
     inApp, panel, openLogin, closeLogin, loginError, setLoginError, autoNotice, setAutoNotice, runPendingOnLoad,
-    handoff, clearHandoff, providers,
-  }), [inApp, panel, openLogin, closeLogin, loginError, autoNotice, runPendingOnLoad, handoff, clearHandoff, providers]);
+    handoff, clearHandoff, providers, completePhoneLogin, phoneLoginTick, flowRestored,
+  }), [inApp, panel, openLogin, closeLogin, loginError, autoNotice, runPendingOnLoad, handoff, clearHandoff, providers, completePhoneLogin, phoneLoginTick, flowRestored]);
 
   return (
     <Ctx.Provider value={value}>

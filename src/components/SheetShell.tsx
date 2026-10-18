@@ -39,7 +39,8 @@ export default function SheetShell({ titleId, descId, titleRef, onClose, childre
     const first = items[0];
     const last = items[items.length - 1];
     const active = document.activeElement;
-    if (e.shiftKey && (active === first || active === titleRef.current)) { e.preventDefault(); last.focus(); }
+    // data-step-title：登入面板的 S-10 步驟標題（它不是 titleRef，但同樣是 tabindex=-1 的起點）
+    if (e.shiftKey && (active === first || active === titleRef.current || (active instanceof HTMLElement && active.hasAttribute('data-step-title')))) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
   };
 

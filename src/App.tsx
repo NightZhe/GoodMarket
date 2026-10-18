@@ -23,6 +23,7 @@ import Account from './pages/buyer/Account';
 import AccountProfile from './pages/buyer/AccountProfile';
 import AccountAddresses from './pages/buyer/AccountAddresses';
 import AccountAddressForm from './pages/buyer/AccountAddressForm';
+import BindPhone from './pages/buyer/BindPhone';
 import Privacy from './pages/buyer/Privacy';
 import { ReviewsProvider } from './store/ReviewsContext';
 import SellerGate from './pages/seller/SellerGate';
@@ -76,6 +77,7 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
       <Route path="account/addresses" element={<AccountAddresses />} />
       <Route path="account/addresses/new" element={<AccountAddressForm />} />
       <Route path="account/addresses/:id" element={<AccountAddressForm />} />
+      <Route path="account/phone" element={<BindPhone />} />
       <Route path="privacy" element={<Privacy />} />
     </Route>
 

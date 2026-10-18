@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { checkAutoAction, reasonFromDbCode, autoModeOf, type AutoReason } from '../../lib/auth/autoAction';
 import { browserStores, takePending, type PendingAction } from '../../lib/auth/pending';
+import { pendingRunKey } from '../../lib/auth/pendingRun';
 import { toAccountError } from '../../lib/account/errors';
 import { useAuth } from '../../store/AuthContext';
 import { useStore } from '../../store/StoreContext';
@@ -11,25 +12,27 @@ type ProductAction = Extract<PendingAction, { kind: 'add_to_cart' | 'buy_now' }>
 
 /**
  * 登入回來之後自動完成原本的動作（D14）。放在路由內（要導頁）。
- *   - 只有「剛登入回來」才取用這個瀏覽器自己存下的待辦動作；平常載入、網址帶參數的連結都不會碰它（B-2：連結不能自動替人加購物車）。
+ *   - 只有「剛登入回來」（Google／Apple 轉址回來，或這一頁剛完成手機驗證）才取用這個瀏覽器自己存下的待辦動作；
+ *     平常載入、網址帶參數的連結都不會碰它（B-2：連結不能自動替人加購物車）。什麼時候執行見 lib/auth/pendingRun.ts。
  *   - 取用就是刪除：重新整理、上一頁、StrictMode 重跑 effect 都不會做第二次（AC-15）。
  *   - 不能執行時（過期、下架、規格沒了、庫存不夠、自己的商店）停在商品頁說明原因，選擇保留。
  */
 export default function PendingRunner() {
   const { authReady, user, loading, shopReady, myShop, getProduct, getShop, addToCart } = useStore();
-  const { runPendingOnLoad, setAutoNotice, clearHandoff } = useAuth();
+  const { runPendingOnLoad, phoneLoginTick, setAutoNotice, clearHandoff } = useAuth();
   const { pathname } = useLocation();
   const firstPath = useRef(pathname);
   const navigate = useNavigate();
   const toast = useToast();
-  const ran = useRef(false);
+  const lastRan = useRef<number | null>(null);
 
   // 網址帶來的預填只對「打開連結的那一頁」有效：離開之後就不再詢問
   useEffect(() => { if (pathname !== firstPath.current) clearHandoff(); }, [pathname, clearHandoff]);
 
   useEffect(() => {
-    if (ran.current || !runPendingOnLoad || !authReady || loading || !user || !shopReady) return;
-    ran.current = true;
+    const key = pendingRunKey({ runPendingOnLoad, phoneLoginTick, lastRanKey: lastRan.current, authReady, loading, hasUser: Boolean(user), shopReady });
+    if (key === null) return;
+    lastRan.current = key;
     const rec = takePending(browserStores(), Date.now());
     if (!rec) return;
     const { action, expired } = rec;
@@ -87,7 +90,7 @@ export default function PendingRunner() {
     } else {
       navigate('/checkout', { state: { items: [{ productId: action.productId, variantId: action.variantId, qty: action.qty }], fromCart: false } });
     }
-  }, [runPendingOnLoad, authReady, loading, user, shopReady, myShop, getProduct, getShop, addToCart, navigate, toast, setAutoNotice]);
+  }, [runPendingOnLoad, phoneLoginTick, authReady, loading, user, shopReady, myShop, getProduct, getShop, addToCart, navigate, toast, setAutoNotice]);
 
   return null;
 }

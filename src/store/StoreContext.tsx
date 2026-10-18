@@ -24,7 +24,7 @@ import {
   QuickEditError, failureText, settleConflict, toQuickEditFailure, type QuickChange, type QuickEditFailureKind, type QuickEditResult,
 } from '../lib/products/quickEdit';
 
-// 資料都存在 Supabase：商品所有人看得到；購物車、訂單屬於登入的帳號（買家只能用 Google／Apple 登入）。
+// 資料都存在 Supabase：商品所有人看得到；購物車、訂單屬於登入的帳號（買家用 Google、Apple 或手機號碼登入）。
 // 瀏覽器裡只剩「結帳頁記住的收件資料」（登出時才清）與登入流程的暫存（見 lib/auth/pending.ts）。
 
 /** 寫入節點後重讀該筆訂單的逾時 */
@@ -171,9 +171,6 @@ interface Store {
   /** 自己的商店資料已確定（沒登入、或已讀完）；判斷「賣家不能買自己商店的商品」前要等它 */
   shopReady: boolean;
   myShop: Shop | null;
-  /** 回傳 true 表示已直接登入；false 表示還要收信確認（專案有開 email 驗證時） */
-  signUp: (email: string, password: string) => Promise<boolean>;
-  signIn: (email: string, password: string) => Promise<void>;
   /** 賣家中心的「換帳號」：登出所有裝置（A-8，維持現況） */
   signOut: () => Promise<void>;
   /** 買家登出：只登出這台裝置，並清掉這台裝置記住的收件資料（A-7）。失敗會丟錯誤，仍維持登入 */
@@ -362,17 +359,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [reload, refreshCart, refreshMyOrders, handleAuthLost]);
 
   // ── 賣家 ─────────────────────────────────────────────────
-  const signUp = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) throw new Error(error.message);
-    return Boolean(data.session);
-  }, []);
-
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-  }, []);
-
   const doSignOut = useCallback(async (scope: 'global' | 'local') => {
     explicitSignOut.current = true;
     try {
@@ -559,14 +545,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     cartCount: validCartCount(cart, id => products.find(p => p.id === id)),
     cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart, addToCart, setCartQty, removeFromCart, retryCartSync,
     checkout, myOrders, myOrdersState, myOrdersIssue, refreshMyOrders, cancelMyOrder, completeMyOrder,
-    user, authReady, sessionExpired, shopReady, myShop, signUp, signIn, signOut, signOutBuyer, createShop,
+    user, authReady, sessionExpired, shopReady, myShop, signOut, signOutBuyer, createShop,
     saveProduct, setProductStatus, quickEditProduct, syncProductSnapshot, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
     getImportIndex, importApi, uploadImportImage,
   }), [
     shops, products, loading, loadError, reload, cart, cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart,
     addToCart, setCartQty, removeFromCart, retryCartSync,
     checkout, myOrders, myOrdersState, myOrdersIssue, refreshMyOrders, cancelMyOrder, completeMyOrder,
-    user, authReady, sessionExpired, shopReady, myShop, signUp, signIn, signOut, signOutBuyer, createShop,
+    user, authReady, sessionExpired, shopReady, myShop, signOut, signOutBuyer, createShop,
     saveProduct, setProductStatus, quickEditProduct, syncProductSnapshot, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
     getImportIndex, importApi, uploadImportImage,
   ]);

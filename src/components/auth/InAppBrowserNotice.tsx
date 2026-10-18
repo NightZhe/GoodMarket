@@ -4,7 +4,6 @@ import { routeOfHash } from '../../lib/auth/callback';
 import { buildExternalUrl, isIOS, type InAppKind } from '../../lib/auth/inapp';
 import { buildPending, type PendingInput } from '../../lib/auth/pending';
 import { btnOutline, btnPrimary } from '../import/ui';
-import PendingSummary from './PendingSummary';
 
 /** 帶著待辦動作的目前網址：登入面板與賣家中心共用 */
 export function currentExternalUrl(kind: InAppKind, trigger: PendingInput | null): string {
@@ -64,22 +63,24 @@ function CopyBlock({ url, primary }: { url: string; primary: boolean }) {
 }
 
 /**
- * S-3：LINE／Facebook／Instagram 內建瀏覽器，Google 不讓登入（disallowed_useragent）。
- * LINE 有官方的外開參數，一鍵用 Safari 開同一頁並帶著待辦動作；FB／IG 沒有，只能請使用者自己換瀏覽器。
- * 標題與說明在容器上（headingFor），這裡只有內容。
+ * S-3／S-5：LINE／Facebook／Instagram 內建瀏覽器，Google 不讓登入（disallowed_useragent）。
+ * 手機號碼可以直接登入（P12）；這裡是給想用 Google 的人的退路：LINE 有官方的外開參數，一鍵用 Safari 開同一頁並帶著待辦動作；
+ * FB／IG 沒有，只能請使用者自己換瀏覽器。標題與說明在容器上（headingFor），待辦摘要在 ProviderLogin。
+ * withPhone＝上面有手機表單：退路按鈕降為次要，並加一句標題。
  */
-export default function InAppBrowserNotice({ kind, trigger }: { kind: InAppKind; trigger: PendingInput | null }) {
+export default function InAppBrowserNotice({ kind, trigger, withPhone = false }: { kind: InAppKind; trigger: PendingInput | null; withPhone?: boolean }) {
   const ios = isIOS(navigator.userAgent);
   const url = currentExternalUrl(kind, trigger);
   const done = trigger?.kind === 'buy_now' ? '登入完成就會直接前往結帳。' : '登入完成就會自動加入購物車。';
   const keeps = trigger && trigger.kind !== 'goto' && trigger.kind !== 'checkout';
+  const lead = withPhone ? <p className="text-sm font-medium">想用 Google 或 Apple 登入？</p> : null;
 
   if (kind === 'line') {
     return (
-      <div className="space-y-4">
-        <PendingSummary trigger={trigger} />
+      <div className="space-y-3">
+        {lead}
         <div className="flex flex-col gap-2">
-          <button type="button" onClick={() => { window.location.href = url; }} className={`${btnPrimary} h-12 w-full text-base`}>
+          <button type="button" onClick={() => { window.location.href = url; }} className={`${withPhone ? btnOutline : btnPrimary} h-12 w-full text-base`}>
             <Compass size={20} aria-hidden="true" />{ios ? '用 Safari 開啟' : '用瀏覽器開啟'}
           </button>
           {/* 備案：使用者自己的 LINE 設定可能蓋掉外開參數（未查證），外開沒有反應時還有退路 */}
@@ -90,8 +91,8 @@ export default function InAppBrowserNotice({ kind, trigger }: { kind: InAppKind;
     );
   }
   return (
-    <div className="space-y-4">
-      <PendingSummary trigger={trigger} />
+    <div className="space-y-3">
+      {lead}
       <ol className="space-y-2 text-sm">
         {['點右上角的「⋯」', '選「在瀏覽器中開啟」'].map((t, i) => (
           <li key={t} className="flex items-center gap-2">
@@ -101,7 +102,7 @@ export default function InAppBrowserNotice({ kind, trigger }: { kind: InAppKind;
         ))}
       </ol>
       <p className="text-sm text-muted">或是複製連結，貼到 Safari 的網址列</p>
-      <CopyBlock url={url} primary />
+      <CopyBlock url={url} primary={!withPhone} />
       {keeps && <p className="text-sm text-muted">你剛剛的選擇會保留，{done}</p>}
     </div>
   );

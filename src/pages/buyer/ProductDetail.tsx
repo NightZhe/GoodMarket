@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, MapPin, MessageCircle, ShoppingCart, Star, Store, Truck, X } from 'lucide-react';
 import { useStore, FREE_SHIPPING_THRESHOLD, SHIPPING_FEE } from '../../store/StoreContext';
@@ -29,7 +29,7 @@ export default function ProductDetail() {
 
 function ProductDetailView({ id }: { id: string }) {
   const { getProduct, getShop, products, addToCart, user, myShop } = useStore();
-  const { openLogin, runPendingOnLoad, loginError, autoNotice, setAutoNotice, handoff, clearHandoff } = useAuth();
+  const { openLogin, runPendingOnLoad, flowRestored, loginError, autoNotice, setAutoNotice, handoff, clearHandoff } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const { productStat, shopStat, summaryState } = useReviews();
@@ -40,10 +40,10 @@ function ProductDetailView({ id }: { id: string }) {
   // 選規格 → 規格圖；點縮圖 → 圖庫。程式預選單一規格不算使用者動作，所以預設是圖庫。
   const [showVariantImage, setShowVariantImage] = useState(false);
   // 登入是整頁跳轉，回來時頁面重新載入：待辦動作裡存了登入前選的規格與數量，這裡還原（AC-2）。
-  // 只在「剛登入回來」或「登入失敗重開面板」時還原，平常開商品頁不受舊紀錄影響
+  // 只在「剛登入回來」「登入失敗重開面板」「手機驗證做到一半重新整理」時還原，平常開商品頁不受舊紀錄影響
   // 網址帶來的選擇（LINE 外開接續）也只是預填：規格與數量帶入，但不會自動動作（B-2）
   const [restored] = useState(() => {
-    const own = runPendingOnLoad || loginError ? peekPending(browserStores(), Date.now())?.action : null;
+    const own = runPendingOnLoad || loginError || flowRestored ? peekPending(browserStores(), Date.now())?.action : null;
     const a = own ?? handoff;
     if (!a || (a.kind !== 'add_to_cart' && a.kind !== 'buy_now') || a.productId !== id) return null;
     const v = product?.variants.find(x => x.id === a.variantId);
@@ -55,6 +55,9 @@ function ProductDetailView({ id }: { id: string }) {
   const [qty, setQty] = useState(restored?.qty ?? 1);
   const [sheet, setSheet] = useState<null | 'cart' | 'buy'>(null);
   const [needPick, setNeedPick] = useState(false);
+  // 手機驗證不會整頁轉址：登入面板關掉後規格抽屜還開著，待辦動作（加入購物車）已經在背景完成，抽屜要跟著收起來
+  const signedIn = user !== null;
+  useEffect(() => { if (signedIn) setSheet(null); }, [signedIn]);
 
   const related = useMemo(
     () => products.filter(p => p.id !== id && p.status === 'active' && p.categoryId === product?.categoryId).slice(0, 6),

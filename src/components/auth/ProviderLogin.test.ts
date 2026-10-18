@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PendingInput } from '../../lib/auth/pending';
-import { headingFor } from './ProviderLogin';
+import { headingFor } from '../../lib/auth/headings';
 
 const base = { inApp: null, ios: true } as const;
 const checkout: PendingInput = { kind: 'checkout', items: [{ productId: 'p', variantId: 'v', qty: 1 }], fromCart: false, payment: 'cod', address: {
