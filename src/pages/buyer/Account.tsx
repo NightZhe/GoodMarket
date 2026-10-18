@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, ClipboardList, LoaderCircle, LogOut, Mail, ShieldCheck, ShoppingCart, Store, UserRound } from 'lucide-react';
+import { ChevronRight, ClipboardList, LoaderCircle, LogOut, ShieldCheck, ShoppingCart, Store, UserRound } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import LoginRequired from '../../components/auth/LoginRequired';
 import { useToast } from '../../components/Toast';
 import { btnOutline } from '../../components/import/ui';
 import { accountLabel, loginProviderOf, providerLabel } from '../../lib/auth/identity';
-import { CONTACT_EMAIL, DELETION_WINDOW } from '../../lib/site';
 
 const ROW = 'flex min-h-12 items-center gap-3 px-4 text-sm focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand';
 
-/** 帳號頁 #/account：登入方式與 email、登出（只登出這台裝置）、刪除帳號說明、隱私政策 */
+/** 帳號頁 #/account：登入方式與 email、登出（只登出這台裝置）、隱私政策。刪除帳號的申請方式只寫在隱私政策頁（2026-10-18 使用者決定拿掉帳號頁的區塊） */
 export default function Account() {
   return (
     <LoginRequired kind="account">
@@ -70,14 +69,6 @@ function AccountView() {
           {busy ? '登出中…' : '登出'}
         </button>
         <p className="mt-3 text-xs leading-5 text-muted">只會登出這台裝置。購物車和訂單會保留在帳號裡，下次登入就會回來；這台裝置記住的收件資料會一併清除。</p>
-      </section>
-
-      <section className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:px-6">
-        <h2 className="text-sm font-medium">刪除帳號</h2>
-        <p className="mt-1 text-sm text-muted">目前請來信申請，我們會人工處理。有開店的帳號請在信中註明，我們會另外與你確認處理方式。申請後 {DELETION_WINDOW}刪除或去識別化你的個人資料。</p>
-        <a href={`mailto:${CONTACT_EMAIL}`} className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-sm underline underline-offset-2">
-          <Mail size={16} aria-hidden="true" />{CONTACT_EMAIL}
-        </a>
       </section>
 
       <nav aria-label="政策" className="mt-2 bg-white md:mt-3 md:rounded-md">

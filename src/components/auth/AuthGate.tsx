@@ -14,7 +14,7 @@ const GATES: Record<GateKind, { icon: ReactNode; title: string; description: str
   checkout: { icon: <ShoppingCart size={28} />, title: '登入後結帳', description: '登入後就能填寫收件資料並下訂單。' },
   orders: { icon: <ClipboardList size={28} />, title: '登入後查看訂單', description: '你的訂單會跟著帳號走，換手機也看得到。' },
   review: { icon: <PenLine size={28} />, title: '登入後撰寫評價', description: '評價要用下單時的帳號來寫。' },
-  account: { icon: <UserRound size={28} />, title: '登入後查看帳號', description: '登入後可以查看登入方式、登出，或申請刪除帳號。' },
+  account: { icon: <UserRound size={28} />, title: '登入後查看帳號', description: '登入後可以查看登入方式、登出。' },
 };
 
 /**
