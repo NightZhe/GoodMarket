@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import { useAuth } from '../../store/AuthContext';
+import Banner from '../../components/import/Banner';
+import { phoneErrorView } from '../../lib/auth/phoneErrors';
 import { useLoginProvider } from '../../components/auth/useLoginProvider';
 import CodeStep from '../../components/auth/CodeStep';
 import LoginRequired from '../../components/auth/LoginRequired';
@@ -27,6 +30,7 @@ export default function BindPhone() {
 
 function BindView() {
   const { user } = useStore();
+  const { providers } = useAuth();
   const navigate = useNavigate();
   const provider = useLoginProvider(user);
   const step = usePhoneStep('bind');
@@ -64,6 +68,9 @@ function BindView() {
               navigate('/account', { replace: true, state: { bound: n ? maskTwPhone(n) : '' } });
             }}
           />
+        ) : !providers.phone ? (
+          // 手機登入被後台關掉：不讓人白填一次（R-13）
+          <Banner kind="error" title={phoneErrorView('provider_disabled').title} />
         ) : (
           <>
             <p className="text-sm text-muted">綁定後，你也可以用這支手機號碼登入同一個帳號，購物車和訂單都在。</p>

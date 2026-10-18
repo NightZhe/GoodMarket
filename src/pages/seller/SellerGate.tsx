@@ -109,6 +109,7 @@ function AuthForm() {
 
 function ShopForm() {
   const { createShop, signOut, user } = useStore();
+  const { providers } = useAuth();
   const provider = useLoginProvider(user);
   const [form, setForm] = useState({ name: '', avatar: AVATARS[0], description: '', location: CITIES[0] });
   const [busy, setBusy] = useState(false);
@@ -139,7 +140,7 @@ function ShopForm() {
 
   // R-31：用手機登入、還沒有店。所有手機帳號都顯示，不判斷是不是新帳號（猜錯的代價比多顯示一則提示高）
   const viaPhone = provider === 'phone';
-  const canBind = user !== null && !phoneOf(user);
+  const canBind = user !== null && !phoneOf(user) && providers.phone;
 
   return (
     <form onSubmit={submit} className="rounded-lg bg-white p-6 shadow-xl">

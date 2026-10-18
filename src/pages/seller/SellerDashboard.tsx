@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, PlusCircle, Smartphone } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import { useAuth } from '../../store/AuthContext';
 import { useLoginProvider } from '../../components/auth/useLoginProvider';
 import { btnOutline } from '../../components/import/ui';
 import { phoneOf, providerLabel } from '../../lib/auth/identity';
@@ -13,6 +14,7 @@ import { useRefreshOnVisible } from '../../store/ReviewsContext';
 export default function SellerDashboard() {
   const { myShop, products, shopOrders, user } = useStore();
   const provider = useLoginProvider(user);
+  const { providers } = useAuth();
   const shop = myShop!;
   const mine = products.filter(p => p.shopId === shop.id);
   const valid = shopOrders.filter(o => o.status !== 'cancelled');
@@ -143,7 +145,7 @@ export default function SellerDashboard() {
       )}
 
       {/* 還沒有門號才顯示；放在最下面，綁定是自願的，不該每次進後台都被提醒 */}
-      {user && !phoneOf(user) && provider && (
+      {user && !phoneOf(user) && provider && providers.phone && (
         <section className="rounded-md border border-line bg-white p-3">
           <h2 className="text-sm font-medium">登入方式</h2>
           <p className="mt-1 text-sm text-muted">

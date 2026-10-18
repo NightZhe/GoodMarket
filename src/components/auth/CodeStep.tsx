@@ -23,7 +23,7 @@ function useResendSeconds(sentAt: number | null): number {
     if (left <= 0) return;
     const t = setInterval(bump, 1000);
     return () => clearInterval(t);
-  }, [left > 0, sentAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [left > 0, sentAt]);
   useEffect(() => {
     const on = () => { if (document.visibilityState === 'visible') bump(); };
     document.addEventListener('visibilitychange', on);
@@ -185,7 +185,7 @@ export default function CodeStep({ mode, flow, trigger = null, inApp = null, tit
   return (
     <div>
       <div className="flex items-start gap-2">
-        <button type="button" onClick={onBack} aria-label={mode === 'bind' ? '返回，改用其他號碼' : '改用其他號碼'} className={`-ml-2 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center text-ink ${FOCUS_RING}`}>
+        <button type="button" onClick={onBack} aria-label="改用其他號碼" className={`-ml-2 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center text-ink ${FOCUS_RING}`}>
           <ArrowLeft size={22} aria-hidden="true" />
         </button>
         <h2 id={titleId} ref={titleRef} tabIndex={-1} data-step-title="" className={`min-w-0 flex-1 pt-2 text-lg font-bold outline-none ${titleSrOnly ? 'sr-only' : ''}`}>

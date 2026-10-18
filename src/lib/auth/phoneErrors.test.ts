@@ -10,7 +10,7 @@ describe('錯誤對照：依 t2-local-tests 第 3 節，用 code／name／status
     ['驗證碼錯／過期／被重寄取代', api(403, 'otp_expired'), 'otp_invalid'],
     ['同一 IP 太多次', api(429, 'over_request_rate_limit'), 'rate_limit_ip'],
     ['其他 HTTP 429', api(429, ''), 'rate_limit_ip'],
-    ['簡訊供應商拒絕', api(422, 'sms_send_failed', 'Error sending confirmation OTP to provider: Twilio 21408'), 'sms_failed'],
+    ['簡訊供應商拒絕', api(422, 'sms_send_failed', 'Error sending confirmation code to provider: Twilio 21408'), 'sms_failed'],
     ['綁定：手機已是別的帳號', api(422, 'phone_exists'), 'phone_exists'],
     ['手機登入關閉', api(400, 'phone_provider_disabled'), 'provider_disabled'],
     ['關閉註冊', api(422, 'signup_disabled'), 'signup_disabled'],

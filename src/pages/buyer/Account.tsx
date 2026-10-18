@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight, ClipboardList, IdCard, LoaderCircle, LogOut, MapPin, ShieldCheck, ShoppingCart, Smartphone, Store } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import { useAuth } from '../../store/AuthContext';
 import LoginRequired from '../../components/auth/LoginRequired';
 import { useToast } from '../../components/Toast';
 import Banner from '../../components/import/Banner';
@@ -23,6 +24,7 @@ export default function Account() {
 
 function AccountView() {
   const { user, signOutBuyer } = useStore();
+  const { providers } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -72,7 +74,7 @@ function AccountView() {
       </section>
 
       {/* 還沒有門號的帳號才有；換號不在這一版，有門號就不顯示 */}
-      {!phoneOf(user) && (
+      {!phoneOf(user) && providers.phone && (
         <nav aria-label="綁定手機" className="mt-2 bg-white md:mt-3 md:rounded-md">
           <Link to="/account/phone" className={`${ROW} min-h-14 py-2`}>
             <Smartphone size={20} className="shrink-0 text-muted" aria-hidden="true" />
