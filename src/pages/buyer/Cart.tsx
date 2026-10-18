@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { PackageX, RotateCw, Store, Trash2, WifiOff } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { PackageX, RotateCw, Store, Trash2, Truck, WifiOff } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import LoginRequired from '../../components/auth/LoginRequired';
 import Banner from '../../components/import/Banner';
@@ -9,6 +9,8 @@ import { useToast } from '../../components/Toast';
 import ProductImage from '../../components/ProductImage';
 import QtyStepper from '../../components/QtyStepper';
 import EmptyState from '../../components/EmptyState';
+import Clauses from '../../components/checkout/Clauses';
+import { cartMarks, cartStockNote, readPriceCheckState } from '../../lib/account/priceCheck';
 import { money } from '../../lib/format';
 import type { CartItem } from '../../types';
 
@@ -54,8 +56,9 @@ function CartSkeleton() {
 }
 
 function CartView() {
-  const { cart, cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart, retryCartSync, getProduct, getShop, setCartQty, removeFromCart } = useStore();
+  const { cart, cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart, retryCartSync, getProduct, getShop, setCartQty, removeFromCart, reload } = useStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const [selected, setSelected] = useState<Set<string>>(() => new Set(cart.map(keyOf)));
   const [retrying, setRetrying] = useState(false);
@@ -73,6 +76,20 @@ function CartView() {
 
   // 進購物車頁就靜默重讀一次：別台裝置改過的內容，不必等到切換分頁才看得到（R-6）
   useEffect(() => { void refreshCart(true); }, [refreshCart]);
+
+  // 商品資料也靜默重讀（D-7i＝B）：畫面維持現有資料、不閃骨架，讀完價格有變就直接顯示新價；
+  // 讀不到（離線、網路不穩）就保留現有資料，購物車照常可用
+  useEffect(() => { void reload({ silent: true }); }, [reload]);
+
+  // 從結帳失敗畫面帶回來的問題清單（D-7a＝D）：只存在元件裡，讀完立刻清掉 history 的 state，
+  // 離開購物車或按上一頁回來都不會重現（AC-29、design.md 5.5）
+  const [priceCheck] = useState(() => readPriceCheckState(location.state));
+  const marks = useMemo(() => (priceCheck ? cartMarks(priceCheck) : null), [priceCheck]);
+  useEffect(() => {
+    if (priceCheck) navigate(location.pathname, { replace: true, state: null });
+    // 只在進頁時清一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 依商店分組，並帶出商品與規格資料。商品下架或規格不見的列不能直接藏起來（使用者會不知道購物車少了東西），
   // 另外列成「已失效」，可以刪除、不計入已選件數與總額
@@ -118,6 +135,16 @@ function CartView() {
       return next;
     });
 
+  const listReady = cartState !== 'idle' && cartState !== 'loading' && cartState !== 'error' && (groups.length > 0 || invalid.length > 0);
+  // 標示出現時焦點移到頂端提示，讀屏會唸出「剛才的結帳沒有成立」（design.md 5.1）
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const noticeFocused = useRef(false);
+  useEffect(() => {
+    if (!marks || !listReady || noticeFocused.current) return;
+    noticeFocused.current = true;
+    noticeRef.current?.focus();
+  }, [marks, listReady]);
+
   if (cartState === 'idle' || cartState === 'loading') return <CartSkeleton />;
 
   if (cartState === 'error') {
@@ -158,6 +185,15 @@ function CartView() {
       {/* 桌機：左清單 + 右側訂單摘要（手機用底部固定列） */}
       <div className="md:mt-4 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-4">
       <div className="min-w-0 space-y-2 md:space-y-4">
+        {marks && (
+          <div className="px-2 pt-2 md:px-0 md:pt-0">
+            <div ref={noticeRef} tabIndex={-1} className="outline-none">
+              <Banner kind="warning" role="status" title="剛才的結帳沒有成立">
+                <Clauses text="有變動的地方已在下面標出，確認後再按「去買單」。" />
+              </Banner>
+            </div>
+          </div>
+        )}
         {cartSyncFailed && (
           <div className="px-2 pt-2 md:px-0 md:pt-0">
             <Banner
@@ -175,6 +211,7 @@ function CartView() {
         {groups.map(([shopId, rows]) => {
           const shop = getShop(shopId);
           const keys = rows.map(r => keyOf(r.item));
+          const shipNote = marks?.shops.get(shopId);
           return (
             <section key={shopId} className="bg-white md:rounded-md">
               <header className="flex items-center gap-3 border-b border-line px-4 py-3">
@@ -183,29 +220,41 @@ function CartView() {
                   <Store size={16} /> {shop?.name}
                 </Link>
               </header>
-              {rows.map(r => (
-                <div key={keyOf(r.item)} className="flex items-center gap-3 border-b border-line px-4 py-4 last:border-0">
-                  <input type="checkbox" aria-label="選取" className="h-4 w-4 shrink-0 accent-brand" disabled={r.stock === 0}
-                    checked={selected.has(keyOf(r.item)) && r.stock > 0} onChange={e => toggle([keyOf(r.item)], e.target.checked)} />
-                  <Link to={`/product/${r.item.productId}`} className="w-20 shrink-0 overflow-hidden rounded-sm border border-line">
-                    <ProductImage src={r.image} alt={r.title} size="sm" className="w-full" />
-                  </Link>
-                  <div className="min-w-0 flex-1 md:grid md:grid-cols-[1fr_120px_140px_110px_50px] md:items-center md:gap-4">
-                    <div className="min-w-0">
-                      <p className="line-clamp-2 text-sm">{r.title}</p>
-                      <p className="mt-1 w-fit rounded-sm bg-canvas px-1.5 text-xs text-muted">規格：{r.variantName}</p>
-                      {r.stock === 0 && <p className="mt-1 text-xs text-error">此規格已售完</p>}
+              {shipNote && (
+                <p className="flex items-start gap-2 border-b border-line bg-warning-bg px-4 py-2 text-xs leading-5 text-ink">
+                  <Truck size={16} className="mt-0.5 shrink-0 text-warning-text" aria-hidden="true" />
+                  <span className="min-w-0"><Clauses text={shipNote} /></span>
+                </p>
+              )}
+              {rows.map(r => {
+                const mark = marks?.items.get(keyOf(r.item));
+                const stockNote = cartStockNote(Boolean(mark?.stock), r.item.qty, r.stock);
+                return (
+                  <div key={keyOf(r.item)} className="flex items-center gap-3 border-b border-line px-4 py-4 last:border-0">
+                    <input type="checkbox" aria-label="選取" className="h-4 w-4 shrink-0 accent-brand" disabled={r.stock === 0}
+                      checked={selected.has(keyOf(r.item)) && r.stock > 0} onChange={e => toggle([keyOf(r.item)], e.target.checked)} />
+                    <Link to={`/product/${r.item.productId}`} className="w-20 shrink-0 overflow-hidden rounded-sm border border-line">
+                      <ProductImage src={r.image} alt={r.title} size="sm" className="w-full" />
+                    </Link>
+                    <div className="min-w-0 flex-1 md:grid md:grid-cols-[1fr_120px_140px_110px_50px] md:items-center md:gap-4">
+                      <div className="min-w-0">
+                        <p className="line-clamp-2 text-sm">{r.title}</p>
+                        <p className="mt-1 w-fit rounded-sm bg-canvas px-1.5 text-xs text-muted">規格：{r.variantName}</p>
+                        {r.stock === 0 && <p className="mt-1 text-xs text-error-text">此規格已售完</p>}
+                        {mark?.price && <p className="mt-1.5 w-fit max-w-full rounded-sm bg-warning-bg px-1.5 py-0.5 text-xs leading-5 text-ink"><Clauses text={mark.price} /></p>}
+                        {stockNote && <p className="mt-1.5 w-fit max-w-full rounded-sm bg-warning-bg px-1.5 py-0.5 text-xs leading-5 text-ink"><Clauses text={stockNote} /></p>}
+                      </div>
+                      <p className="mt-1 text-brand md:mt-0 md:text-center md:text-ink">{money(r.price)}</p>
+                      <div className="mt-2 flex items-center justify-between md:mt-0 md:justify-center">
+                        <QtyStepper value={r.item.qty} max={Math.max(1, r.stock)} onChange={n => run(setCartQty(r.item.productId, r.item.variantId, n), '更新購物車失敗，已還原')} />
+                        <button onClick={() => run(removeFromCart([r.item]), '更新購物車失敗，已還原')} aria-label="刪除" className="p-2 text-muted md:hidden"><Trash2 size={18} /></button>
+                      </div>
+                      <p className="hidden text-center text-brand md:block">{money(r.price * r.item.qty)}</p>
+                      <button onClick={() => run(removeFromCart([r.item]), '更新購物車失敗，已還原')} className="hidden text-sm hover:text-brand md:block">刪除</button>
                     </div>
-                    <p className="mt-1 text-brand md:mt-0 md:text-center md:text-ink">{money(r.price)}</p>
-                    <div className="mt-2 flex items-center justify-between md:mt-0 md:justify-center">
-                      <QtyStepper value={r.item.qty} max={Math.max(1, r.stock)} onChange={n => run(setCartQty(r.item.productId, r.item.variantId, n), '更新購物車失敗，已還原')} />
-                      <button onClick={() => run(removeFromCart([r.item]), '更新購物車失敗，已還原')} aria-label="刪除" className="p-2 text-muted md:hidden"><Trash2 size={18} /></button>
-                    </div>
-                    <p className="hidden text-center text-brand md:block">{money(r.price * r.item.qty)}</p>
-                    <button onClick={() => run(removeFromCart([r.item]), '更新購物車失敗，已還原')} className="hidden text-sm hover:text-brand md:block">刪除</button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </section>
           );
         })}

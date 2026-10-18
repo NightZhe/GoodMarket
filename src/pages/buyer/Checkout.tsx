@@ -19,9 +19,10 @@ import { useAddressBook } from '../../lib/account/useAddressBook';
 import { signedInText } from '../../lib/auth/identity';
 import type { CheckoutAddress } from '../../lib/auth/pending';
 import ProductImage from '../../components/ProductImage';
+import CheckoutRejected from '../../components/checkout/CheckoutRejected';
 import EmptyState from '../../components/EmptyState';
 import { money } from '../../lib/format';
-import type { CartItem, Order } from '../../types';
+import type { CartItem, CheckoutRejection, Order } from '../../types';
 
 const PAYMENTS: { id: Order['payment']; label: string }[] = [
   { id: 'cod', label: '貨到付款' },
@@ -76,6 +77,7 @@ function CheckoutView() {
   const [reauthNotice, setReauthNotice] = useState(Boolean(state?.reauth));
   const [payment, setPayment] = useState<Order['payment']>(state?.payment ?? 'cod');
   const [done, setDone] = useState<Order[] | null>(null);
+  const [rejected, setRejected] = useState<CheckoutRejection[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [ownShopError, setOwnShopError] = useState(false);
@@ -103,9 +105,12 @@ function CheckoutView() {
       const subtotal = rows.reduce((s, r) => s + r.price * r.item.qty, 0);
       return { shopId, rows, subtotal, shipping: shippingFor(subtotal, rows.map(r => getProduct(r.item.productId))) };
     });
-    // 只在進頁時計算一次：結帳成功後庫存會變，不該讓摘要跟著跳
+    // 只在進頁時計算一次：結帳成功後庫存會變，不該讓摘要跟著跳。
+    // 這份結果同時是畫面上的單價與每店運費，也是送出時帶給伺服器比對的「看到的價格／運費」（不重算）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // 讀不到商品或規格的品項列不出來，也不送出（spec 4.1 第 2 點）
+  const unlisted = items.length - groups.reduce((n, g) => n + g.rows.length, 0);
 
   // 收件資訊的三種情況（設計 7）：a 地址簿有資料＝摘要；b 地址簿是空的＝表單＋「存到我的地址」；c 讀不到＝表單＋重試
   const bookAddr = pickBookAddress(rows, pickId, frozen);
@@ -136,6 +141,17 @@ function CheckoutView() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (rejected) {
+    return (
+      <CheckoutRejected
+        changes={rejected} fromCart={!!state?.fromCart}
+        shopOrder={groups.map(g => g.shopId)}
+        submittedProductIds={groups.flatMap(g => g.rows.map(r => r.item.productId))}
+        shopName={id => getShop(id)?.name} imageOf={id => getProduct(id)?.images[0]}
+      />
     );
   }
 
@@ -201,8 +217,16 @@ function CheckoutView() {
     setSubmitError('');
     setOwnShopError(false);
     try {
-      const orders = await checkout({ items, buyer: buyerOf(address), payment, fromCart: !!state?.fromCart });
-      setDone(orders);
+      const result = await checkout({
+        items: groups.flatMap(g => g.rows.map(r => ({ ...r.item, price: r.price }))),
+        seenShipping: Object.fromEntries(groups.map(g => [g.shopId, g.shipping])),
+        buyer: buyerOf(address), payment, fromCart: !!state?.fromCart,
+      });
+      if (result.outcome === 'rejected') {
+        setRejected(result.changes);
+        return;
+      }
+      setDone(result.orders);
       window.scrollTo(0, 0);
       // 先建訂單、再存地址：存地址失敗（網路、上限…）訂單照樣成立，只提醒一聲，不重試也不阻擋
       if (address.source === 'manual' && offerSave && saveBox) {
@@ -226,7 +250,8 @@ function CheckoutView() {
         setSubmitError('購物車有自己商店的商品，無法下單');
         setOwnShopError(true);
       } else {
-        // 最常見的是下單瞬間庫存被買走，訊息直接來自資料庫的檢查（中文）
+        // 價格、庫存、運費的變動不會走到這裡（改走失敗畫面）；這裡是下架、規格不見、網路、後端未升級等，
+        // 資料庫的錯誤訊息本身是中文
         setSubmitError(accountErrorText(e, '下單失敗，請再試一次'));
       }
     } finally {
@@ -252,6 +277,11 @@ function CheckoutView() {
           <Banner kind="info" role="status" title="已重新登入" actions={<button type="button" className={btnOutline} onClick={() => setReauthNotice(false)}>知道了</button>}>
             你填的資料都還在，可以繼續下單。
           </Banner>
+        </div>
+      )}
+      {unlisted > 0 && (
+        <div className="px-2 pt-2 md:px-0 md:pt-0">
+          <Banner kind="warning" role="status" title={`有 ${unlisted} 件商品已無法購買，這次不會一起下單`} />
         </div>
       )}
       <section className="bg-white p-4 md:rounded-md md:p-6">
