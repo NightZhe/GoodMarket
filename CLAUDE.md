@@ -42,12 +42,19 @@
 - `supabase/.env`（已 gitignore）放使用者本機 Google OAuth 用戶端的密鑰，**agent 不得建立、修改、刪除**，只能讀 sha256 證明沒動。
 - 本機假 OAuth 驗證法：暫改 `supabase/config.toml` 加 keycloak／github 區塊指向本機假伺服器，跑真實 GoTrue PKCE；測完必須還原並附 sha256。做法見 `.work/buyer-auth/t3-ac46.md`。
 
-## 目前狀態（2026-10-18，給新 session 的交接）
+## 目前狀態（2026-10-18 晚間更新，給新 session 的交接）
 
 已上線：商品評價（含照片、賣家回覆）；買家已取貨自動完成＋訂單狀態鎖定；**買家帳號**（遊客只能瀏覽，
-加購物車／下單／訂單／評價都要 Google 或 Apple 登入；購物車與訂單綁帳號；舊訂單憑證機制已移除）。
+加購物車／下單／訂單／評價都要 Google 或 Apple 登入；購物車與訂單綁帳號；舊訂單憑證機制已移除）；
+**商品表單上限**（售價／原價 499,999、庫存 999,999，`src/lib/products/variants.ts`）；帳號頁拿掉「刪除帳號」區塊（申請方式只在隱私政策頁）；
+**我的商品列表快改**（點價格／庫存格就地改、多規格展開、手機底部面板；走資料庫函式 `quick_edit_product`：只寫被改的值、比對舊值回衝突、
+庫存全 0 自動下架、留 `product_change_log` 異動紀錄；列表斷點改 1024；上下架改只寫 status）。
 每個功能的決策、規格、驗收報告、上線紀錄都在 `.work/<功能>/`（不進版控）：
-`product-reviews/`、`picked-up-complete/`、`buyer-auth/`（含 `prod-runbook.md`、`prod-apply-log.md`、`prod-delete-log.md`、`tools/`）。
+`product-reviews/`、`picked-up-complete/`、`buyer-auth/`、`list-quick-edit/`（含 `prod-runbook.md`、`prod-apply-log.md`、`tools/metrics/` 成功指標查詢）。
+同日另有「帳號頁子選單＋地址簿」（`account-payment-methods/`）與「手機號碼登入」（`phone-otp-auth/`，分支 `phone-otp-auth`）兩條線由其他 session 進行。
+
+下一個該做的：**結帳比價**（`.work/checkout-price-check/`，使用者已拍板流程：下單時伺服器比對買家看到的價格，不一致就不建單、顯示下單失敗並導回賣家商品頁）。
+快改上線後改價會變多，這個缺口要盡快補。
 
 維運提醒：
 - **Apple 登入 client secret 2027-04-15 到期**，2027-04-01 前用 Supabase 文件頁工具＋原 `.p8` 重做並更新後台。
@@ -56,4 +63,5 @@
 - 正式站 Storage 刪檔需要 service role key：由使用者在自己終端機以 `read -rs` 輸入後跑 `tools/delete-review-paths.mjs`，不經過 agent。
 
 已知小問題（不急）：登入方式設定讀取超過 5 秒會先顯示兩顆按鈕；平板寬度賣家首頁與商品頁有橫向捲軸；
-購物車兩次更新間隔 3 秒內讀屏可能不重念。
+購物車兩次更新間隔 3 秒內讀屏可能不重念；賣家中心頂欄在 188px 寬（手機 200%）橫向溢出，快改面板的關閉鈕會被擠出；
+`.claude/agents/qa.md` 沒有「交件前必跑關卡」表（其他四個角色都有）；快改的 iPhone Safari／LINE 實機驗收待使用者。
