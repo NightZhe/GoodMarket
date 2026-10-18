@@ -67,6 +67,9 @@ function NoticeBar({ text, onClose }: { text: string; onClose: () => void }) {
   );
 }
 
+// 上下架文字鈕：視覺高 36（lg 32），after 偽元素把點擊區補到 44
+const toggleBtn = 'relative inline-flex h-9 shrink-0 items-center justify-center gap-1 whitespace-nowrap self-center rounded-sm border bg-white px-2.5 text-xs font-medium after:absolute after:inset-x-0 after:-inset-y-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand motion-safe:active:scale-[0.98] lg:h-8 lg:after:-inset-y-1.5';
+
 export default function SellerProducts() {
   const { myShop, products, loading, loadError, setProductStatus, deleteProduct, reload } = useStore();
   const toast = useToast();
@@ -286,7 +289,7 @@ export default function SellerProducts() {
         </div>
 
         <div ref={listRef}>
-          <div className="hidden grid-cols-[1fr_150px_80px_80px_120px] gap-4 bg-[#fafafa] px-4 py-2.5 text-xs text-muted lg:grid">
+          <div className="hidden grid-cols-[1fr_150px_80px_80px_152px] gap-4 bg-[#fafafa] px-4 py-2.5 text-xs text-muted lg:grid">
             <span>商品</span>
             <span className="flex items-center gap-1">價格<Pencil size={11} aria-hidden="true" /></span>
             <span className="flex items-center gap-1">庫存<Pencil size={11} aria-hidden="true" /></span>
@@ -327,7 +330,7 @@ export default function SellerProducts() {
                   product: p, onSaved: onSaved(p, here ?? 'price'), onGone, onClose: cancelEdit, onStatusChange: setStatus,
                 };
                 return (
-                  <li key={p.id} className={`grid grid-cols-1 items-center gap-x-4 gap-y-2 px-4 py-3 min-[320px]:grid-cols-[1fr_auto] lg:grid-cols-[1fr_150px_80px_80px_120px] ${multi && here && here !== 'sheet' ? 'lg:items-start' : ''}`}>
+                  <li key={p.id} className={`grid grid-cols-1 items-center gap-x-4 gap-y-2 px-4 py-3 min-[320px]:grid-cols-[1fr_auto] lg:grid-cols-[1fr_150px_80px_80px_152px] ${multi && here && here !== 'sheet' ? 'lg:items-start' : ''}`}>
                     <div className={`flex min-w-0 items-center gap-3 max-[319px]:flex-col max-[319px]:items-start ${multi && here && here !== 'sheet' ? 'lg:sticky lg:top-[4.5rem] lg:self-start' : ''}`}>
                       <ProductImage src={p.images[0]} alt="" size="sm" className={`w-14 shrink-0 rounded-sm ${p.status === 'hidden' ? 'opacity-40' : ''}`} />
                       <div className="min-w-0">
@@ -354,15 +357,16 @@ export default function SellerProducts() {
                       <div className="flex justify-end gap-1">
                         <Link to={`/seller/products/${p.id}/edit`} state={toForm} aria-label="編輯" title="編輯" className="rounded-md p-2 text-muted hover:bg-canvas hover:text-brand"><Pencil size={17} /></Link>
                         <button
-                          aria-label={toggleLabel} title={toggleLabel}
+                          type="button"
                           onClick={async () => {
                             try {
                               await setProductStatus(p.id, p.status === 'active' ? 'hidden' : 'active');
                               toast(p.status === 'active' ? '已下架' : '已重新上架');
                             } catch (e) { toast(e instanceof Error ? e.message : '操作失敗'); }
                           }}
-                          className="rounded-md p-2 text-muted hover:bg-canvas hover:text-brand">
-                          {p.status === 'active' ? <EyeOff size={17} /> : <Eye size={17} />}
+                          className={`${toggleBtn} ${p.status === 'active' ? 'border-line text-muted hover:bg-canvas' : 'border-brand text-brand-dark hover:bg-brand-soft'}`}>
+                          {p.status === 'active' ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+                          {toggleLabel}
                         </button>
                         <button aria-label="刪除" title="刪除" onClick={() => setConfirmId(p.id)} className="rounded-md p-2 text-muted hover:bg-error-bg hover:text-error"><Trash2 size={17} /></button>
                       </div>
