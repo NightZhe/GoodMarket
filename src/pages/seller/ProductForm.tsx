@@ -8,6 +8,7 @@ import ProductImage from '../../components/ProductImage';
 import EmptyState from '../../components/EmptyState';
 import { uid } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
+import { NUMBER_INPUT_MAX_LENGTH, PRICE_MAX, STOCK_MAX, variantErrors, wholeNumber } from '../../lib/products/variants';
 import type { CategoryId, Product } from '../../types';
 
 const MAX_IMAGES = 9;
@@ -90,19 +91,16 @@ function Form({ existing, shopId, location, onSave }: {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const num = (s: string) => (/^\d+$/.test(s.trim()) ? Number(s) : NaN);
+  const num = wholeNumber;
   const errors = {
     title: title.trim().length < 5 ? '商品名稱至少 5 個字' : '',
     categoryId: !categoryId ? '請選擇分類' : '',
     images: images.length === 0 ? '至少需要 1 張商品圖片' : '',
-    variants: variants.some(v => !v.name.trim() || !(num(v.price) > 0) || Number.isNaN(num(v.stock)))
-      ? '每個規格都要填名稱、大於 0 的售價與庫存' : '',
-    // 原價是選填，但填了就必須高於該規格自己的售價
-    original: variants.some(v => v.original && !(num(v.original) > num(v.price)))
-      ? '原價要高於同一列的售價，否則請留空' : '',
   };
+  // 規格列的規則（必填、原價要高於售價、售價／原價／庫存上限）在 lib/products/variants.ts，有單元測試
+  const variantMessages = variantErrors(variants);
   const imagesFull = images.length >= MAX_IMAGES;
-  const hasError = Object.values(errors).some(Boolean);
+  const hasError = Object.values(errors).some(Boolean) || variantMessages.length > 0;
   const descLength = cpLength(description);
   const [descLevel, setDescLevel] = useState<'none' | 'near' | 'full'>('none');
   const [descAnnounce, setDescAnnounce] = useState('');
@@ -295,17 +293,16 @@ function Form({ existing, shopId, location, onSave }: {
           return (
             <div key={v.id} className="grid grid-cols-[1fr_1fr_36px] gap-2 rounded-md bg-canvas p-2 md:grid-cols-[1fr_110px_110px_90px_36px] md:bg-transparent md:p-0">
               <input aria-label={`規格 ${i + 1} 名稱`} value={v.name} onChange={e => patch({ name: e.target.value })} placeholder="規格名稱" className={`col-span-3 bg-white md:col-span-1 ${input}`} />
-              <input aria-label={`規格 ${i + 1} 售價`} value={v.price} inputMode="numeric" onChange={e => patch({ price: e.target.value.replace(/\D/g, '') })} placeholder="$ 售價" className={`bg-white ${input}`} />
-              <input aria-label={`規格 ${i + 1} 原價`} value={v.original} inputMode="numeric" onChange={e => patch({ original: e.target.value.replace(/\D/g, '') })} placeholder="$ 原價" className={`col-span-2 bg-white md:col-span-1 ${input}`} />
-              <input aria-label={`規格 ${i + 1} 庫存`} value={v.stock} inputMode="numeric" onChange={e => patch({ stock: e.target.value.replace(/\D/g, '') })} placeholder="庫存" className={`bg-white ${input}`} />
+              <input aria-label={`規格 ${i + 1} 售價`} value={v.price} inputMode="numeric" maxLength={NUMBER_INPUT_MAX_LENGTH} onChange={e => patch({ price: e.target.value.replace(/\D/g, '') })} placeholder="$ 售價" className={`bg-white ${input}`} />
+              <input aria-label={`規格 ${i + 1} 原價`} value={v.original} inputMode="numeric" maxLength={NUMBER_INPUT_MAX_LENGTH} onChange={e => patch({ original: e.target.value.replace(/\D/g, '') })} placeholder="$ 原價" className={`col-span-2 bg-white md:col-span-1 ${input}`} />
+              <input aria-label={`規格 ${i + 1} 庫存`} value={v.stock} inputMode="numeric" maxLength={NUMBER_INPUT_MAX_LENGTH} onChange={e => patch({ stock: e.target.value.replace(/\D/g, '') })} placeholder="庫存" className={`bg-white ${input}`} />
               <button type="button" aria-label="刪除規格" disabled={variants.length === 1} onClick={() => setVariants(rows => rows.filter(r => r.id !== v.id))}
                 className="flex items-center justify-center text-muted hover:text-error disabled:opacity-30"><Trash2 size={17} /></button>
             </div>
           );
         })}
-        {err('variants')}
-        {err('original')}
-        <p className="text-xs text-muted">填了原價，商品頁與商品卡就會顯示劃掉的原價與折扣百分比。</p>
+        {touched && variantMessages.map(m => <p key={m} className="mt-1 text-xs text-error">{m}</p>)}
+        <p className="text-xs text-muted">填了原價，商品頁與商品卡就會顯示劃掉的原價與折扣百分比。售價與原價最高 ${thousands(PRICE_MAX)}，庫存最高 {thousands(STOCK_MAX)}。</p>
         <div className="grid gap-4 border-t border-line pt-4 md:grid-cols-2">
           <label className="flex items-center gap-2 self-end pb-2.5 text-sm">
             <input type="checkbox" checked={freeShipping} onChange={e => setFreeShipping(e.target.checked)} className="h-4 w-4 accent-brand" />
