@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Order } from '../../types';
 import type { OrderPaymentRow } from './types';
-import { BUYER_PAY_LABEL, SELLER_PAY_LABEL, orderPayLine, orderPayState, pendingBatch } from './orderView';
+import { BUYER_PAY_LABEL, SELLER_PAY_LABEL, orderPayLine, orderPayLineIfOn, orderPayState, pendingBatch, sellerPayLabel } from './orderView';
 
 const row = (over: Partial<OrderPaymentRow> = {}): OrderPaymentRow => ({
   order_id: 'o1', group_id: 'g1', payment_status: 'paid', pay_expires_at: null, paid_at: '2026-10-19T08:00:00Z', card_brand: 'visa', card4: '4242', last_fail: null, ...over,
@@ -68,5 +68,25 @@ describe('pendingBatch：同一批待付款的訂單', () => {
   it('沒有群組編號（舊資料）：只有自己', () => {
     const pays = [row({ order_id: 'a', group_id: null, payment_status: 'pending' })];
     expect(pendingBatch('a', pays, [o('a')]).map(x => x.id)).toEqual(['a']);
+  });
+});
+
+describe('開關關著時，付款相關字樣不出現（與開關打開前的畫面逐字相同）', () => {
+  it('買家訂單 footer 的付款方式一行：開關關著不顯示', () => {
+    expect(orderPayLineIfOn(false, 'cod', undefined)).toBeNull();
+    expect(orderPayLineIfOn(false, 'card', undefined)).toBeNull();
+    expect(orderPayLineIfOn(true, 'cod', undefined)).toBe('貨到付款');
+    expect(orderPayLineIfOn(true, 'ecpay_card', row())).toBe('信用卡 Visa •••• 4242・已付款');
+  });
+  it('賣家訂單 footer 的付款標籤：關著時示範單維持原本的「信用卡」「ATM 轉帳」，沒有「（示範）」', () => {
+    expect(sellerPayLabel('cod', false)).toBe('貨到付款');
+    expect(sellerPayLabel('card', false)).toBe('信用卡');
+    expect(sellerPayLabel('transfer', false)).toBe('ATM 轉帳');
+    expect(sellerPayLabel('card', true)).toBe('信用卡（示範）');
+    expect(sellerPayLabel('transfer', true)).toBe('ATM 轉帳（示範）');
+  });
+  it('已經存在的線上付款單不受開關影響：賣家永遠看得到「信用卡・已付款」', () => {
+    expect(sellerPayLabel('ecpay_card', false)).toBe('信用卡・已付款');
+    expect(sellerPayLabel('ecpay_card', true)).toBe('信用卡・已付款');
   });
 });

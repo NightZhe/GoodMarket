@@ -45,3 +45,12 @@ export function pendingBatch<T extends { id: string }>(orderId: string, pays: Or
   const ids = new Set(pays.filter(p => p.group_id === mine.group_id && p.payment_status === 'pending').map(p => p.order_id));
   return orders.filter(o => ids.has(o.id));
 }
+
+/** 買家訂單 footer 的付款方式一行：開關關著時整行不出現（畫面與沒有線上付款功能時逐字相同） */
+export const orderPayLineIfOn = (onlineOn: boolean, payment: Order['payment'], pay: OrderPaymentRow | undefined): string | null =>
+  onlineOn ? orderPayLine(payment, pay) : null;
+
+/** 開關關著時賣家看到的標籤：維持上線前的字（沒有「（示範）」）。已存在的線上付款單一律「信用卡・已付款」，不受開關影響 */
+const SELLER_LEGACY_LABEL: Record<Order['payment'], string> = { cod: '貨到付款', card: '信用卡', transfer: 'ATM 轉帳', ecpay_card: SELLER_PAY_LABEL.ecpay_card };
+export const sellerPayLabel = (payment: Order['payment'], onlineOn: boolean): string =>
+  (onlineOn ? SELLER_PAY_LABEL : SELLER_LEGACY_LABEL)[payment];

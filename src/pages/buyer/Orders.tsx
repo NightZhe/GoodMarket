@@ -15,7 +15,7 @@ import EmptyState from '../../components/EmptyState';
 import { dateText, money } from '../../lib/format';
 import { expireMyPendingOrders, fetchOrderPayments } from '../../lib/payment/api';
 import { clockText, msUntil } from '../../lib/payment/countdown';
-import { orderPayLine, orderPayState, pendingBatch, type OrderPayState } from '../../lib/payment/orderView';
+import { orderPayLineIfOn, orderPayState, pendingBatch, type OrderPayState } from '../../lib/payment/orderView';
 import type { OrderPaymentRow } from '../../lib/payment/types';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import OrderTimeline from '../../components/OrderTimeline';
@@ -279,7 +279,8 @@ function OrdersView() {
               <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-[#fffefb] px-4 py-3">
                 <span>
                   <span className="block text-xs text-muted">{dateText(o.createdAt)}</span>
-                  <span className="block text-xs text-muted">{orderPayLine(o.payment, pay)}</span>
+                  {/* 付款方式一行只在線上付款開關打開時出現；關著時與開關打開前的畫面逐字相同 */}
+                  {paymentCfg.enabled && <span className="block text-xs text-muted">{orderPayLineIfOn(true, o.payment, pay)}</span>}
                 </span>
                 <div className="flex flex-wrap items-center justify-end gap-3">
                   <span className="text-sm">訂單金額 <span className="text-lg text-brand">{money(o.total)}</span></span>

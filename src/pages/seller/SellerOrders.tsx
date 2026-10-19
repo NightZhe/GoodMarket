@@ -10,7 +10,7 @@ import OrderTimeline from '../../components/OrderTimeline';
 import { STATUS_LABEL } from '../buyer/Orders';
 import { dateText, money } from '../../lib/format';
 import { FEE_RATES, payoutOf } from '../../lib/payout';
-import { SELLER_PAY_LABEL } from '../../lib/payment/orderView';
+import { sellerPayLabel } from '../../lib/payment/orderView';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useMerchantState } from '../../lib/payment/useMerchant';
 import type { Order, OrderStatus, ShippingMilestone } from '../../types';
@@ -244,7 +244,7 @@ export default function SellerOrders() {
                 <span>訂單編號 <span className="font-mono text-ink">{o.orderNo}</span></span>
                 <span>{dateText(o.createdAt)}</span>
                 {o.payment === 'ecpay_card' && <span className="inline-flex items-center gap-1 text-ink"><CreditCard size={13} aria-hidden="true" />信用卡・已付款</span>}
-                {o.payment === 'cod' && <span className="inline-flex items-center gap-1"><Banknote size={13} aria-hidden="true" />貨到付款</span>}
+                {payEnabled && o.payment === 'cod' && <span className="inline-flex items-center gap-1"><Banknote size={13} aria-hidden="true" />貨到付款</span>}
                 <span className={`ml-auto rounded-full px-2 py-0.5 font-medium ${TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span>
               </header>
               <div className="grid gap-4 p-4 md:grid-cols-[1fr_240px]">
@@ -316,7 +316,7 @@ export default function SellerOrders() {
               )}
 
               <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-3">
-                <span className="mr-auto text-xs text-muted">{SELLER_PAY_LABEL[o.payment]}・運費 {money(o.shippingFee)}</span>
+                <span className="mr-auto text-xs text-muted">{sellerPayLabel(o.payment, payEnabled)}・運費 {money(o.shippingFee)}</span>
                 <span className="text-sm">訂單金額 <span className="text-lg font-medium text-brand">{money(o.total)}</span></span>
                 {o.status === 'shipping' && (
                   <MilestoneButtons
