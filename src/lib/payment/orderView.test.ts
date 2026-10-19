@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Order } from '../../types';
 import type { OrderPaymentRow } from './types';
-import { BUYER_PAY_LABEL, SELLER_PAY_LABEL, orderPayLine, orderPayLineIfOn, orderPayState, pendingBatch, sellerPayLabel } from './orderView';
+import { BUYER_PAY_LABEL, SELLER_PAY_LABEL, orderPayLine, buyerCancelUi, orderPayLineIfOn, orderPayState, pendingBatch, sellerCanCancel, sellerPayLabel } from './orderView';
 
 const row = (over: Partial<OrderPaymentRow> = {}): OrderPaymentRow => ({
   order_id: 'o1', group_id: 'g1', payment_status: 'paid', pay_expires_at: null, paid_at: '2026-10-19T08:00:00Z', card_brand: 'visa', card4: '4242', last_fail: null, ...over,
@@ -88,5 +88,27 @@ describe('開關關著時，付款相關字樣不出現（與開關打開前的�
   it('已經存在的線上付款單不受開關影響：賣家永遠看得到「信用卡・已付款」', () => {
     expect(sellerPayLabel('ecpay_card', false)).toBe('信用卡・已付款');
     expect(sellerPayLabel('ecpay_card', true)).toBe('信用卡・已付款');
+  });
+});
+
+describe('已付款的線上單不能自行取消（退款規格未補前）', () => {
+  it('買家：待出貨的貨到付款／示範單照舊有取消鈕；已付款線上單改成一行說明；還沒付完款的由待付款區處理', () => {
+    expect(buyerCancelUi('to_ship', 'cod')).toBe('button');
+    expect(buyerCancelUi('to_ship', 'demo')).toBe('button');
+    expect(buyerCancelUi('to_ship', 'paid')).toBe('paid_note');
+    expect(buyerCancelUi('to_ship', 'pending')).toBe('none');
+    expect(buyerCancelUi('to_ship', 'confirming')).toBe('none');
+    expect(buyerCancelUi('to_ship', 'unknown')).toBe('none');
+  });
+  it('買家：已出貨以後本來就沒有取消鈕，也不寫說明', () => {
+    expect(buyerCancelUi('shipping', 'paid')).toBe('none');
+    expect(buyerCancelUi('completed', 'paid')).toBe('none');
+    expect(buyerCancelUi('cancelled', 'cod')).toBe('none');
+  });
+  it('賣家：已付款的線上單不顯示取消（取消不會退款）；貨到付款與示範單照舊', () => {
+    expect(sellerCanCancel('ecpay_card')).toBe(false);
+    expect(sellerCanCancel('cod')).toBe(true);
+    expect(sellerCanCancel('card')).toBe(true);
+    expect(sellerCanCancel('transfer')).toBe(true);
   });
 });

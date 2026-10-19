@@ -10,7 +10,7 @@ import OrderTimeline from '../../components/OrderTimeline';
 import { STATUS_LABEL } from '../buyer/Orders';
 import { dateText, money } from '../../lib/format';
 import { FEE_RATES, payoutOf } from '../../lib/payout';
-import { sellerPayLabel } from '../../lib/payment/orderView';
+import { sellerCanCancel, sellerPayLabel } from '../../lib/payment/orderView';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useMerchantState } from '../../lib/payment/useMerchant';
 import type { Order, OrderStatus, ShippingMilestone } from '../../types';
@@ -335,7 +335,8 @@ export default function SellerOrders() {
                 )}
                 {o.status === 'to_ship' && (
                   <>
-                    <button onClick={async () => {
+                    {/* 已付款的線上單先不給取消：取消不會退款（退款規格未補） */}
+                    {sellerCanCancel(o.payment) && <button onClick={async () => {
                       try {
                         await updateOrderStatus(o.id, 'cancelled');
                       } catch (e) {
@@ -343,7 +344,7 @@ export default function SellerOrders() {
                         return;
                       }
                       toast('訂單已取消');
-                    }} className="rounded-sm border border-line px-3 py-2 text-sm hover:bg-canvas">取消訂單</button>
+                    }} className="rounded-sm border border-line px-3 py-2 text-sm hover:bg-canvas">取消訂單</button>}
                     <button onClick={() => setShipId(shipId === o.id ? null : o.id)} className="flex items-center gap-1.5 rounded-sm bg-brand px-4 py-2 text-sm text-white hover:bg-brand-dark">
                       <Truck size={16} /> 安排出貨
                     </button>

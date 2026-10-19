@@ -15,7 +15,7 @@ import EmptyState from '../../components/EmptyState';
 import { dateText, money } from '../../lib/format';
 import { expireMyPendingOrders, fetchOrderPayments } from '../../lib/payment/api';
 import { clockText, msUntil } from '../../lib/payment/countdown';
-import { orderPayLineIfOn, orderPayState, pendingBatch, type OrderPayState } from '../../lib/payment/orderView';
+import { buyerCancelUi, orderPayLineIfOn, orderPayState, pendingBatch, type OrderPayState } from '../../lib/payment/orderView';
 import type { OrderPaymentRow } from '../../lib/payment/types';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import OrderTimeline from '../../components/OrderTimeline';
@@ -295,11 +295,12 @@ function OrdersView() {
                       {pay?.group_id && <Link to={`/pay/${pay.group_id}`} className={`${btnPrimary} flex-1`}>重新付款</Link>}
                     </div>
                   )}
-                  {o.status === 'to_ship' && !isUnfinished(ps) && (
+                  {buyerCancelUi(o.status, ps) === 'button' && (
                     busy?.id === o.id ? <BusyButton label="取消中…" /> : (
                       <button onClick={() => void act(o.id, 'cancel')} aria-disabled={busy ? true : undefined} className="inline-flex min-h-11 items-center rounded-sm border border-line px-3 text-sm">取消訂單</button>
                     )
                   )}
+                  {buyerCancelUi(o.status, ps) === 'paid_note' && <p className="w-full text-right text-xs text-muted">已付款的訂單目前無法自行取消</p>}
                   {o.status === 'shipping' && (
                     busy?.id === o.id ? <BusyButton label="完成中…" /> : (
                       <button onClick={() => void act(o.id, 'complete')} aria-disabled={busy ? true : undefined} className="inline-flex min-h-11 items-center rounded-sm bg-brand px-3 text-sm text-white">完成訂單</button>

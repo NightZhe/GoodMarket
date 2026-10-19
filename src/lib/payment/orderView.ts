@@ -1,4 +1,4 @@
-import type { Order } from '../../types';
+import type { Order, OrderStatus } from '../../types';
 import { brandLabel } from './cards';
 import type { OrderPaymentRow } from './types';
 
@@ -54,3 +54,16 @@ export const orderPayLineIfOn = (onlineOn: boolean, payment: Order['payment'], p
 const SELLER_LEGACY_LABEL: Record<Order['payment'], string> = { cod: '貨到付款', card: '信用卡', transfer: 'ATM 轉帳', ecpay_card: SELLER_PAY_LABEL.ecpay_card };
 export const sellerPayLabel = (payment: Order['payment'], onlineOn: boolean): string =>
   (onlineOn ? SELLER_PAY_LABEL : SELLER_LEGACY_LABEL)[payment];
+
+/**
+ * 買家訂單的取消區：待出貨且不是線上付款訂單＝取消鈕（照舊）；已付款的線上單＝一行說明（退款規格未補前不能自行取消，
+ * 按下去只會被資料庫擋）；其餘（還沒付完款的由待付款區處理、已出貨以後本來就沒有）不顯示
+ */
+export function buyerCancelUi(status: OrderStatus, pay: OrderPayState): 'button' | 'paid_note' | 'none' {
+  if (status !== 'to_ship') return 'none';
+  if (pay === 'cod' || pay === 'demo') return 'button';
+  return pay === 'paid' ? 'paid_note' : 'none';
+}
+
+/** 賣家端：已付款的線上單先不給取消（取消不會退款，退款規格未補） */
+export const sellerCanCancel = (payment: Order['payment']): boolean => payment !== 'ecpay_card';
