@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ChevronDown, MapPin, Phone, Receipt, Truck, User } from 'lucide-react';
+import { Banknote, CircleDashed, ChevronDown, CreditCard, Info, MapPin, Phone, Receipt, Truck, User } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useRefreshOnVisible } from '../../store/ReviewsContext';
 import { orderActionErrorMessage } from '../../lib/orders/errors';
@@ -10,9 +10,11 @@ import OrderTimeline from '../../components/OrderTimeline';
 import { STATUS_LABEL } from '../buyer/Orders';
 import { dateText, money } from '../../lib/format';
 import { FEE_RATES, payoutOf } from '../../lib/payout';
+import { SELLER_PAY_LABEL } from '../../lib/payment/orderView';
+import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
+import { useMerchantState } from '../../lib/payment/useMerchant';
 import type { Order, OrderStatus, ShippingMilestone } from '../../types';
 
-const PAY: Record<string, string> = { cod: '貨到付款', card: '信用卡', transfer: 'ATM 轉帳' };
 const TONE: Record<OrderStatus, string> = {
   to_ship: 'bg-brand-soft text-brand', shipping: 'bg-info-bg text-info-text',
   completed: 'bg-success-soft text-success-text', cancelled: 'bg-canvas text-muted',
@@ -72,6 +74,22 @@ function PayoutPanel({ order }: { order: Order }) {
           <span className="ml-2">（訂單金額 {money(p.orderTotal)}，手續費 {money(p.feeTotal)}）</span>
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * 撥款狀態（設計 12.2）。撥款資料來自綠界的撥款對帳檔，這個對帳還沒做（後端 runbook 第 11 節），所以目前只會是「資料更新中」；
+ * 文案全部保守（「以綠界科技為準」），不寫天數、不寫頻率（都未查證）
+ */
+function SettlementBlock() {
+  return (
+    <div className="mt-3 rounded-md border border-line bg-subtle p-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-sm font-medium">撥款狀態</span>
+        <span className="inline-flex items-center gap-1 rounded-sm bg-canvas px-1.5 py-0.5 text-xs font-medium text-ink"><CircleDashed size={12} aria-hidden="true" />撥款資料更新中</span>
+      </div>
+      <p className="mt-1.5 text-sm text-muted">綠界科技的對帳資料還沒送來。資料送來後這裡會更新，不影響出貨。預計撥款日與實際入帳時間以綠界科技為準。</p>
     </div>
   );
 }
@@ -174,6 +192,8 @@ function ShipForm({ onSubmit, onCancel }: {
 export default function SellerOrders() {
   const { myShop, shopOrders, updateOrderStatus, addOrderEvent, refreshShopOrders } = useStore();
   const toast = useToast();
+  const { enabled: payEnabled } = usePaymentConfig();
+  const merchantState = useMerchantState(payEnabled);
   // 操作失敗（多半是畫面資料過期，例如買家剛完成或取消了這張單）：顯示錯誤訊息，並重讀成實際狀態
   // 重讀不等結果：斷線時重讀本身也會卡住，按鈕不能因此一直停在處理中。
   const onActionError = async (e: unknown) => {
@@ -198,6 +218,11 @@ export default function SellerOrders() {
   return (
     <div className="mx-auto max-w-5xl">
       <h1 className="text-xl font-bold">訂單管理</h1>
+      {payEnabled && merchantState === 'active' && (
+        <p className="mt-2 flex items-start gap-1.5 text-sm text-muted">
+          <Info size={16} className="mt-0.5 shrink-0 text-info-text" aria-hidden="true" />線上付款的訂單，買家付款成功後才會出現在這裡。
+        </p>
+      )}
       <div className="no-scrollbar mt-4 flex overflow-x-auto rounded-t-lg border-b border-line bg-white px-2">
         {tabs.map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -218,6 +243,8 @@ export default function SellerOrders() {
               <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-[#fafafa] px-4 py-2.5 text-xs text-muted">
                 <span>訂單編號 <span className="font-mono text-ink">{o.orderNo}</span></span>
                 <span>{dateText(o.createdAt)}</span>
+                {o.payment === 'ecpay_card' && <span className="inline-flex items-center gap-1 text-ink"><CreditCard size={13} aria-hidden="true" />信用卡・已付款</span>}
+                {o.payment === 'cod' && <span className="inline-flex items-center gap-1"><Banknote size={13} aria-hidden="true" />貨到付款</span>}
                 <span className={`ml-auto rounded-full px-2 py-0.5 font-medium ${TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span>
               </header>
               <div className="grid gap-4 p-4 md:grid-cols-[1fr_240px]">
@@ -264,6 +291,12 @@ export default function SellerOrders() {
               </div>
 
               <PayoutPanel order={o} />
+              {o.payment === 'ecpay_card' && <div className="border-t border-line px-4 pb-3"><SettlementBlock /></div>}
+              {payEnabled && o.payment === 'cod' && (
+                <p className="flex items-start gap-1.5 border-t border-line px-4 py-2.5 text-xs text-muted">
+                  <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />貨到付款：買家收貨時直接付款給你，不經過好物集，也不會有撥款。
+                </p>
+              )}
 
               {shipId === o.id && o.status === 'to_ship' && (
                 <ShipForm
@@ -283,7 +316,7 @@ export default function SellerOrders() {
               )}
 
               <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-3">
-                <span className="mr-auto text-xs text-muted">{PAY[o.payment]}・運費 {money(o.shippingFee)}</span>
+                <span className="mr-auto text-xs text-muted">{SELLER_PAY_LABEL[o.payment]}・運費 {money(o.shippingFee)}</span>
                 <span className="text-sm">訂單金額 <span className="text-lg font-medium text-brand">{money(o.total)}</span></span>
                 {o.status === 'shipping' && (
                   <MilestoneButtons

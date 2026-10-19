@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { toOrderActionError } from '../lib/orders/errors';
 import { toOrder } from '../lib/orders/map';
 import { placeCheckedOrder } from '../lib/account/api';
+import { placeOnlineOrder, type PlaceOnlineResult } from '../lib/payment/api';
 import { toAccountError } from '../lib/account/errors';
 import { validCartCount } from '../lib/account/cart';
 import { cleanLegacyStorage } from '../lib/account/legacy';
@@ -55,12 +56,17 @@ export interface CheckoutInput {
   /** 結帳頁每家店顯示的運費（看到的運費），鍵＝shopId */
   seenShipping: Record<string, number>;
   buyer: Order['buyer'];
-  payment: Order['payment'];
+  payment: Exclude<Order['payment'], 'ecpay_card'>;
   fromCart: boolean; // 「直接購買」不經過購物車，結帳後就不該動到購物車
+  /** 這次要線上付款（信用卡）的店；有值就走 place_online_order：這幾家建待付款訂單，其餘照舊貨到付款 */
+  onlineShopIds?: string[];
 }
 
+/** 線上付款的訂單建好了：付款群組編號、要付的金額、30 分鐘後逾時（接著呼叫 payment-pay） */
+export interface OnlineCheckout { payGroupId: string; payTotal: number; expiresAt: string; onlineOrderIds: string[] }
+
 /** ok＝訂單成立；rejected＝價格、庫存或運費跟結帳頁看到的不同，整次不成立（沒有建單、沒有扣庫存、購物車不動） */
-export type CheckoutResult = { outcome: 'ok'; orders: Order[] } | { outcome: 'rejected'; changes: CheckoutRejection[] };
+export type CheckoutResult = { outcome: 'ok'; orders: Order[]; online?: OnlineCheckout } | { outcome: 'rejected'; changes: CheckoutRejection[] };
 
 export interface ShopDraft {
   name: string;
@@ -338,9 +344,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 從購物車結帳時，資料庫在同一個交易裡把已下單的品項從帳號購物車移除（所有裝置）。
   // 下單被擋時什麼都沒寫入，但記憶體裡的價格、庫存、免運已經過時：重讀商品，購物車來的也重讀購物車（spec 4.1）。
   const checkout = useCallback(async (input: CheckoutInput): Promise<CheckoutResult> => {
-    let result;
+    let result: Awaited<ReturnType<typeof placeCheckedOrder>>;
+    let onlineOk: Extract<PlaceOnlineResult, { outcome: 'ok' }> | null = null;
     try {
-      result = await placeCheckedOrder(input);
+      if (input.onlineShopIds?.length) {
+        const r = await placeOnlineOrder({
+          p_items: input.items.map(x => ({ productId: x.productId, variantId: x.variantId, qty: x.qty, price: x.price })),
+          p_buyer: input.buyer, p_from_cart: input.fromCart, p_seen_shipping: input.seenShipping, p_online_shop_ids: input.onlineShopIds,
+        });
+        if (r.outcome === 'ok') onlineOk = r;
+        result = r;
+      } else {
+        result = await placeCheckedOrder(input);
+      }
     } catch (e) {
       const err = toAccountError(e);
       if (err.kind === 'auth') handleAuthLost();
@@ -355,7 +371,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     void refreshMyOrders(true);
     await reload(); // 庫存與銷量已變動
-    return { outcome: 'ok', orders: result.orders.map(toOrder) };
+    const orders = result.orders.map(toOrder);
+    return onlineOk
+      ? { outcome: 'ok', orders, online: { payGroupId: onlineOk.payGroupId, payTotal: onlineOk.payTotal, expiresAt: onlineOk.expiresAt, onlineOrderIds: onlineOk.onlineOrderIds } }
+      : { outcome: 'ok', orders };
   }, [reload, refreshCart, refreshMyOrders, handleAuthLost]);
 
   // ── 賣家 ─────────────────────────────────────────────────

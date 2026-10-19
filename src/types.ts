@@ -93,7 +93,7 @@ export interface Order {
   total: number;
   status: OrderStatus;
   buyer: { name: string; phone: string; address: string };
-  payment: 'cod' | 'card' | 'transfer';
+  payment: 'cod' | 'card' | 'transfer' | 'ecpay_card';
   carrier?: string | null;    // 物流方式
   trackingNo?: string | null; // 物流單號
   events: OrderEvent[];

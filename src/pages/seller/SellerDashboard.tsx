@@ -10,6 +10,7 @@ import ProductImage from '../../components/ProductImage';
 import { money, soldText } from '../../lib/format';
 import { getSellerReviewCounts } from '../../lib/reviews/api';
 import { useRefreshOnVisible } from '../../store/ReviewsContext';
+import PayoutCard from '../../components/payment/PayoutCard';
 
 export default function SellerDashboard() {
   const { myShop, products, shopOrders, user } = useStore();
@@ -59,6 +60,8 @@ export default function SellerDashboard() {
           <PlusCircle size={16} /> 新增商品
         </Link>
       </div>
+
+      <PayoutCard />
 
       {/* 待辦 */}
       <section className="rounded-lg bg-white p-4 md:p-5">

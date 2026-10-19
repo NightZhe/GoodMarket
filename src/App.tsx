@@ -24,6 +24,11 @@ import AccountProfile from './pages/buyer/AccountProfile';
 import AccountAddresses from './pages/buyer/AccountAddresses';
 import AccountAddressForm from './pages/buyer/AccountAddressForm';
 import BindPhone from './pages/buyer/BindPhone';
+import PaymentMethods from './pages/buyer/PaymentMethods';
+import PaymentMethodNew from './pages/buyer/PaymentMethodNew';
+import PaymentBindResult from './pages/buyer/PaymentBindResult';
+import AccountPayout from './pages/buyer/AccountPayout';
+import PayResult from './pages/buyer/PayResult';
 import Privacy from './pages/buyer/Privacy';
 import { ReviewsProvider } from './store/ReviewsContext';
 import SellerGate from './pages/seller/SellerGate';
@@ -33,6 +38,7 @@ import SellerProducts from './pages/seller/SellerProducts';
 import ProductForm from './pages/seller/ProductForm';
 import SellerOrders from './pages/seller/SellerOrders';
 import SellerReviews from './pages/seller/SellerReviews';
+import SellerPayout from './pages/seller/SellerPayout';
 
 // 匯入精靈很少用到，且會載入約 650 KB 的 Excel 解析程式，所以整頁延後載入
 const ImportWizard = lazy(() => import('./pages/seller/ImportWizard'));
@@ -78,6 +84,11 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
       <Route path="account/addresses/new" element={<AccountAddressForm />} />
       <Route path="account/addresses/:id" element={<AccountAddressForm />} />
       <Route path="account/phone" element={<BindPhone />} />
+      <Route path="account/payment-methods" element={<PaymentMethods />} />
+      <Route path="account/payment-methods/new" element={<PaymentMethodNew />} />
+      <Route path="account/payment-methods/result" element={<PaymentBindResult />} />
+      <Route path="account/payout" element={<AccountPayout />} />
+      <Route path="pay/:paymentId" element={<PayResult />} />
       <Route path="privacy" element={<Privacy />} />
     </Route>
 
@@ -91,6 +102,7 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
         <Route path="products/:id/edit" element={<ProductForm />} />
         <Route path="orders" element={<SellerOrders />} />
         <Route path="reviews" element={<SellerReviews />} />
+        <Route path="payout" element={<SellerPayout />} />
       </Route>
     </Route>
 

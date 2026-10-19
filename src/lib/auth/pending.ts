@@ -35,14 +35,14 @@ export type PendingAction =
   | { kind: 'add_to_cart'; productId: string; variantId: string; qty: number; returnTo: string; createdAt: number }
   | { kind: 'buy_now'; productId: string; variantId: string; qty: number; returnTo: string; createdAt: number }
   /** 結帳時 session 過期：品項、是否來自購物車、付款方式、已填的收件資料都要還原 */
-  | { kind: 'checkout'; items: CartItem[]; fromCart: boolean; payment: PaymentMethod; address: CheckoutAddress; returnTo: string; createdAt: number }
+  | { kind: 'checkout'; items: CartItem[]; fromCart: boolean; payment: PaymentMethod; cardId: string | null; address: CheckoutAddress; returnTo: string; createdAt: number }
   /** 沒有動作要做，只是登入完回到某一頁 */
   | { kind: 'goto'; returnTo: string; createdAt: number };
 
 /** 呼叫端只給「是什麼動作」，回到哪一頁與建立時間由存取層補上 */
 export type PendingInput =
   | { kind: 'add_to_cart' | 'buy_now'; productId: string; variantId: string; qty: number }
-  | { kind: 'checkout'; items: CartItem[]; fromCart: boolean; payment: PaymentMethod; address: CheckoutAddress }
+  | { kind: 'checkout'; items: CartItem[]; fromCart: boolean; payment: PaymentMethod; cardId?: string | null; address: CheckoutAddress }
   | { kind: 'goto' };
 
 export interface StorageLike {
@@ -51,7 +51,7 @@ export interface StorageLike {
   removeItem(key: string): void;
 }
 
-const PAYMENTS: readonly string[] = ['cod', 'card', 'transfer'];
+const PAYMENTS: readonly string[] = ['cod', 'card', 'transfer', 'ecpay_card'];
 const MAX_QTY = 999;
 const MAX_ITEMS = 50;
 const MAX_ID_LENGTH = 100;
@@ -107,7 +107,10 @@ export function parsePending(raw: string | null): PendingAction | null {
       const a = parseAddress(data.address);
       if (!items || typeof data.fromCart !== 'boolean' || typeof data.payment !== 'string' || !PAYMENTS.includes(data.payment)) return null;
       if (!a) return null;
-      return { kind: 'checkout', items, fromCart: data.fromCart, payment: data.payment as PaymentMethod, address: a, ...base };
+      // cardId：選了哪張信用卡（線上付款）。舊版存的紀錄沒有這個欄位＝沒選卡
+      const cardId = data.cardId === undefined || data.cardId === null ? null : data.cardId;
+      if (cardId !== null && !isId(cardId)) return null;
+      return { kind: 'checkout', items, fromCart: data.fromCart, payment: data.payment as PaymentMethod, cardId, address: a, ...base };
     }
     case 'goto':
       return { kind: 'goto', ...base };
@@ -124,7 +127,7 @@ export function buildPending(input: PendingInput, currentRoute: string, now: num
     case 'buy_now':
       return { ...input, returnTo: `/product/${encodeURIComponent(input.productId)}`, createdAt: now };
     case 'checkout':
-      return { ...input, returnTo: '/checkout', createdAt: now };
+      return { ...input, cardId: input.cardId ?? null, returnTo: '/checkout', createdAt: now };
     case 'goto':
       return { kind: 'goto', returnTo: route, createdAt: now };
   }

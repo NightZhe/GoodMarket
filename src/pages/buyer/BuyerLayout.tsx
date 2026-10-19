@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from
 import { ClipboardList, Home, Loader2, LogIn, Search as SearchIcon, ShoppingCart, Store, UserRound } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
+import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 
 export function Logo({ light = true }: { light?: boolean }) {
   return (
@@ -16,6 +17,7 @@ export function Logo({ light = true }: { light?: boolean }) {
 export default function BuyerLayout() {
   const { cartCount, loading, loadError, reload, user } = useStore();
   const { openLogin } = useAuth();
+  usePaymentConfig(); // 先讀一次線上付款開關，之後帳號頁、結帳頁不必再等
   // 只有第一次載入商品時用轉圈圈取代頁面。登入、登出、登入過期之後的重新載入是在背景進行：
   // 頁面若被卸載，結帳頁填到一半的收件資料就會消失（登入過期時要能留著，AC-13）
   const loadedOnce = useRef(false);
@@ -36,7 +38,9 @@ export default function BuyerLayout() {
   // 評價表單（/orders/:id/review）手機底部有自己的送出列，也不顯示全站導覽
   // 地址新增／編輯頁（/account/addresses/new、/account/addresses/:id）有鍵盤，固定的底部分頁在 iOS Safari 鍵盤開關時會跳
   const hideTabBar = pathname.startsWith('/product/') || pathname === '/checkout' || pathname === '/cart'
-    || /^\/orders\/[^/]+\/review$/.test(pathname) || pathname.startsWith('/account/addresses/');
+    || /^\/orders\/[^/]+\/review$/.test(pathname) || pathname.startsWith('/account/addresses/')
+    // 綁卡頁有鍵盤（綠界欄位）、付款結果頁要專心看結果
+    || pathname === '/account/payment-methods/new' || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/');
 
   return (
     <div className="flex min-h-dvh flex-col">

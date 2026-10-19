@@ -22,7 +22,7 @@ const ADDRESS: CheckoutAddress = {
 const cart = (over: Partial<PendingAction> = {}) =>
   ({ ...buildPending({ kind: 'add_to_cart', productId: 'p1', variantId: 'v1', qty: 3 }, '/', NOW), ...over }) as PendingAction;
 const checkout = () => buildPending({
-  kind: 'checkout', fromCart: true, payment: 'transfer',
+  kind: 'checkout', fromCart: true, payment: 'transfer', cardId: null,
   items: [{ productId: 'p1', variantId: 'v1', qty: 2 }, { productId: 'p2', variantId: 'v9', qty: 1 }],
   address: ADDRESS,
 }, '/checkout', NOW);
@@ -125,6 +125,15 @@ describe('壞資料一律丟掉', () => {
 });
 
 describe('結帳狀態完整保存', () => {
+  it('選了哪張信用卡（線上付款）也存得進去、讀得回來；舊紀錄沒有這個欄位＝沒選卡', () => {
+    const a = mem();
+    const online = buildPending({ kind: 'checkout', fromCart: true, payment: 'ecpay_card', cardId: 'card-1', items: [{ productId: 'p1', variantId: 'v1', qty: 1 }], address: ADDRESS }, '/checkout', NOW);
+    savePending([a], online);
+    expect(takePending([a], NOW)!.action).toMatchObject({ kind: 'checkout', payment: 'ecpay_card', cardId: 'card-1' });
+    const old = { ...checkout(), cardId: undefined };
+    expect(parsePending(JSON.stringify(old))).toMatchObject({ kind: 'checkout', cardId: null });
+    expect(parsePending(JSON.stringify({ ...checkout(), cardId: { x: 1 } }))).toBeNull();
+  });
   it('全部品項、fromCart、付款方式、收件資料都存得進去、讀得回來', () => {
     const a = mem();
     savePending([a], checkout());
@@ -138,7 +147,7 @@ describe('結帳狀態完整保存', () => {
   it('手填的收件資料與「存到我的地址」勾選狀態也原樣還原（R-A16、7.5）', () => {
     const a = mem();
     const manual: CheckoutAddress = { ...ADDRESS, source: 'manual', bookId: null, saveToBook: true, zip: '', district: '' };
-    savePending([a], buildPending({ kind: 'checkout', fromCart: false, payment: 'cod', items: [{ productId: 'p1', variantId: 'v1', qty: 1 }], address: manual }, '/checkout', NOW));
+    savePending([a], buildPending({ kind: 'checkout', fromCart: false, payment: 'cod', cardId: null, items: [{ productId: 'p1', variantId: 'v1', qty: 1 }], address: manual }, '/checkout', NOW));
     expect(takePending([a], NOW)!.action).toMatchObject({ kind: 'checkout', address: manual });
   });
   it('地址簿那筆事後被刪了，快照仍完整（AC-A25：還原不靠地址編號）', () => {
