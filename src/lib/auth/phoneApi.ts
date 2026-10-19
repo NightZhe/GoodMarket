@@ -2,6 +2,7 @@ import type { AuthError } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { AuthErrorLike } from './phoneErrors';
 import type { AuthMethod } from './identity';
+import { raceTimeout } from './raceTimeout';
 
 // 手機登入／綁定的 Supabase 呼叫。每支都回傳 { error }，不丟例外：錯誤交給 phoneErrors.ts 用 code／name／status 分類。
 // 重新傳送＝再呼叫一次（登入：signInWithOtp；綁定：updateUser），不用 resend：resend 對已確認的門號不寄、
@@ -11,10 +12,13 @@ export type CallResult = { error: AuthErrorLike | null };
 
 const failure = (e: unknown): AuthErrorLike => ({ name: 'UnexpectedError', message: e instanceof Error ? e.message : String(e) });
 
+/** 伺服器 15 秒沒回應就放棄等待（design 第 5 節 Turnstile 是 10 秒，這是整個請求；錯誤對照走 request_timeout） */
+export const REQUEST_TIMEOUT_MS = 15_000;
+const TIMED_OUT: CallResult = { error: { name: 'RequestTimeout', code: 'request_timeout', status: 408 } };
+
 async function call(fn: () => Promise<{ error: AuthError | null }>): Promise<CallResult> {
   try {
-    const { error } = await fn();
-    return { error };
+    return await raceTimeout(fn().then(({ error }): CallResult => ({ error })), REQUEST_TIMEOUT_MS, () => TIMED_OUT);
   } catch (e) {
     return { error: failure(e) };
   }

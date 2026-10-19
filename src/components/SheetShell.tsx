@@ -31,21 +31,39 @@ export default function SheetShell({ titleId, descId, titleRef, onClose, childre
     // 只在掛載與卸載時處理焦點與捲動鎖；titleRef 是穩定的 ref 物件
   }, []);
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
-    if (e.key !== 'Tab') return;
-    const items = [...(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
-    if (items.length === 0) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement;
-    // data-step-title：登入面板的 S-10 步驟標題（它不是 titleRef，但同樣是 tabindex=-1 的起點）
-    if (e.shiftKey && (active === first || active === titleRef.current || (active instanceof HTMLElement && active.hasAttribute('data-step-title')))) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
-  };
+  // Esc 與焦點陷阱掛在 document：焦點掉到 body 時（Safari 點按鈕不會讓按鈕取得焦點、按鈕被換掉）面板內的 onKeyDown 收不到
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    let backwards = false;
+    const items = () => [...(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current(); return; }
+      if (e.key !== 'Tab') return;
+      backwards = e.shiftKey;
+      const list = items();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement;
+      // data-step-title：登入面板的 S-10 步驟標題（它不是 titleRef，但同樣是 tabindex=-1 的起點）
+      if (e.shiftKey && (active === first || active === titleRef.current || (active instanceof HTMLElement && active.hasAttribute('data-step-title')))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    };
+    // Safari 預設 Tab 只停在表單欄位，永遠停不到「最後一個按鈕」，上面的首尾判斷接不住：焦點一跑出面板就拉回來
+    const onFocusIn = (e: FocusEvent) => {
+      const panel = panelRef.current;
+      if (!panel || !(e.target instanceof Node) || panel.contains(e.target)) return;
+      const list = items();
+      (backwards ? list[list.length - 1] : list[0])?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('focusin', onFocusIn);
+    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('focusin', onFocusIn); };
+  }, [titleRef]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center md:items-center md:p-4" onKeyDown={onKeyDown}>
+    <div className="fixed inset-0 z-[60] flex items-end justify-center md:items-center md:p-4">
       <div className="animate-fade absolute inset-0 bg-black/45" onClick={onClose} aria-hidden="true" />
       <div
         ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descId}

@@ -10,7 +10,7 @@ import CodeStep from '../../components/auth/CodeStep';
 import LoginRequired from '../../components/auth/LoginRequired';
 import PhoneForm from '../../components/auth/PhoneForm';
 import { usePhoneStep } from '../../components/auth/usePhoneStep';
-import { phoneOf } from '../../lib/auth/identity';
+import { phoneOf, providerLabel } from '../../lib/auth/identity';
 import { maskTwPhone, nationalFromAuthPhone } from '../../lib/auth/phone';
 import { rememberVia } from '../../lib/auth/loginVia';
 import { clearFlow, flowStore } from '../../lib/auth/phoneFlow';
@@ -70,7 +70,9 @@ function BindView() {
           />
         ) : !providers.phone ? (
           // 手機登入被後台關掉：不讓人白填一次（R-13）
-          <Banner kind="error" title={phoneErrorView('provider_disabled').title} />
+          <Banner kind="error" title={provider === 'google' || provider === 'apple'
+            ? `目前暫停手機登入，你的帳號仍可以用 ${providerLabel(provider)} 登入。`
+            : phoneErrorView('provider_disabled').title.replace('，請改用 Apple 或 Google。', '，請稍後再試。')} />
         ) : (
           <>
             <p className="text-sm text-muted">綁定後，你也可以用這支手機號碼登入同一個帳號，購物車和訂單都在。</p>

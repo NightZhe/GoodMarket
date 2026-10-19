@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { CircleAlert, Info } from 'lucide-react';
 import type { InAppKind } from '../../lib/auth/inapp';
 import { btnOutline } from '../import/ui';
@@ -24,9 +24,15 @@ export default function TurnstileSlot({ ctl, inApp, ios, where, needMessage, nee
   needMessage?: string | null; needId?: string;
 }) {
   const labelId = useId();
-  if (ctl.status === 'off') return null;
   const interactive = ctl.status === 'interactive' || ctl.status === 'timeout';
-  const visible = interactive || ctl.status === 'failed' || ctl.status === 'unavailable';
+  // 勾選完成後官方 widget 還會停著顯示「成功!」，到 token 用掉、widget 重設才收起來：這段時間版面間距要留著
+  const [shownWidget, setShownWidget] = useState(false);
+  useEffect(() => {
+    if (interactive) setShownWidget(true);
+    else if (ctl.status === 'loading' || ctl.status === 'off') setShownWidget(false);
+  }, [interactive, ctl.status]);
+  if (ctl.status === 'off') return null;
+  const visible = interactive || ctl.status === 'failed' || ctl.status === 'unavailable' || (ctl.status === 'ready' && shownWidget);
 
   return (
     <div className={visible ? 'mt-4' : undefined}>
@@ -49,10 +55,10 @@ export default function TurnstileSlot({ ctl, inApp, ios, where, needMessage, nee
         </p>
       )}
       {ctl.status === 'failed' && (
-        <Banner kind="error" title="安全驗證沒有通過，請再試一次。" actions={<button type="button" onClick={ctl.retry} className={btnOutline}>再試一次</button>} />
+        <Banner kind="error" title="安全驗證沒有通過，請再試一次。" actions={<button type="button" onClick={() => { ctl.retry(); ctl.focus(); }} className={btnOutline}>再試一次</button>} />
       )}
       {ctl.status === 'unavailable' && (
-        <Banner kind="error" title={turnstileUnavailableText(inApp, ios)} actions={<button type="button" onClick={ctl.retry} className={btnOutline}>重新載入安全驗證</button>} />
+        <Banner kind="error" title={turnstileUnavailableText(inApp, ios)} actions={<button type="button" onClick={() => { ctl.retry(); ctl.focus(); }} className={btnOutline}>重新載入安全驗證</button>} />
       )}
     </div>
   );

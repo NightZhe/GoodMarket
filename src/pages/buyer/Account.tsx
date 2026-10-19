@@ -30,9 +30,14 @@ function AccountView() {
   const [busy, setBusy] = useState(false);
   // 綁定手機成功會帶著遮罩門號回到這頁：頂端橫幅（不用 toast，那句話 40 字，toast 2.6 秒讀不完），焦點移到橫幅
   const { state } = useLocation() as { state: { bound?: string } | null };
-  const boundNote = typeof state?.bound === 'string' ? state.bound : null;
+  // 只顯示一次：進來時記下，然後把導航 state 清掉，重新整理就不會再出現
+  const [boundNote] = useState(() => (typeof state?.bound === 'string' ? state.bound : null));
   const noteRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (boundNote) noteRef.current?.focus({ preventScroll: true }); }, [boundNote]);
+  useEffect(() => {
+    if (!boundNote) return;
+    noteRef.current?.focus({ preventScroll: true });
+    navigate('/account', { replace: true, state: null });
+  }, [boundNote, navigate]);
   if (!user) return null;
 
   const logout = async () => {

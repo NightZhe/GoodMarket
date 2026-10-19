@@ -6,6 +6,7 @@ import { useAuth } from '../../store/AuthContext';
 import Banner from '../../components/import/Banner';
 import { btnOutline } from '../../components/import/ui';
 import CodeStep from '../../components/auth/CodeStep';
+import { currentExternalUrl } from '../../components/auth/InAppBrowserNotice';
 import PrivacyNote from '../../components/auth/PrivacyNote';
 import ProviderLogin from '../../components/auth/ProviderLogin';
 import { focusPageHeading } from '../../components/auth/focusPageHeading';
@@ -83,7 +84,9 @@ function AuthForm() {
         {/* 整張卡換成 S-10：沒有關閉鈕、沒有 Apple／Google */}
         <CodeStep
           mode="login" flow={step.flow} trigger={{ kind: 'goto' }} inApp={inApp} titleId="seller-code-title"
-          onBack={step.back} onExit={step.back} onFlowChange={step.enter} onVerified={focusPageHeading}
+          onBack={step.back} onFlowChange={step.enter} onVerified={focusPageHeading}
+          // 內建瀏覽器的出口列寫「用 Safari 開啟後…」：LINE 直接外開（帶著目前這一頁），其他回主畫面看說明
+          onExit={inApp === 'line' ? () => { window.location.href = currentExternalUrl(inApp, { kind: 'goto' }); } : step.back}
         />
       </div>
     );

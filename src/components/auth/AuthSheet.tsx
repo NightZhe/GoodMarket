@@ -6,6 +6,7 @@ import type { PendingInput } from '../../lib/auth/pending';
 import type { EnabledProviders } from '../../lib/auth/providers';
 import SheetShell from '../SheetShell';
 import CodeStep from './CodeStep';
+import { focusPageHeading } from './focusPageHeading';
 import { currentExternalUrl } from './InAppBrowserNotice';
 import PrivacyNote from './PrivacyNote';
 import ProviderLogin, { type LoginErrorKind } from './ProviderLogin';
@@ -48,7 +49,7 @@ export default function AuthSheet({ trigger, expired, error, inApp, providers, o
         {step.flow ? (
           <CodeStep
             mode="login" flow={step.flow} trigger={trigger} inApp={inApp} titleId="auth-title" descId="auth-desc"
-            onBack={step.back} onClose={onClose} onExit={exitToProviders} onFlowChange={step.enter} onVerified={() => {}}
+            onBack={step.back} onClose={onClose} onExit={exitToProviders} onFlowChange={step.enter} onVerified={focusPageHeading}
           />
         ) : (
           <>
