@@ -39,6 +39,7 @@ import ProductForm from './pages/seller/ProductForm';
 import SellerOrders from './pages/seller/SellerOrders';
 import SellerReviews from './pages/seller/SellerReviews';
 import SellerPayout from './pages/seller/SellerPayout';
+import RequirePayment from './components/payment/RequirePayment';
 
 // 匯入精靈很少用到，且會載入約 650 KB 的 Excel 解析程式，所以整頁延後載入
 const ImportWizard = lazy(() => import('./pages/seller/ImportWizard'));
@@ -84,10 +85,11 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
       <Route path="account/addresses/new" element={<AccountAddressForm />} />
       <Route path="account/addresses/:id" element={<AccountAddressForm />} />
       <Route path="account/phone" element={<BindPhone />} />
-      <Route path="account/payment-methods" element={<PaymentMethods />} />
-      <Route path="account/payment-methods/new" element={<PaymentMethodNew />} />
-      <Route path="account/payment-methods/result" element={<PaymentBindResult />} />
-      <Route path="account/payout" element={<AccountPayout />} />
+      {/* 線上付款開關關著時，這幾頁直接輸入網址也進不去（導回帳號頁） */}
+      <Route path="account/payment-methods" element={<RequirePayment to="/account"><PaymentMethods /></RequirePayment>} />
+      <Route path="account/payment-methods/new" element={<RequirePayment to="/account"><PaymentMethodNew /></RequirePayment>} />
+      <Route path="account/payment-methods/result" element={<RequirePayment to="/account"><PaymentBindResult /></RequirePayment>} />
+      <Route path="account/payout" element={<RequirePayment to="/account"><AccountPayout /></RequirePayment>} />
       <Route path="pay/:paymentId" element={<PayResult />} />
       <Route path="privacy" element={<Privacy />} />
     </Route>
@@ -102,7 +104,7 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
         <Route path="products/:id/edit" element={<ProductForm />} />
         <Route path="orders" element={<SellerOrders />} />
         <Route path="reviews" element={<SellerReviews />} />
-        <Route path="payout" element={<SellerPayout />} />
+        <Route path="payout" element={<RequirePayment to="/seller"><SellerPayout /></RequirePayment>} />
       </Route>
     </Route>
 
