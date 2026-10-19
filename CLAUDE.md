@@ -42,7 +42,7 @@
 - `supabase/.env`（已 gitignore）放使用者本機 Google OAuth 用戶端的密鑰，**agent 不得建立、修改、刪除**，只能讀 sha256 證明沒動。
 - 本機假 OAuth 驗證法：暫改 `supabase/config.toml` 加 keycloak／github 區塊指向本機假伺服器，跑真實 GoTrue PKCE；測完必須還原並附 sha256。做法見 `.work/buyer-auth/t3-ac46.md`。
 
-## 目前狀態（2026-10-18 晚間更新，給新 session 的交接）
+## 目前狀態（2026-10-19 更新，給新 session 的交接）
 
 已上線：商品評價（含照片、賣家回覆）；買家已取貨自動完成＋訂單狀態鎖定；**買家帳號**（遊客只能瀏覽，
 加購物車／下單／訂單／評價都要 Google 或 Apple 登入；購物車與訂單綁帳號；舊訂單憑證機制已移除）；
@@ -58,8 +58,16 @@
 同一資料夾的 `spec.md`／`spec-review-payment.md` 是**付款（P-B）與賣家收款（P-C）**的規格：方向為 PAYUNi 代理商模式（本站不經手錢），等使用者問完 PAYUNi 業務、拍板 D18～D25 才開工。
 「手機號碼登入」（`phone-otp-auth/`，分支 `phone-otp-auth`）由另一 session 進行。
 
-下一個該做的：**結帳比價**（`.work/checkout-price-check/`，使用者已拍板流程：下單時伺服器比對買家看到的價格，不一致就不建單、顯示下單失敗並導回賣家商品頁）。
-快改上線後改價會變多，這個缺口要盡快補。
+**結帳比價**（`checkout-price-check/`，2026-10-19 上線）：新前端下單改走資料庫函式 `place_checked_order`，帶結帳頁顯示的單價與每店運費；
+伺服器鎖列後逐件比單價、庫存、逐店比運費，任一不一致就**不建單、不扣庫存、不動購物車**，只寫 `checkout_rejection_log`（不記買家身分，前端讀不到）並回
+`{outcome:'rejected', changes}`；前端整頁換成「下單失敗，請重新購買」失敗畫面，直接購買導回商品頁、購物車結帳導回購物車並標出問題品項（只勾被擋那批）；
+成功訂單 `lines[].seenPrice` 標記經過比對；購物車進頁靜默重讀商品（`reload({silent:true})`）。規格 v0.2、決策、介面、設計、驗收報告、`prod-runbook.md`、
+`tools/metrics/m1～m6.sql`（成功指標）都在 `.work/checkout-price-check/`。
+**收緊舊函式待辦**：`20261018180100_checkout_price_check_tighten.sql` 把舊 `place_account_order` 改成回「網站已更新，請重新整理」，屬「收回」性質，
+要等新前端上線、使用者實機驗過（AC-51 iPhone Safari、AC-52 LINE）後另給清單確認再套；套之前每天看 `tools/metrics/m2.sql` 的 `unchecked_orders`。
+本機 `db reset --local` 會連收緊一起套，驗「舊前端＋新資料庫」要先跑 `tools/rollback-tighten.sql`（`interface.md` §7）。
+
+下一個該做的：收緊舊函式（上面）；之後是付款（P-B／P-C，等 PAYUNi 拍板）。
 
 維運提醒：
 - **Apple 登入 client secret 2027-04-15 到期**，2027-04-01 前用 Supabase 文件頁工具＋原 `.p8` 重做並更新後台。
@@ -67,6 +75,6 @@
 - 寄信用 Gmail SMTP（寄件人「好物集」），目前沒有任何流程會寄信；Confirm email 使用者決定**不開**（理由與風險評估在 `.work/buyer-auth/decisions.md`，本檔進公開 repo，不展開）。
 - 正式站 Storage 刪檔需要 service role key：由使用者在自己終端機以 `read -rs` 輸入後跑 `tools/delete-review-paths.mjs`，不經過 agent。
 
-已知小問題（不急）：登入方式設定讀取超過 5 秒會先顯示兩顆按鈕；平板寬度賣家首頁與商品頁有橫向捲軸；
+已知小問題（不急）：下單成功路徑小計仍是 integer，單張訂單超過 21 億元會 `integer out of range`（舊函式也一樣，不會建錯單）；失敗畫面 VoiceOver 實聽未驗（無障礙樹已對）；登入方式設定讀取超過 5 秒會先顯示兩顆按鈕；平板寬度賣家首頁與商品頁有橫向捲軸；
 購物車兩次更新間隔 3 秒內讀屏可能不重念；賣家中心頂欄在 188px 寬（手機 200%）橫向溢出，快改面板的關閉鈕會被擠出；
 `.claude/agents/qa.md` 沒有「交件前必跑關卡」表（其他四個角色都有）；快改與帳號頁地址簿的 iPhone Safari／LINE 實機驗收待使用者；離線按登出時「登出失敗」訊息與實際已登出矛盾（既有）；「我的訂單」不顯示收件地址（既有）；隱私頁與結帳底欄在 188px 寬有幾 px 橫向溢出（既有）。

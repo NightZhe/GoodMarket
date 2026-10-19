@@ -192,3 +192,13 @@ export interface ImportIndex {
   images: { sourceUrl: string; url: string }[];
   lastImport: ImportRecord | null;
 }
+
+/**
+ * 結帳比價：下單被擋時伺服器回傳的一個問題（介面見 .work/checkout-price-check/interface.md）。
+ * price＝看到的單價與目前單價不同；stock＝要買的合計數量超過目前庫存（stock 0＝已售完）；
+ * shipping＝結帳頁該店顯示的運費與目前運費不同
+ */
+export type CheckoutRejection =
+  | { kind: 'price'; productId: string; variantId: string; shopId: string; title: string; variantName: string; seenPrice: number; currentPrice: number }
+  | { kind: 'stock'; productId: string; variantId: string; shopId: string; title: string; variantName: string; qty: number; stock: number }
+  | { kind: 'shipping'; shopId: string; shopName: string; seenFee: number; currentFee: number };

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session, User } from '@supabase/supabase-js';
 import { toOrderActionError } from '../lib/orders/errors';
 import { toOrder } from '../lib/orders/map';
-import { placeAccountOrder } from '../lib/account/api';
+import { placeCheckedOrder } from '../lib/account/api';
 import { toAccountError } from '../lib/account/errors';
 import { validCartCount } from '../lib/account/cart';
 import { cleanLegacyStorage } from '../lib/account/legacy';
@@ -10,9 +10,10 @@ import { browserStores, clearPending } from '../lib/auth/pending';
 import { BUYER_KEY } from '../lib/site';
 import { supabase, SHOP_ORDER_COLUMNS, type ProductRow, type ShopOrderRow, type ShopRow } from '../lib/supabase';
 import type {
-  CartItem, ImportBatchResult, ImportIndex, Order, OrderStatus, Product, Shop, ShippingMilestone,
+  CartItem, CheckoutRejection, ImportBatchResult, ImportIndex, Order, OrderStatus, Product, Shop, ShippingMilestone,
 } from '../types';
 import { useAccountCart, type CartState } from './useAccountCart';
+import { settleReload } from './reloadPolicy';
 import { useAccountOrders, type OrdersState } from './useAccountOrders';
 import type { AccountErrorKind } from '../lib/account/errors';
 import { ImportCallError, toCallError } from '../lib/import/errors';
@@ -49,11 +50,17 @@ const toProduct = (r: ProductRow): Product => ({
 });
 
 export interface CheckoutInput {
-  items: CartItem[];
+  /** price＝結帳頁該列顯示的單價（看到的價格）；只放結帳頁列得出來的品項 */
+  items: (CartItem & { price: number })[];
+  /** 結帳頁每家店顯示的運費（看到的運費），鍵＝shopId */
+  seenShipping: Record<string, number>;
   buyer: Order['buyer'];
   payment: Order['payment'];
   fromCart: boolean; // 「直接購買」不經過購物車，結帳後就不該動到購物車
 }
+
+/** ok＝訂單成立；rejected＝價格、庫存或運費跟結帳頁看到的不同，整次不成立（沒有建單、沒有扣庫存、購物車不動） */
+export type CheckoutResult = { outcome: 'ok'; orders: Order[] } | { outcome: 'rejected'; changes: CheckoutRejection[] };
 
 export interface ShopDraft {
   name: string;
@@ -126,7 +133,8 @@ interface Store {
   loadError: string | null;
   getProduct: (id: string) => Product | undefined;
   getShop: (id: string) => Shop | undefined;
-  reload: () => Promise<void>;
+  /** silent＝背景重讀：失敗時不換成「載入商品失敗」頁、畫面保留現有資料（進購物車、下單被擋後） */
+  reload: (opts?: { silent?: boolean }) => Promise<void>;
 
   // 購物車（帳號版，D15）。沒登入時是空的，也不會呼叫資料庫
   cart: CartItem[];
@@ -147,7 +155,7 @@ interface Store {
   retryCartSync: () => Promise<void>;
 
   // 買家訂單（帳號版，D16）
-  checkout: (input: CheckoutInput) => Promise<Order[]>;
+  checkout: (input: CheckoutInput) => Promise<CheckoutResult>;
   myOrders: Order[];
   myOrdersState: OrdersState;
   myOrdersIssue: AccountErrorKind | null;
@@ -224,19 +232,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 商店與商品：公開資料，任何人都讀得到；賣家登入後還會多看到自己下架的商品（RLS）。
   // 同時可能有好幾次載入在飛（進站、登入、下單後），只採用最後發出的那一次，舊的回來不能蓋掉新的。
   const loadSeq = useRef(0);
-  const reload = useCallback(async () => {
+  // 有一般（非 silent）重讀還沒回來：被較新的 silent 重讀蓋掉時，由那次 silent 重讀代為報錯／結束轉圈
+  const loudPending = useRef(false);
+  const reload = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
     const seq = ++loadSeq.current;
-    setLoadError(null);
+    if (!silent) {
+      loudPending.current = true;
+      setLoadError(null);
+    }
     const [shopRes, productRes] = await Promise.all([
       supabase.from('shops').select('*').order('created_at'),
       fetchAllProducts(),
     ]);
     if (seq !== loadSeq.current) return;
-    if (shopRes.error || productRes.error) {
+    const outcome = settleReload({ ok: !shopRes.error && !productRes.error, silent, loudPending: loudPending.current });
+    if (outcome === 'ignore') return;
+    loudPending.current = false;
+    if (outcome === 'report') {
       setLoadError(shopRes.error?.message ?? productRes.error?.message ?? '載入失敗');
       setLoading(false);
       return;
     }
+    setLoadError(null);
     setShops((shopRes.data as ShopRow[]).map(toShop));
     setProducts((productRes.data as ProductRow[]).map(toProduct));
     setLoading(false);
@@ -319,21 +337,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void refreshShopOrders(); }, [refreshShopOrders]);
 
   // ── 下單 ─────────────────────────────────────────────────
-  // 扣庫存與建單都在資料庫的 place_account_order() 裡完成，避免兩個人同時買到同一件庫存。
+  // 比對、扣庫存與建單都在資料庫的 place_checked_order() 裡完成，避免兩個人同時買到同一件庫存。
   // 從購物車結帳時，資料庫在同一個交易裡把已下單的品項從帳號購物車移除（所有裝置）。
-  const checkout = useCallback(async (input: CheckoutInput): Promise<Order[]> => {
-    let rows;
+  // 下單被擋時什麼都沒寫入，但記憶體裡的價格、庫存、免運已經過時：重讀商品，購物車來的也重讀購物車（spec 4.1）。
+  const checkout = useCallback(async (input: CheckoutInput): Promise<CheckoutResult> => {
+    let result;
     try {
-      rows = await placeAccountOrder(input);
+      result = await placeCheckedOrder(input);
     } catch (e) {
       const err = toAccountError(e);
       if (err.kind === 'auth') handleAuthLost();
       throw err;
     }
     if (input.fromCart) void refreshCart(true);
+    if (result.outcome === 'rejected') {
+      // silent：重讀失敗時不能把失敗畫面換成「載入商品失敗」（買家會看不到哪裡變了）；沒讀到新資料的代價只是
+      // 回商品頁看到舊價、再送一次又被擋，伺服器仍會比對
+      await reload({ silent: true });
+      return result;
+    }
     void refreshMyOrders(true);
     await reload(); // 庫存與銷量已變動
-    return rows.map(toOrder);
+    return { outcome: 'ok', orders: result.orders.map(toOrder) };
   }, [reload, refreshCart, refreshMyOrders, handleAuthLost]);
 
   // ── 賣家 ─────────────────────────────────────────────────

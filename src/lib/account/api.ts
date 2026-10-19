@@ -2,6 +2,7 @@ import { supabase } from '../supabase';
 import type { CartItem } from '../../types';
 import { AccountError, classifyAccountError } from './errors';
 import type { BuyerOrderRow } from '../supabase';
+import { parseCheckedOrder, type CheckedOrderResult } from './priceCheck';
 
 // 帳號版的資料庫呼叫都集中在這裡（介面見 .work/buyer-auth/interface.md）。
 // 錯誤一律轉成 AccountError：呼叫端只看 kind（登入失效／後端未升級／網路／被拒絕）。
@@ -51,11 +52,23 @@ export interface PlaceOrderInput {
   fromCart: boolean;
 }
 
-export const placeAccountOrder = (i: PlaceOrderInput) =>
-  rpc<BuyerOrderRow[]>('place_account_order', {
-    p_items: i.items.map(x => ({ productId: x.productId, variantId: x.variantId, qty: x.qty })),
-    p_buyer: i.buyer, p_payment: i.payment, p_from_cart: i.fromCart,
-  });
+export interface PlaceCheckedOrderInput extends Omit<PlaceOrderInput, 'items'> {
+  /** price＝結帳頁該列顯示的單價（看到的價格） */
+  items: (CartItem & { price: number })[];
+  /** 結帳頁每家店顯示的運費（看到的運費），鍵＝shopId；必須剛好涵蓋這次送出的每一家店 */
+  seenShipping: Record<string, number>;
+}
+
+/**
+ * 結帳比價版的下單（.work/checkout-price-check/interface.md）。伺服器比對看到的價格、運費與庫存：
+ * 全部一致才建單（ok），否則整次不成立並回問題清單（rejected）。
+ * 函式不存在（新前端＋舊資料庫）照常分類成 backend_missing；不得退回舊函式（那等於關掉比對，spec 7.2）
+ */
+export const placeCheckedOrder = async (i: PlaceCheckedOrderInput): Promise<CheckedOrderResult<BuyerOrderRow>> =>
+  parseCheckedOrder<BuyerOrderRow>(await rpc<unknown>('place_checked_order', {
+    p_items: i.items.map(x => ({ productId: x.productId, variantId: x.variantId, qty: x.qty, price: x.price })),
+    p_buyer: i.buyer, p_payment: i.payment, p_from_cart: i.fromCart, p_seen_shipping: i.seenShipping,
+  }));
 
 export const getAccountOrders = () => rpc<BuyerOrderRow[]>('get_account_orders');
 export const cancelAccountOrder = (id: string) => rpc<BuyerOrderRow>('cancel_account_order', { p_id: id });
