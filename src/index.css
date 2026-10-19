@@ -66,6 +66,6 @@ button:disabled { cursor: not-allowed; }
   .animate-sheet, .animate-fade, .animate-toast, .animate-auth-panel { animation: none; }
 }
 
-/* 綠界綁卡欄位是站內付 SDK 畫進頁面的同頁 DOM（不是 iframe）。它預設字級 15px：輸入框小於 16px 時，iOS Safari 聚焦會自動放大頁面 */
-#ECPayPayment input { font-size: 1rem; }
+/* 綠界綁卡欄位是站內付 SDK 畫進頁面的同頁 DOM（不是 iframe）。它預設字級 15px：輸入框小於 16px 時，iOS Safari 聚焦會自動放大頁面；預設高 41px，觸控目標要 ≥44 */
+#ECPayPayment input { font-size: 1rem; min-height: 2.75rem; }
 @media (prefers-reduced-motion: reduce) { #ECPayPayment *, #ECPayPayment *::before, #ECPayPayment *::after { animation: none !important; transition: none !important; } }

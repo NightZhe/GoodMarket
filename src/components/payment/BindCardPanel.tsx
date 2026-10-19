@@ -6,6 +6,7 @@ import { Bone, pressCls } from '../account/ui';
 import { useOnline } from '../../lib/useOnline';
 import { bindConfirm, bindStart, errorCodeOf, isAuthError } from '../../lib/payment/api';
 import { BIND_SESSION_KEY, taiwanTimeMs } from '../../lib/payment/bind';
+import { labelEcpayFields } from '../../lib/payment/ecpayA11y';
 import { ecpayBindToken, ecpayStep, loadEcpaySdk, type EcpayGlobal } from '../../lib/payment/ecpaySdk';
 import { PAYMENT_ERROR_TEXT, PaymentError } from '../../lib/payment/errors';
 import type { BindStartResponse } from '../../lib/payment/types';
@@ -74,6 +75,7 @@ export default function BindCardPanel({ variant, returnPath, from, onBound, onRe
         if (!alive) return;
         startRef.current = start;
         ecpayRef.current = ecpay;
+        if (boxRef.current) labelEcpayFields(boxRef.current);
         setPhase('ready');
       } catch (e) {
         if (!alive) return;
@@ -92,6 +94,16 @@ export default function BindCardPanel({ variant, returnPath, from, onBound, onRe
     })();
     return () => { alive = false; clearTimeout(timer); };
   }, [returnPath, attempt]);
+
+  // 綠界的欄位沒有程式化標籤（AC-B22）：畫好之後補 aria-label；SDK 之後若重畫欄位（換輸入、重新驗證）再補一次
+  useEffect(() => {
+    const box = boxRef.current;
+    if (phase !== 'ready' || !box) return;
+    labelEcpayFields(box);
+    const obs = new MutationObserver(() => labelEcpayFields(box));
+    obs.observe(box, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, [phase]);
 
   // 跳轉 8 秒後仍在這頁：給手動連結
   useEffect(() => {
