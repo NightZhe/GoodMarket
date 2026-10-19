@@ -25,7 +25,7 @@ export const PAYMENT_ERROR_TEXT: Record<PaymentErrorCode, string> = {
   RETURN_PATH_INVALID: '資料有誤，請重新整理後再試一次。',
   NO_CONTACT: '你的帳號沒有電子郵件或手機號碼，綠界科技無法受理。請先綁定手機。',
   PAYMENT_DISABLED: '線上付款暫時停用，目前只能貨到付款。',
-  CARD_LIMIT: '信用卡最多只能綁 5 張，請先刪除一張。',
+  CARD_LIMIT: '信用卡最多只能綁 5 張，正在刪除中的卡也算在內。請先刪除一張，或等刪除中的卡處理完再試。',
   BIND_RATE_LIMIT: '嘗試的次數太多了，請一小時後再試。',
   BIND_UNAVAILABLE: '暫時連不上綠界科技，請稍後再試。',
   BIND_NOT_FOUND: '找不到這次綁定，請重新開始。',

@@ -51,7 +51,7 @@ function NewView() {
       {blocked === 'CARD_LIMIT' && (
         <Notice>
           <Banner kind="warning" role="status" title={`已經綁了 ${CARD_LIMIT} 張卡`} actions={<Link to={back} className={btnOutline}>回到付款方式</Link>}>
-            最多只能綁 {CARD_LIMIT} 張。請先刪除一張，再新增。
+            最多只能綁 {CARD_LIMIT} 張，正在刪除中的卡也算在內。請先刪除一張，或等刪除中的卡處理完再新增。
           </Banner>
         </Notice>
       )}

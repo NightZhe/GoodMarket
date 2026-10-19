@@ -30,7 +30,7 @@ export default function BindSheet({ onClose, ...panel }: Omit<BindPanelProps, 'v
             kind="warning" role="status" title={blocked === 'CARD_LIMIT' ? `已經綁了 ${CARD_LIMIT} 張卡` : '線上付款暫時停用'}
             actions={<button type="button" className={btnOutline} onClick={onClose}>關閉</button>}
           >
-            {blocked === 'CARD_LIMIT' ? `最多只能綁 ${CARD_LIMIT} 張。請先到「付款方式」刪除一張，再新增。` : '目前不能綁定信用卡，請改用貨到付款。'}
+            {blocked === 'CARD_LIMIT' ? `最多只能綁 ${CARD_LIMIT} 張，正在刪除中的卡也算在內。請先到「付款方式」刪除一張，或等刪除中的卡處理完再新增。` : '目前不能綁定信用卡，請改用貨到付款。'}
           </Banner>
         ) : (
           <BindCardPanel variant="sheet" {...panel} onCancel={onClose} onBlocked={code => { setBlocked(code); panel.onBlocked?.(code); }} />

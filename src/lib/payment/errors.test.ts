@@ -20,6 +20,12 @@ describe('錯誤碼對照表', () => {
   });
 });
 
+describe('CARD_LIMIT 的說明', () => {
+  it('張數上限包含「刪除中」的卡：畫面上算有效的卡不到 5 張時，使用者也看得懂為什麼被擋', () => {
+    expect(PAYMENT_ERROR_TEXT.CARD_LIMIT).toContain('刪除中');
+  });
+});
+
 describe('parseErrorBody：Edge Function 的 { ok:false, error:{code,message} }', () => {
   it('標準格式', () => {
     const e = parseErrorBody({ ok: false, error: { code: 'CARD_LIMIT', message: '最多 5 張' } }, 409);
