@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronDown, Clock, Hourglass, LoaderCircle, Store, TriangleAlert, WifiOff } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import LoginRequired from '../../components/auth/LoginRequired';
@@ -15,7 +15,7 @@ import EmptyState from '../../components/EmptyState';
 import { dateText, money } from '../../lib/format';
 import { expireMyPendingOrders, fetchOrderPayments } from '../../lib/payment/api';
 import { clockText, msUntil } from '../../lib/payment/countdown';
-import { buyerCancelUi, orderPayLineIfOn, orderPayState, pendingBatch, type OrderPayState } from '../../lib/payment/orderView';
+import { buyerCancelUi, ordersTabFromQuery, orderPayLineIfOn, orderPayState, pendingBatch, type OrderPayState } from '../../lib/payment/orderView';
 import type { OrderPaymentRow } from '../../lib/payment/types';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import OrderTimeline from '../../components/OrderTimeline';
@@ -76,6 +76,7 @@ function OrdersView() {
   const [cancelBatch, setCancelBatch] = useState<Order[] | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const { statusState, statusOf, refreshStatus } = useReviews();
+  const [query] = useSearchParams();
 
   // 線上付款的付款資訊（待付款、確認中、已付款…）。開關關著時不讀：舊資料庫沒有這支函式，也沒有線上付款訂單
   const refreshPayments = useCallback(async () => {
@@ -89,6 +90,10 @@ function OrdersView() {
   const unfinished = myOrders.filter(o => isUnfinished(stateOf(o)));
   const showPendingTab = paymentCfg.enabled || unfinished.length > 0;
   const tabs = showPendingTab ? [TABS[0], { id: 'pending' as const, label: unfinished.length > 0 ? `待付款 (${unfinished.length})` : '待付款' }, ...TABS.slice(1)] : TABS;
+
+  // #/orders?tab=pending（例如從付款頁、通知連進來）要切到待付款分頁；分頁要等線上付款開關或待付款訂單確定有了才存在
+  const wantPending = ordersTabFromQuery(query.get('tab')) === 'pending';
+  useEffect(() => { if (wantPending && showPendingTab) setTab('pending'); }, [wantPending, showPendingTab]);
 
   const list = myOrders.filter(o => {
     const s = stateOf(o);

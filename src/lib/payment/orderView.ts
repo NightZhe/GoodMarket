@@ -67,3 +67,6 @@ export function buyerCancelUi(status: OrderStatus, pay: OrderPayState): 'button'
 
 /** 賣家端：已付款的線上單先不給取消（取消不會退款，退款規格未補） */
 export const sellerCanCancel = (payment: Order['payment']): boolean => payment !== 'ecpay_card';
+
+/** 我的訂單網址的 ?tab=：只認 pending（待付款），其餘一律是「全部」（網址可被任何人亂改） */
+export const ordersTabFromQuery = (raw: string | null): 'all' | 'pending' => (raw === 'pending' ? 'pending' : 'all');

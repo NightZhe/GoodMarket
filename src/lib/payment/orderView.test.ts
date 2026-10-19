@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Order } from '../../types';
 import type { OrderPaymentRow } from './types';
-import { BUYER_PAY_LABEL, SELLER_PAY_LABEL, orderPayLine, buyerCancelUi, orderPayLineIfOn, orderPayState, pendingBatch, sellerCanCancel, sellerPayLabel } from './orderView';
+import { BUYER_PAY_LABEL, SELLER_PAY_LABEL, orderPayLine, buyerCancelUi, ordersTabFromQuery, orderPayLineIfOn, orderPayState, pendingBatch, sellerCanCancel, sellerPayLabel } from './orderView';
 
 const row = (over: Partial<OrderPaymentRow> = {}): OrderPaymentRow => ({
   order_id: 'o1', group_id: 'g1', payment_status: 'paid', pay_expires_at: null, paid_at: '2026-10-19T08:00:00Z', card_brand: 'visa', card4: '4242', last_fail: null, ...over,
@@ -110,5 +110,15 @@ describe('已付款的線上單不能自行取消（退款規格未補前）', (
     expect(sellerCanCancel('cod')).toBe(true);
     expect(sellerCanCancel('card')).toBe(true);
     expect(sellerCanCancel('transfer')).toBe(true);
+  });
+});
+
+describe('ordersTabFromQuery：#/orders?tab=pending 進來要切到待付款分頁', () => {
+  it('tab=pending 是待付款，其餘（沒有、亂寫）是全部', () => {
+    expect(ordersTabFromQuery('pending')).toBe('pending');
+    expect(ordersTabFromQuery(null)).toBe('all');
+    expect(ordersTabFromQuery('')).toBe('all');
+    expect(ordersTabFromQuery('cancelled')).toBe('all');
+    expect(ordersTabFromQuery('<script>')).toBe('all');
   });
 });
