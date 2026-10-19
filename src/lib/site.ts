@@ -6,7 +6,7 @@ export const BUYER_KEY = 'goodmarket_buyer';
 /** 隱私政策與帳號頁的聯絡信箱（使用者確認，會公開顯示） */
 export const CONTACT_EMAIL = 'zerozhe588@gmail.com';
 /** 隱私政策生效日期（使用者提供）。手機登入上線時改成推前端那天（修訂紀錄第一筆跟著用它） */
-export const PRIVACY_EFFECTIVE = '2026/10/18';
+export const PRIVACY_EFFECTIVE = '2026/10/19';
 /** 隱私政策第一版發佈日（Google、Apple 登入），修訂紀錄最後一筆；不會再變 */
 export const PRIVACY_FIRST_PUBLISHED = '2026/10/17';
 /** 申請刪除帳號後，多久內刪除或去識別化個人資料（使用者拍板：帳號存在期間保存；申請刪除後 1 年內處理） */
