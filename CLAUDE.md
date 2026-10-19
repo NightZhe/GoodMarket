@@ -63,11 +63,12 @@
 `{outcome:'rejected', changes}`；前端整頁換成「下單失敗，請重新購買」失敗畫面，直接購買導回商品頁、購物車結帳導回購物車並標出問題品項（只勾被擋那批）；
 成功訂單 `lines[].seenPrice` 標記經過比對；購物車進頁靜默重讀商品（`reload({silent:true})`）。規格 v0.2、決策、介面、設計、驗收報告、`prod-runbook.md`、
 `tools/metrics/m1～m6.sql`（成功指標）都在 `.work/checkout-price-check/`。
-**收緊舊函式待辦**：`20261018180100_checkout_price_check_tighten.sql` 把舊 `place_account_order` 改成回「網站已更新，請重新整理」，屬「收回」性質，
-要等新前端上線、使用者實機驗過（AC-51 iPhone Safari、AC-52 LINE）後另給清單確認再套；套之前每天看 `tools/metrics/m2.sql` 的 `unchecked_orders`。
+**收緊舊函式已完成**（2026-10-19，使用者實機驗 AC-51／AC-52 後另給清單確認才套）：正式站已套 `20261018180100_checkout_price_check_tighten.sql`，
+舊 `place_account_order` 一律回 CLIENT_OUTDATED「網站已更新，請重新整理頁面後再下單」（簽名、權限不變）；v1／v2 驗證 all_ok、匿名冒煙 HTTP 400 相符，紀錄在 `prod-apply-log.md` 第 7～8 步。
+之後 `tools/metrics/m2.sql` 的 `unchecked_orders` 應維持 0；還原用 `tools/rollback-tighten.sql`（runbook 第 9 節 A）。
 本機 `db reset --local` 會連收緊一起套，驗「舊前端＋新資料庫」要先跑 `tools/rollback-tighten.sql`（`interface.md` §7）。
 
-下一個該做的：收緊舊函式（上面）；之後是付款（P-B／P-C，等 PAYUNi 拍板）。
+下一個該做的：付款（P-B／P-C，等 PAYUNi 拍板）。
 
 維運提醒：
 - **Apple 登入 client secret 2027-04-15 到期**，2027-04-01 前用 Supabase 文件頁工具＋原 `.p8` 重做並更新後台。
