@@ -56,7 +56,12 @@
 行政區清單由 `scripts/gen-tw-districts.mts` 從中華郵政 3 碼檔產生，`src/data/tw-districts.json` 與資料庫同源）。隱私政策生效日改為 2026/10/18。
 **刪帳號工具已更新**（會一併刪地址與個人檔案；舊版備份在 `account-payment-methods/tools/pre-A-T4-account-tool/`）。
 同一資料夾的 `spec.md`／`spec-review-payment.md` 是**付款（P-B）與賣家收款（P-C）**的規格：方向為 PAYUNi 代理商模式（本站不經手錢），等使用者問完 PAYUNi 業務、拍板 D18～D25 才開工。
-「手機號碼登入」（`phone-otp-auth/`，分支 `phone-otp-auth`）由另一 session 進行。
+**手機號碼簡訊登入**（`phone-otp-auth/`，前端 2026-10-19 推上線 fba774c，**後台尚未設定**）：買家與賣家改用 Apple／Google／台灣手機號碼＋簡訊驗證碼，
+Email＋密碼登入已從畫面移除（規格 `.work/email-password-auth/` 作廢）；帳號頁可綁手機（`#/account/phone`）；傳送驗證碼前走 Cloudflare Turnstile（sitekey 由 GitHub secret `VITE_TURNSTILE_SITEKEY` 注入）。
+**上線進度**：runbook `.work/phone-otp-auth/prod-runbook.md` 步驟 3（推前端）已完成，**步驟 0～1（Twilio 帳號、Turnstile widget、GitHub secret、Supabase Phone provider＋Confirm phone＋範本＋Rate Limits）由使用者補做**；
+在那之前正式站 `external.phone=false`，前端自動隱藏手機欄位，買家仍只有 Apple／Google。之後依序：步驟 4 開 Captcha（前有硬性檢查）→ 步驟 5 刪「只有 Email 身分的開店帳號」（P10，不可逆，預覽→使用者確認→刪除→驗證→Storage）→ 步驟 6 關 Email provider。
+已知問題（不擋上線，P15）：驗證請求逾時後才成功時待辦動作不執行（L-1）；Safari 桌機外接鍵盤 Tab 第一下落到背景（S-3）。
+多 session 並行同一 repo 的做法（2026-10-18 起）：各自用 git worktree 分支與隔離的本機 Supabase 實例（複製 `supabase/` 到暫存區換 project_id／port），不改 repo `config.toml`；合併前互相知會。
 
 **結帳比價**（`checkout-price-check/`，2026-10-19 上線）：新前端下單改走資料庫函式 `place_checked_order`，帶結帳頁顯示的單價與每店運費；
 伺服器鎖列後逐件比單價、庫存、逐店比運費，任一不一致就**不建單、不扣庫存、不動購物車**，只寫 `checkout_rejection_log`（不記買家身分，前端讀不到）並回
@@ -75,6 +80,8 @@
 - 刪帳號走人工流程：`.work/buyer-auth/prod-runbook.md` 第 6 節的工具；有開店的帳號工具會擋，另外處理。
 - 寄信用 Gmail SMTP（寄件人「好物集」），目前沒有任何流程會寄信；Confirm email 使用者決定**不開**（理由與風險評估在 `.work/buyer-auth/decisions.md`，本檔進公開 repo，不展開）。
 - 正式站 Storage 刪檔需要 service role key：由使用者在自己終端機以 `read -rs` 輸入後跑 `tools/delete-review-paths.mjs`，不經過 agent。
+- 手機登入上線後：Supabase **Confirm phone 不得關閉**（關了簡訊額度不生效、門號可被改綁到他人帳號）；緊急止血要同時關 Phone provider **並**把 Rate Limits 的 SMS 每小時調低（只關 provider 止不住綁手機那條路）。Twilio 餘額與用量每週看（`.work/phone-otp-auth/spec.md` 第 15 節）。
+- 正式站 runbook 的指令用函式 `Q()` 包 `npx supabase db query --linked`；舊 `buyer-auth/prod-runbook.md` 的字串變數寫法在 zsh 會 command not found。
 
 已知小問題（不急）：下單成功路徑小計仍是 integer，單張訂單超過 21 億元會 `integer out of range`（舊函式也一樣，不會建錯單）；失敗畫面 VoiceOver 實聽未驗（無障礙樹已對）；登入方式設定讀取超過 5 秒會先顯示兩顆按鈕；平板寬度賣家首頁與商品頁有橫向捲軸；
 購物車兩次更新間隔 3 秒內讀屏可能不重念；賣家中心頂欄在 188px 寬（手機 200%）橫向溢出，快改面板的關閉鈕會被擠出；
