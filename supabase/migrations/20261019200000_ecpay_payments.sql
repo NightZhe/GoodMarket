@@ -145,11 +145,12 @@ create or replace view public.my_payment_methods as
 revoke all on public.my_payment_methods from public, anon, authenticated;
 grant select on public.my_payment_methods to authenticated;
 
--- 一個帳號最多 5 張（綠界也是 5 張；這裡先擋，連同撤銷中的一起算，因為綠界那邊還佔著名額）
+-- 一個帳號最多 5 張「有效」的卡（跟畫面一致；撤銷中的卡已隱藏、不能扣款，不佔名額。撤銷通常在刪除請求內就完成，
+-- 極少數還沒完成時，綠界那邊可能仍佔著名額，這時綁卡會被綠界拒絕並顯示一般失敗訊息）
 create or replace function public._payment_methods_limit() returns trigger
 language plpgsql set search_path = public as $$
 begin
-  if (select count(*) from public.payment_methods m where m.user_id = new.user_id) >= 5 then
+  if (select count(*) from public.payment_methods m where m.user_id = new.user_id and m.status = 'active') >= 5 then
     raise exception '最多只能綁定 5 張信用卡，請先刪除一張' using hint = 'CARD_LIMIT';
   end if;
   return new;
@@ -501,7 +502,7 @@ begin
   if not public._pay_enabled() then return jsonb_build_object('ok', false, 'code', 'PAYMENT_DISABLED', 'message', '線上付款暫時無法使用'); end if;
   insert into public.payment_members (user_id) values (p_user) on conflict (user_id) do nothing;
   select merchant_member_id into v_member from public.payment_members where user_id = p_user;
-  if (select count(*) from public.payment_methods where user_id = p_user) >= 5 then
+  if (select count(*) from public.payment_methods where user_id = p_user and status = 'active') >= 5 then
     return jsonb_build_object('ok', false, 'code', 'CARD_LIMIT', 'message', '最多只能綁定 5 張信用卡，請先刪除一張');
   end if;
   -- 防濫用：每個帳號每小時最多開始 10 次綁卡（每次都會打一次綠界）
