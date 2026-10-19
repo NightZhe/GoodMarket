@@ -11,6 +11,12 @@ const auth = (state: AuthState, over: Partial<AuthRow> = {}): AuthRow => ({
 });
 const plan = (auths: AuthRow[], decision: GroupDecision = null, now = NOW) => planStep({ id: 'g1', decision }, auths, now);
 
+describe('planStep: 沒有任何授權紀錄（SQL 手造的空群組）', () => {
+  it.each([null, 'capture', 'abandon'] as const)('決定=%s 時絕不能收尾成已付款，改成失敗（回到可重付）', (d) => {
+    expect(plan([], d)).toEqual({ type: 'finalize', outcome: 'failed' });
+  });
+});
+
 describe('planStep: 尚未決定', () => {
   it('全部 pending → 全部打綠界授權', () => {
     const a = [auth('pending'), auth('pending')];

@@ -649,6 +649,9 @@ begin
   if g.status = 'paid' then return; end if;
   select count(*) into v_bad from public.payment_auths a where a.group_id = p_group and a.attempt_no = g.attempt_no and a.state <> 'captured';
   if v_bad > 0 then raise exception 'cannot finalize paid: % authorizations are not captured', v_bad; end if;
+  if not exists (select 1 from public.payment_auths a where a.group_id = p_group and a.attempt_no = g.attempt_no) then
+    raise exception 'cannot finalize paid: group % has no authorizations', p_group;
+  end if;
   select * into m from public.payment_methods where id = g.payment_method_id;
   update public.orders o set payment_status = 'paid', paid_at = now(), ecpay_trade_no = a.ecpay_trade_no,
          pay_card_brand = (select brand from public.my_payment_methods_for(g.user_id) b where b.id = m.id), pay_card4 = m.card4

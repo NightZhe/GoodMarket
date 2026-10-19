@@ -25,6 +25,8 @@ function planCalling(calling: AuthRow[], now: number): PlanStep {
 
 export function planStep(group: GroupView, auths: AuthRow[], now: number): PlanStep {
   const by = (s: AuthRow['state']) => auths.filter((a) => a.state === s);
+  // 沒有任何授權紀錄（理論上不會發生；SQL 手造的空群組）：不能因為「沒有失敗的」就判已付款
+  if (auths.length === 0) return { type: 'finalize', outcome: 'failed' };
   const pending = by('pending');
   const calling = by('calling');
   const authorized = by('authorized');

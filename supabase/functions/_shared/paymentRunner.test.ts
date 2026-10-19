@@ -116,6 +116,14 @@ describe('driveGroup: 結果不明與補償（AC-E6）', () => {
 });
 
 describe('driveGroup: 安全網', () => {
+  it('群組存在但 0 筆授權 → failed，不是 paid；不打綠界、不呼叫 finalizePaid', async () => {
+    const s = memoryStore([]); const g = fakeGateway();
+    const r = await run(s, g, T0, false);
+    expect(r.outcome).toBe('failed');
+    expect(g.log).toEqual([]);
+    expect(s.st.finalized).toEqual(['failed']);
+  });
+
   it('放棄動作反覆失敗 → 確認中（卡住），絕不收尾成失敗（會留下活的授權）', async () => {
     const s = memoryStore([A(), B()]);
     const g = fakeGateway({ authorize: { '2000132': { kind: 'declined', rtnCode: 10100252, rtnMsg: '', cardInvalid: false } }, abandon: { '3002607': { kind: 'failed', rtnMsg: 'x' } } });
