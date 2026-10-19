@@ -26,6 +26,7 @@ import { browserStores, buildPending, savePending, type CheckoutAddress } from '
 import { errorCodeOf, fetchShopsOnlinePayable, isAuthError, payErrorText, payGroup } from '../../lib/payment/api';
 import type { PaymentErrorCode } from '../../lib/payment/types';
 import { brandLabel, cardBrandOf } from '../../lib/payment/cards';
+import { rememberPayCard } from '../../lib/payment/lastCard';
 import { ONLINE_SHOP_LIMIT, payButtonLabel, planCheckout, preselectChoice, type CodReason, type PayChoice } from '../../lib/payment/plan';
 import { destinationOfPayError, SLOW_PAY_MS, WAIT_PAY_MS } from '../../lib/payment/screens';
 import { refreshPaymentConfig, usePaymentConfig } from '../../lib/payment/usePaymentConfig';
@@ -273,6 +274,8 @@ function CheckoutView() {
   /** 呼叫 payment-pay（每家店各授權一筆，可能數十秒），然後去付款結果頁。超過 45 秒不再等，結果頁會輪詢確認中 */
   const payAndGo = async (groupId: string, cardId: string, orders: Order[]) => {
     const cod = orders.filter(o => o.payment === 'cod').map(o => ({ shopId: o.shopId, total: o.total, orderNo: o.orderNo }));
+    const [store] = browserStores();
+    if (store) rememberPayCard(store, groupId, cardId); // 付款失敗後重付頁用它知道「剛失敗的是哪張卡」
     const slowTimer = setTimeout(() => setSlow(true), SLOW_PAY_MS);
     let notice: string | undefined;
     try {

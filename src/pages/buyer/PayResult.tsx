@@ -20,6 +20,8 @@ import {
 } from '../../lib/payment/api';
 import { brandLabel } from '../../lib/payment/cards';
 import { clockText, msUntil } from '../../lib/payment/countdown';
+import { failedCardIdOf, recallPayCard, rememberPayCard } from '../../lib/payment/lastCard';
+import { browserStores } from '../../lib/auth/pending';
 import { preselectRetryCard, type PayChoice } from '../../lib/payment/plan';
 import {
   CONFIRM_POLL, SLOW_PAY_MS, WAIT_PAY_MS, destinationOfPayError, failureSentences, pollAction, screenOfGroup, type PayScreen,
@@ -130,13 +132,21 @@ function PayView({ groupId }: { groupId: string }) {
     return () => clearTimeout(t);
   }, [needCards, expiresAt, paying, reload, refreshMyOrders]);
 
-  // 重付區的預選：預設且未過期且不是剛失敗的那張 → 第一張可用的 → 都沒有就不預選
-  const failedCardId: string | null = null; // 後端沒有回「剛剛失敗的是哪張卡」：系統問題預選同一張，銀行拒絕時由 failure.cardInvalid／文案提示
+  // 重付區的預選：預設且未過期且不是剛失敗的那張 → 第一張可用的 → 都沒有就不預選。
+  // 後端沒回「用的是哪張卡」，所以用這個瀏覽器分頁按付款時記下的（lib/payment/lastCard.ts）；換瀏覽器就退回預設規則
+  const [store] = browserStores();
+  const failedCardId = group && screen === 'failed' ? failedCardIdOf(group.lastFail, store ? recallPayCard(store, groupId) : null) : null;
+  const failKey = screen === 'failed' ? group?.lastFail?.attemptNo ?? 0 : 0;
+  const handledFail = useRef(0);
   useEffect(() => {
-    if (!needCards || cardsHook.rows === null || (choice?.kind === 'card' && cards.some(c => c.id === choice.cardId))) return;
+    if (!needCards || cardsHook.rows === null) return;
+    // 剛又失敗一次：先前選的就是剛失敗的那張，要換掉；使用者之後自己再選回那張則不再干預（failKey 沒變）
+    const stale = failKey !== handledFail.current && failedCardId !== null && choice?.kind === 'card' && choice.cardId === failedCardId;
+    handledFail.current = failKey;
+    if (!stale && choice?.kind === 'card' && cards.some(c => c.id === choice.cardId)) return;
     const id = preselectRetryCard(cards, failedCardId);
     setChoice(id ? { kind: 'card', cardId: id } : null);
-  }, [needCards, cardsHook.rows, cards, choice]);
+  }, [needCards, cardsHook.rows, cards, choice, failKey, failedCardId]);
 
   const nameOf = (shopId: string) => getShop(shopId)?.name ?? '這家店';
 
@@ -146,6 +156,7 @@ function PayView({ groupId }: { groupId: string }) {
     setPickError(false);
     setNotice('');
     setPaying(true);
+    if (store) rememberPayCard(store, group.groupId, choice.cardId);
     const slowTimer = setTimeout(() => setSlow(true), SLOW_PAY_MS);
     try {
       const res = await Promise.race([payGroup(group.groupId, choice.cardId), new Promise<'wait'>(r => setTimeout(() => r('wait'), WAIT_PAY_MS))]);
