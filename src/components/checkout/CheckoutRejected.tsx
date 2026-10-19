@@ -7,7 +7,7 @@ import { pressCls } from '../account/ui';
 import Clauses from './Clauses';
 import { money } from '../../lib/format';
 import {
-  groupRejections, itemAriaLabel, primaryAction, priceTrend, rejectionNotes, rejectionSentence, shippingAriaText, stockParts,
+  groupRejections, itemAriaLabel, itemKey, primaryAction, priceTrend, rejectionNotes, rejectionSentence, shippingAriaText, stockParts,
   type RejectedItem,
 } from '../../lib/account/priceCheck';
 import type { CheckoutRejection } from '../../types';
@@ -17,8 +17,8 @@ interface Props {
   fromCart: boolean;
   /** 這次送出的商店，依第一次出現的順序（結帳頁的分組順序） */
   shopOrder: string[];
-  /** 這次送出的商品（直接購買只有一件；只有運費變動時主要按鈕回這件） */
-  submittedProductIds: string[];
+  /** 這次送出的品項（直接購買只有一件；只有運費變動時主要按鈕回這件；購物車來的只預設勾選這些） */
+  submitted: { productId: string; variantId: string }[];
   shopName: (shopId: string) => string | undefined;
   imageOf: (productId: string) => string | undefined;
 }
@@ -84,7 +84,7 @@ function ItemRow({ item, image }: { item: RejectedItem; image: string | undefine
  * 下單被擋（D-7e＝A）：結帳頁整頁換成這個畫面。全部問題一次列出，導回一律用站內連結、不自動跳轉、沒有動畫。
  * 版面與 class 照 .work/checkout-price-check/design.md 第 4、6 節
  */
-export default function CheckoutRejected({ changes, fromCart, shopOrder, submittedProductIds, shopName, imageOf }: Props) {
+export default function CheckoutRejected({ changes, fromCart, shopOrder, submitted, shopName, imageOf }: Props) {
   const h1 = useRef<HTMLHeadingElement>(null);
   const idBase = useId();
   useEffect(() => {
@@ -94,7 +94,9 @@ export default function CheckoutRejected({ changes, fromCart, shopOrder, submitt
 
   const groups = groupRejections(changes, shopOrder);
   const notes = rejectionNotes({ shopCount: shopOrder.length, fromCart });
-  const primary = primaryAction(changes, { fromCart, submittedProductIds });
+  const primary = primaryAction(changes, {
+    fromCart, submittedProductIds: submitted.map(i => i.productId), submittedKeys: submitted.map(itemKey),
+  });
 
   return (
     <>

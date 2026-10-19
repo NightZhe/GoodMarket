@@ -10,7 +10,7 @@ import ProductImage from '../../components/ProductImage';
 import QtyStepper from '../../components/QtyStepper';
 import EmptyState from '../../components/EmptyState';
 import Clauses from '../../components/checkout/Clauses';
-import { cartMarks, cartStockNote, readPriceCheckState } from '../../lib/account/priceCheck';
+import { cartMarks, cartStockNote, defaultSelected, readPriceCheckState } from '../../lib/account/priceCheck';
 import { money } from '../../lib/format';
 import type { CartItem } from '../../types';
 
@@ -60,7 +60,10 @@ function CartView() {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(cart.map(keyOf)));
+  // 從結帳失敗畫面帶回來的內容（D-7a＝D）：只存在元件裡，讀完立刻清掉 history 的 state，
+  // 離開購物車或按上一頁回來都不會重現（AC-29、design.md 5.5）
+  const [priceCheck] = useState(() => readPriceCheckState(location.state));
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(defaultSelected(cart.map(keyOf), priceCheck)));
   const [retrying, setRetrying] = useState(false);
 
   // 別台裝置改了購物車、這裡背景重讀後有變：畫面已經會更新，另外對讀屏宣告一聲（只在進頁之後發生的變動）
@@ -81,10 +84,7 @@ function CartView() {
   // 讀不到（離線、網路不穩）就保留現有資料，購物車照常可用
   useEffect(() => { void reload({ silent: true }); }, [reload]);
 
-  // 從結帳失敗畫面帶回來的問題清單（D-7a＝D）：只存在元件裡，讀完立刻清掉 history 的 state，
-  // 離開購物車或按上一頁回來都不會重現（AC-29、design.md 5.5）
-  const [priceCheck] = useState(() => readPriceCheckState(location.state));
-  const marks = useMemo(() => (priceCheck ? cartMarks(priceCheck) : null), [priceCheck]);
+  const marks = useMemo(() => (priceCheck ? cartMarks(priceCheck.changes) : null), [priceCheck]);
   useEffect(() => {
     if (priceCheck) navigate(location.pathname, { replace: true, state: null });
     // 只在進頁時清一次
@@ -110,14 +110,14 @@ function CartView() {
     return { groups: [...map.entries()], invalid: gone };
   }, [cart, getProduct]);
 
-  // 別台裝置新加的品項預設勾選；使用者已經取消勾選的維持原狀
+  // 別台裝置新加的品項預設勾選；使用者已經取消勾選的維持原狀。從失敗畫面回來時同樣只勾送出結帳的品項
   const known = useRef(new Set(cart.map(keyOf)));
   useEffect(() => {
     const fresh = cart.map(keyOf).filter(k => !known.current.has(k));
     if (fresh.length === 0) return;
     fresh.forEach(k => known.current.add(k));
-    setSelected(prev => new Set([...prev, ...fresh]));
-  }, [cart]);
+    setSelected(prev => new Set([...prev, ...defaultSelected(fresh, priceCheck)]));
+  }, [cart, priceCheck]);
 
   const run = (p: Promise<void>, failMessage: string) => { p.catch(() => toast(failMessage, 'error')); };
   const allRows = groups.flatMap(([, rows]) => rows);

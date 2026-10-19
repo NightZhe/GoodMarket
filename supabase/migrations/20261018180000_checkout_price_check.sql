@@ -43,7 +43,7 @@ create table if not exists public.checkout_rejection_log (
   variant_id    text,
   seen_value    integer,
   current_value integer,
-  qty           integer,
+  qty           bigint,     -- 合計數量可能超過 integer（API 直接打極大數量時），所以用 bigint
   stock         integer,
   constraint checkout_rejection_log_shape check (case reason
     when 'price'    then variant_id is not null and seen_value is not null and current_value is not null and qty is null and stock is null
@@ -126,7 +126,7 @@ begin
     end if;
     v_vkey := (v_item->>'productId')::uuid::text || '|' || (v_item->>'variantId');
     v_totals := jsonb_set(v_totals, array[v_vkey],
-      to_jsonb(coalesce((v_totals->>v_vkey)::integer, 0) + greatest(1, coalesce((v_item->>'qty')::integer, 1))));
+      to_jsonb(coalesce((v_totals->>v_vkey)::bigint, 0) + greatest(1, coalesce((v_item->>'qty')::integer, 1))));
   end loop;
 
   -- 看到的運費：必須是物件，key 是店 id（uuid），值是 0 以上的 JSON 整數；同一家店（大小寫不同）出現兩次也算格式錯
@@ -171,18 +171,19 @@ begin
     end if;
     if not (v_vkey = any (v_seen_qty)) then
       v_seen_qty := v_seen_qty || v_vkey;
-      if (v_totals->>v_vkey)::integer > v_stock then
+      if (v_totals->>v_vkey)::bigint > v_stock then
         v_changes := v_changes || jsonb_build_object('kind', 'stock', 'productId', v_product.id, 'variantId', v_variant->>'id',
           'shopId', v_product.shop_id, 'title', v_product.title, 'variantName', coalesce(v_variant->>'name', ''),
-          'qty', (v_totals->>v_vkey)::integer, 'stock', v_stock);
+          'qty', (v_totals->>v_vkey)::bigint, 'stock', v_stock);
       end if;
     end if;
-    -- 目前運費的材料：目前單價 × 送出數量（庫存不足也照送出數量算，spec 4.2）、這批商品目前的免運設定
+    -- 目前運費的材料：目前單價 × 送出數量（庫存不足也照送出數量算，spec 4.2）、這批商品目前的免運設定。
+    -- 用 bigint 算：極大數量（例如 5000 × 499,999）在 integer 會溢位成英文錯誤，而這時應該回 rejected 的 stock（小q B-2）
     v_key := v_product.shop_id::text;
     if not (v_key = any (v_shop_ord)) then v_shop_ord := v_shop_ord || v_key; end if;
     v_group := coalesce(v_ship -> v_key, jsonb_build_object('subtotal', 0, 'all_free', true));
     v_ship := jsonb_set(v_ship, array[v_key], jsonb_build_object(
-      'subtotal', (v_group->>'subtotal')::integer + v_price * v_qty,
+      'subtotal', (v_group->>'subtotal')::bigint + v_price::bigint * v_qty,
       'all_free', (v_group->>'all_free')::boolean and v_product.free_shipping));
   end loop;
 
@@ -195,7 +196,7 @@ begin
   -- 逐店比運費（規則同 _place_order_core）
   foreach v_key in array v_shop_ord loop
     v_group := v_ship -> v_key;
-    v_fee := case when (v_group->>'subtotal')::integer >= 499 or (v_group->>'all_free')::boolean then 0 else 60 end;
+    v_fee := case when (v_group->>'subtotal')::bigint >= 499 or (v_group->>'all_free')::boolean then 0 else 60 end;
     if (v_seen_ship->>v_key)::integer <> v_fee then
       v_changes := v_changes || jsonb_build_object('kind', 'shipping', 'shopId', v_key::uuid,
         'shopName', (select s.name from public.shops s where s.id = v_key::uuid),
@@ -210,7 +211,7 @@ begin
     select c->>'kind', (c->>'shopId')::uuid, coalesce(p_from_cart, false), (c->>'productId')::uuid, c->>'variantId',
            coalesce((c->>'seenPrice')::integer, (c->>'seenFee')::integer),
            coalesce((c->>'currentPrice')::integer, (c->>'currentFee')::integer),
-           (c->>'qty')::integer, (c->>'stock')::integer
+           (c->>'qty')::bigint, (c->>'stock')::integer
       from jsonb_array_elements(v_changes) with ordinality t(c, n)
      order by n;
     return jsonb_build_object('outcome', 'rejected', 'changes', v_changes);

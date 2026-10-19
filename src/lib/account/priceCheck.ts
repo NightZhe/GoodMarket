@@ -103,16 +103,19 @@ export function itemAriaLabel(item: RejectedItem): string {
 export const shippingAriaText = (shopName: string, s: { seen: number; current: number }) =>
   `${shopName}，運費原本 ${yuan(s.seen)}，現在 ${yuan(s.current)}`;
 
-export type PriceCheckState = { priceCheck: { changes: CheckoutRejection[] } };
+/** 失敗畫面帶回購物車的內容：問題清單，與這次送出結帳的品項（itemKey），購物車只預設勾選後者 */
+export interface PriceCheck { changes: CheckoutRejection[]; submitted: string[] }
+export type PriceCheckState = { priceCheck: PriceCheck };
 
 /**
  * 主要按鈕（D-7a＝D）：直接購買回第一件有問題的商品頁（只有運費變動時回這次買的那件）；
  * 購物車來的回購物車，並把問題清單放進這次導覽的 state 供購物車標示
  */
 export function primaryAction(
-  changes: CheckoutRejection[], { fromCart, submittedProductIds }: { fromCart: boolean; submittedProductIds: string[] },
+  changes: CheckoutRejection[],
+  { fromCart, submittedProductIds, submittedKeys }: { fromCart: boolean; submittedProductIds: string[]; submittedKeys: string[] },
 ): { label: string; to: string; state?: PriceCheckState } {
-  if (fromCart) return { label: '回購物車重新結帳', to: '/cart', state: { priceCheck: { changes } } };
+  if (fromCart) return { label: '回購物車重新結帳', to: '/cart', state: { priceCheck: { changes, submitted: submittedKeys } } };
   const first = changes.find(c => c.kind !== 'shipping');
   const productId = first ? first.productId : submittedProductIds[0];
   return { label: '回商品頁重新購買', to: productId ? `/product/${productId}` : '/' };
@@ -154,12 +157,21 @@ export function parseCheckedOrder<T>(raw: unknown): CheckedOrderResult<T> {
 
 // ── 購物車標示 ──
 
-/** 購物車從 location.state 讀問題清單；不是從失敗畫面來的（或格式不對）回 null */
-export function readPriceCheckState(state: unknown): CheckoutRejection[] | null {
-  if (!isObj(state) || !isObj(state.priceCheck) || !Array.isArray(state.priceCheck.changes)) return null;
-  const changes = state.priceCheck.changes.map(toRejection).filter((c): c is CheckoutRejection => c !== null);
-  return changes.length > 0 ? changes : null;
+/** 購物車從 location.state 讀失敗畫面帶回來的內容；不是從失敗畫面來的（或格式不對）回 null */
+export function readPriceCheckState(state: unknown): PriceCheck | null {
+  if (!isObj(state) || !isObj(state.priceCheck)) return null;
+  const { changes: rawChanges, submitted } = state.priceCheck;
+  if (!Array.isArray(rawChanges) || !Array.isArray(submitted) || !submitted.every(isStr)) return null;
+  const changes = rawChanges.map(toRejection).filter((c): c is CheckoutRejection => c !== null);
+  return changes.length > 0 ? { changes, submitted } : null;
 }
+
+/**
+ * 購物車的預設勾選：一般進頁全部勾選；從失敗畫面回來只勾這次送出結帳的品項，
+ * 結帳前沒勾的維持沒勾（不能讓買家不細看就多買，B-1）
+ */
+export const defaultSelected = (keys: string[], priceCheck: PriceCheck | null): string[] =>
+  priceCheck ? keys.filter(k => priceCheck.submitted.includes(k)) : keys;
 
 export interface CartMarks {
   /** 鍵＝itemKey。price＝價格變動的文字；stock＝被標庫存不足（顯示與否看 cartStockNote） */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cartMarks, cartStockNote, parseCheckedOrder, readPriceCheckState, groupRejections, itemAriaLabel, primaryAction, priceTrend, rejectionNotes, rejectionSentence, shippingAriaText } from './priceCheck';
+import { cartMarks, defaultSelected, cartStockNote, parseCheckedOrder, readPriceCheckState, groupRejections, itemAriaLabel, primaryAction, priceTrend, rejectionNotes, rejectionSentence, shippingAriaText } from './priceCheck';
 import type { CheckoutRejection } from '../../types';
 import { AccountError, accountErrorText } from './errors';
 
@@ -108,17 +108,17 @@ describe('讀屏朗讀字串（design.md 第 8 節，AC-48）', () => {
 
 describe('主要按鈕（D-7a＝D）', () => {
   it('直接購買：回第一件有問題的商品頁', () => {
-    expect(primaryAction([ship('s1'), price('b')], { fromCart: false, submittedProductIds: ['b'] }))
+    expect(primaryAction([ship('s1'), price('b')], { fromCart: false, submittedProductIds: ['b'], submittedKeys: ['b|v1'] }))
       .toEqual({ label: '回商品頁重新購買', to: '/product/b' });
   });
   it('直接購買、只有運費變動：回這次買的那件商品頁', () => {
-    expect(primaryAction([ship('s1')], { fromCart: false, submittedProductIds: ['p1'] }))
+    expect(primaryAction([ship('s1')], { fromCart: false, submittedProductIds: ['p1'], submittedKeys: ['p1|v1'] }))
       .toEqual({ label: '回商品頁重新購買', to: '/product/p1' });
   });
   it('購物車：回購物車，帶全部問題', () => {
     const changes = [price('a'), ship('s1')];
-    expect(primaryAction(changes, { fromCart: true, submittedProductIds: ['a'] }))
-      .toEqual({ label: '回購物車重新結帳', to: '/cart', state: { priceCheck: { changes } } });
+    expect(primaryAction(changes, { fromCart: true, submittedProductIds: ['a'], submittedKeys: ['a|v1', 'b|v1'] }))
+      .toEqual({ label: '回購物車重新結帳', to: '/cart', state: { priceCheck: { changes, submitted: ['a|v1', 'b|v1'] } } });
   });
 });
 
@@ -149,11 +149,12 @@ describe('解析下單回傳（place_checked_order）', () => {
 describe('購物車：從失敗畫面帶回來的問題清單', () => {
   it('讀得出 state 裡的問題清單；其他來源（一般進頁、格式不對）回 null', () => {
     const changes = [price('a')];
-    expect(readPriceCheckState({ priceCheck: { changes } })).toEqual(changes);
+    expect(readPriceCheckState({ priceCheck: { changes, submitted: ['a|v1'] } })).toEqual({ changes, submitted: ['a|v1'] });
     expect(readPriceCheckState(null)).toBeNull();
     expect(readPriceCheckState({ items: [] })).toBeNull();
-    expect(readPriceCheckState({ priceCheck: { changes: [] } })).toBeNull();
-    expect(readPriceCheckState({ priceCheck: { changes: 'x' } })).toBeNull();
+    expect(readPriceCheckState({ priceCheck: { changes: [], submitted: ['a|v1'] } })).toBeNull();
+    expect(readPriceCheckState({ priceCheck: { changes: 'x', submitted: ['a|v1'] } })).toBeNull();
+    expect(readPriceCheckState({ priceCheck: { changes } })).toBeNull();
   });
   it('依品項與商店建標示：價格文字、運費文字（design.md 第 7 節）', () => {
     const marks = cartMarks([price('a', 's1', 1500, 1450), stock('b'), ship('s2', 60, 0)]);
@@ -178,5 +179,18 @@ describe('購物車「只剩 N 件，請調整數量」的顯示條件', () => {
   });
   it('沒被標庫存不足：不顯示', () => {
     expect(cartStockNote(false, 3, 1)).toBeNull();
+  });
+});
+
+describe('購物車的預設勾選', () => {
+  const keys = ['bottle|v1', 'coaster|v1', 'towel|v1'];
+  it('一般進購物車：全部勾選（既有行為）', () => {
+    expect(defaultSelected(keys, null)).toEqual(keys);
+  });
+  it('從失敗畫面回來：只勾這次送出結帳的品項，原本沒勾的維持沒勾（B-1）', () => {
+    expect(defaultSelected(keys, { changes: [price('bottle')], submitted: ['bottle|v1', 'coaster|v1'] })).toEqual(['bottle|v1', 'coaster|v1']);
+  });
+  it('送出的品項已不在購物車：不會憑空多勾', () => {
+    expect(defaultSelected(keys, { changes: [price('x')], submitted: ['x|v1'] })).toEqual([]);
   });
 });

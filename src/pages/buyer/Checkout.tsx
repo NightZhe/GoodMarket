@@ -149,7 +149,7 @@ function CheckoutView() {
       <CheckoutRejected
         changes={rejected} fromCart={!!state?.fromCart}
         shopOrder={groups.map(g => g.shopId)}
-        submittedProductIds={groups.flatMap(g => g.rows.map(r => r.item.productId))}
+        submitted={groups.flatMap(g => g.rows.map(r => r.item))}
         shopName={id => getShop(id)?.name} imageOf={id => getProduct(id)?.images[0]}
       />
     );
