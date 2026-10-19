@@ -131,7 +131,7 @@ function StatusBlock({ row, online, refreshing, onRefresh, onSubmitted }: {
 
         {(state === 'rejected' || state === 'suspended') && (
           <div className="mt-3 rounded-md border border-error-border bg-error-bg p-3">
-            <p className="text-sm font-medium">綠界科技說明的原因</p>
+            <p className="text-sm font-medium">退回原因</p>
             <p className="mt-1 break-words text-sm leading-6">{row?.reason || '沒有提供原因。'}</p>
           </div>
         )}
