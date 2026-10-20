@@ -187,6 +187,18 @@ describe('revokeAccountCards：刪帳號前向綠界刪掉這個人的全部綁�
   });
 });
 
+describe('checkedAt：刪卡步驟的時間基準（刪除 SQL 用它擋「刪卡之後才開始的綁卡」）', () => {
+  it('取開始刪卡（標 revoking 之前）的時間，不是請求結束的時間：請求執行中才開始的綁卡也要被擋（小q 驗收 §3-1）', async () => {
+    let clock = Date.UTC(2026, 9, 20, 15, 0, 0);
+    const m = memoryStore([row(1)], { [X]: MX });
+    const begin = m.store.begin.bind(m.store);
+    m.store.begin = async (u) => { const r = await begin(u); clock += 60_000; return r; };   // 刪卡過程花了 1 分鐘
+    const e = ecpayWorld({ [MX]: [card(1)] });
+    const r = await revokeAccountCards({ store: m.store, gateway: e.client, bindMerchantId: '3002607', now: () => clock }, X);
+    expect(r.checkedAt).toBe('2026-10-20T15:00:00.000Z');
+  });
+});
+
 describe('adminSecretOk：管理函式的密碼（D34＝B：跟排程密碼分開）', () => {
   const ADMIN = 'a'.repeat(64), CRON = 'c'.repeat(64);
   it('正確的管理密碼 → 放行', () => expect(adminSecretOk(ADMIN, { adminSecret: ADMIN, cronSecret: CRON })).toBe(true));

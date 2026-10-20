@@ -28,6 +28,7 @@ export interface CardReport { id: string; card6: string; card4: string; statusBe
 export interface OrphanReport { card6: string; card4: string; ref: string; result: CardResult; rtnCode: number | null; rtnMsg: string | null }
 export interface RevokeReport {
   userId: string;
+  /** 開始刪卡的時間（呼叫資料庫標 revoking 之前取）。刪除 SQL 擋「這之後才開始的綁卡」，所以不能用請求結束的時間 */
   checkedAt: string;
   hasMember: boolean;
   allRevoked: boolean;
@@ -70,6 +71,7 @@ const redactor = (secrets: string[]) => {
 
 export async function revokeAccountCards(deps: RevokeDeps, userId: string): Promise<RevokeReport> {
   const { store, gateway, bindMerchantId } = deps;
+  const checkedAt = new Date(deps.now()).toISOString();
   const b = await store.begin(userId);
   if (!b.ok) throw new RevokeRefused(b.code, b.message, b.retryAfter);
   const known = new Set(b.cards.map((c) => c.bindCardId));
@@ -77,7 +79,7 @@ export async function revokeAccountCards(deps: RevokeDeps, userId: string): Prom
 
   // 0. 沒有會員列也沒有卡（E-8）：這個帳號從來沒把會員代號送到綠界，綠界上不可能有它的卡
   if (b.memberId === null && b.cards.length === 0) {
-    return { userId, checkedAt: new Date(deps.now()).toISOString(), hasMember: false, allRevoked: true, queryOk: true,
+    return { userId, checkedAt, hasMember: false, allRevoked: true, queryOk: true,
       ecpayRemaining: 0, siteRemaining: await store.countMethods(userId), cards: [], orphans: [], queryError: null };
   }
 
@@ -128,7 +130,7 @@ export async function revokeAccountCards(deps: RevokeDeps, userId: string): Prom
     && cards.every((c) => c.result !== 'failed') && orphans.every((o) => o.result !== 'failed');
   const redact = redactor(secrets);
   return {
-    userId, checkedAt: new Date(deps.now()).toISOString(), hasMember: b.memberId !== null,
+    userId, checkedAt, hasMember: b.memberId !== null,
     allRevoked, queryOk: q.ok, ecpayRemaining, siteRemaining,
     cards: cards.map((c) => ({ ...c, rtnMsg: redact(c.rtnMsg) })),
     orphans: orphans.map((o) => ({ ...o, rtnMsg: redact(o.rtnMsg) })),
