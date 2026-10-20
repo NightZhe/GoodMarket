@@ -37,12 +37,22 @@ export type AuthorizeResult =
   | { kind: 'unknown'; reason: string };
 
 export type ActionResult = { kind: 'done' } | { kind: 'failed'; rtnMsg: string } | { kind: 'unknown' };
+/** 刪除綁卡（35608）的結果：失敗時帶回綠界的代碼與訊息、逾時帶原因（管理刪卡要逐張回報綠界回了什麼） */
+export type DeleteCardResult = { kind: 'done' } | { kind: 'failed'; rtnCode: number | null; rtnMsg: string } | { kind: 'unknown'; reason: string };
 
 export type BindResult =
   | { kind: 'bound'; bindCardId: string; isSameCard: boolean; card6: string; card4: string; expYear: string; expMonth: string; tradeNo: string; merchantTradeNo: string }
   | { kind: 'need3d'; url: string; merchantTradeNo: string }
   | { kind: 'failed'; rtnCode: number | null; rtnMsg: string }
   | { kind: 'unknown' };
+
+/** 查詢綁卡清單：會員沒有任何綁卡（從沒綁過、或全部刪光）時綠界回這個碼，不是查詢失敗。
+ *  刪除不存在的 BindCardID 也回同一個碼。B-0 本機對綠界測試環境實測（.work/account-payment-methods/t6-delete-cards-probe.md）；35613／35608 文件都沒寫 */
+export const NO_BIND_CARD_CODE = 5100088;
+const codeOf = (v: unknown): number | null => { const n = typeof v === 'number' ? v : Number(v); return Number.isFinite(n) ? n : null; };
+const unknownMsg = (err: string) => (err === 'TimeoutError' ? 'timeout' : err || 'unknown');
+
+export interface BoundCard { card6: string; card4: string; expYear: string; expMonth: string; bindCardId: string }
 
 /** 查無交易：本機對綠界測試環境實測，兩支查詢 API 對不存在的 MerchantTradeNo 都回 10000185（文件寫的 error_nopay 是 DoAction 對已取消交易的回應） */
 const NO_TRADE_CODE = 10000185;
@@ -103,17 +113,19 @@ export function createEcpayClient(cfg: EcpayConfig, fetchFn: typeof fetch = fetc
 
   async function queryBindCards(a: { bindMerchantId: string; memberId: string; merchantTradeNo?: string }) {
     const r = await ecpg('/Merchant/GetMemberBindCard', { MerchantID: a.bindMerchantId, MerchantMemberID: a.memberId, ...(a.merchantTradeNo ? { MerchantTradeNo: a.merchantTradeNo } : {}) });
-    if (r.kind !== 'ok') return { ok: false as const };
-    if (r.data.RtnCode !== 1) return { ok: false as const };
+    if (r.kind === 'unknown') return { ok: false as const, rtnCode: null, rtnMsg: unknownMsg(r.error) };
+    if (r.kind === 'rejected') return { ok: false as const, rtnCode: null, rtnMsg: r.transMsg };
+    if (r.data.RtnCode === NO_BIND_CARD_CODE) return { ok: true as const, cards: [] as BoundCard[] };
+    if (r.data.RtnCode !== 1) return { ok: false as const, rtnCode: codeOf(r.data.RtnCode), rtnMsg: String(r.data.RtnMsg ?? '') };
     const list = Array.isArray(r.data.BindCardList) ? r.data.BindCardList : [];
-    return { ok: true as const, cards: list.map((c: Raw) => ({ card6: String(c.Card6No), card4: String(c.Card4No), expYear: String(c.CardValidYY), expMonth: String(c.CardValidMM), bindCardId: String(c.BindCardID) })) };
+    return { ok: true as const, cards: list.map((c: Raw): BoundCard => ({ card6: String(c.Card6No), card4: String(c.Card4No), expYear: String(c.CardValidYY), expMonth: String(c.CardValidMM), bindCardId: String(c.BindCardID) })) };
   }
 
-  async function deleteBindCard(a: { bindMerchantId: string; bindCardId: string }): Promise<ActionResult> {
+  async function deleteBindCard(a: { bindMerchantId: string; bindCardId: string }): Promise<DeleteCardResult> {
     const r = await ecpg('/Merchant/DeleteMemberBindCard', { MerchantID: a.bindMerchantId, BindCardID: a.bindCardId });
-    if (r.kind === 'unknown') return { kind: 'unknown' };
-    if (r.kind === 'rejected') return { kind: 'failed', rtnMsg: r.transMsg };
-    return r.data.RtnCode === 1 ? { kind: 'done' } : { kind: 'failed', rtnMsg: String(r.data.RtnMsg ?? '') };
+    if (r.kind === 'unknown') return { kind: 'unknown', reason: unknownMsg(r.error) };
+    if (r.kind === 'rejected') return { kind: 'failed', rtnCode: null, rtnMsg: r.transMsg };
+    return r.data.RtnCode === 1 ? { kind: 'done' } : { kind: 'failed', rtnCode: codeOf(r.data.RtnCode), rtnMsg: String(r.data.RtnMsg ?? '') };
   }
 
   // ── 授權 ──

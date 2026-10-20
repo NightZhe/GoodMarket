@@ -177,10 +177,30 @@ describe('綁卡 API', () => {
     const { client } = mk(() => ({ RtnCode: 1, BindCardList: [{ Card6No: '431195', Card4No: '2222', CardValidYY: '30', CardValidMM: '12', BindCardID: 'BC1' }] }));
     expect(await client.queryBindCards({ bindMerchantId: '3002607', memberId: 'm1' })).toEqual({ ok: true, cards: [{ card6: '431195', card4: '2222', expYear: '30', expMonth: '12', bindCardId: 'BC1' }] });
   });
+  it('queryBindCards：會員沒有任何綁卡時綠界回 5100088（B-0 實測，文件沒寫）→ 視為 0 張，不是查詢失敗', async () => {
+    const { client } = mk(() => ({ PlatformID: null, MerchantID: null, MerchantMemberID: null, BindCardList: null, RtnCode: 5100088, RtnMsg: 'The BindCard does not exist.' }));
+    expect(await client.queryBindCards({ bindMerchantId: '3002607', memberId: 'm1' })).toEqual({ ok: true, cards: [] });
+  });
+  it('queryBindCards：其他錯誤碼 → 失敗，並帶回綠界的代碼與訊息（給管理刪卡回報用）', async () => {
+    const { client } = mk(() => ({ RtnCode: 5100011, RtnMsg: 'The parameter [MerchantMemberID] Incorrect format' }));
+    expect(await client.queryBindCards({ bindMerchantId: '3002607', memberId: 'm1' })).toEqual({ ok: false, rtnCode: 5100011, rtnMsg: 'The parameter [MerchantMemberID] Incorrect format' });
+  });
+  it('queryBindCards：逾時 → 失敗，rtnCode null、rtnMsg timeout', async () => {
+    const { client } = mk(() => 'timeout');
+    expect(await client.queryBindCards({ bindMerchantId: '3002607', memberId: 'm1' })).toEqual({ ok: false, rtnCode: null, rtnMsg: 'timeout' });
+  });
   it('deleteBindCard：RtnCode 1 → ok', async () => {
     const { client, calls } = mk(() => ({ RtnCode: 1 }));
     expect(await client.deleteBindCard({ bindMerchantId: '3002607', bindCardId: 'BC1' })).toEqual({ kind: 'done' });
     expect(calls[0].path).toBe('/Merchant/DeleteMemberBindCard');
+  });
+  it('deleteBindCard：卡不存在（5100088）→ failed，帶回綠界的代碼與訊息（判斷「已不存在」交給呼叫端反查清單）', async () => {
+    const { client } = mk(() => ({ RtnCode: 5100088, RtnMsg: 'The BindCard does not exist.' }));
+    expect(await client.deleteBindCard({ bindMerchantId: '3002607', bindCardId: 'BC1' })).toEqual({ kind: 'failed', rtnCode: 5100088, rtnMsg: 'The BindCard does not exist.' });
+  });
+  it('deleteBindCard：逾時 → unknown，原因 timeout', async () => {
+    const { client } = mk(() => 'timeout');
+    expect(await client.deleteBindCard({ bindMerchantId: '3002607', bindCardId: 'BC1' })).toEqual({ kind: 'unknown', reason: 'timeout' });
   });
 });
 
