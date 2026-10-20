@@ -5,18 +5,24 @@ import { useStore } from '../../store/StoreContext';
 import LoginRequired from '../../components/auth/LoginRequired';
 import { useToast } from '../../components/Toast';
 import { accountErrorText, toAccountError } from '../../lib/account/errors';
-import { btnOutline, btnPrimary } from '../../components/import/ui';
+import { btnOutline, btnPrimary, focusRing } from '../../components/import/ui';
 import LeaveDialog from '../../components/import/LeaveDialog';
+import { StatusBlockView, cardOf } from '../../components/payment/RefundBlocks';
+import { RequestCancelDialog, WithdrawCancelDialog } from '../../components/payment/RefundDialogs';
 import { OrderStateChip } from '../../components/payment/PayTag';
 import { useRefreshOnVisible, useReviews } from '../../store/ReviewsContext';
 import OrderReviewRow, { OrderReviewRowSkeleton } from '../../components/reviews/OrderReviewRow';
 import ProductImage from '../../components/ProductImage';
 import EmptyState from '../../components/EmptyState';
-import { dateText, money } from '../../lib/format';
-import { expireMyPendingOrders, fetchOrderPayments } from '../../lib/payment/api';
+import { dateText, dayText, money } from '../../lib/format';
+import { useOnline } from '../../lib/useOnline';
+import { expireMyPendingOrders, fetchMyOrderRefunds, fetchOrderPayments, requestOrderCancel, withdrawOrderCancel } from '../../lib/payment/api';
 import { clockText, msUntil } from '../../lib/payment/countdown';
-import { buyerCancelUi, ordersTabFromQuery, orderPayLineIfOn, orderPayState, pendingBatch, type OrderPayState } from '../../lib/payment/orderView';
-import type { OrderPaymentRow } from '../../lib/payment/types';
+import { buyerCancelUi, hasBatchSiblings, ordersTabFromQuery, orderPayLineIfOn, orderPayState, pendingBatch, type OrderPayState } from '../../lib/payment/orderView';
+import { buyerRefundView } from '../../lib/payment/refundView';
+import { buyerCancelFailure } from '../../lib/payment/refundErrors';
+import { useOrderRefunds } from '../../lib/payment/useOrderRefunds';
+import type { OrderPaymentRow, OrderPaymentStatus } from '../../lib/payment/types';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import OrderTimeline from '../../components/OrderTimeline';
 import type { Order, OrderStatus } from '../../types';
@@ -64,6 +70,11 @@ function OrderSkeleton() {
 
 const isUnfinished = (s: OrderPayState) => s === 'pending' || s === 'confirming';
 
+/** 線上付款開關關著時仍認得的付款狀態：已付款、退款中、已退款（退款不跟開關走，R-RF9）；待付款等其餘狀態維持開關關著時的樣子 */
+const PAID_FAMILY: ReadonlySet<OrderPaymentStatus> = new Set(['paid', 'refunding', 'refunded']);
+
+type CancelDialog = { kind: 'request' | 'withdraw'; order: Order };
+
 function OrdersView() {
   const { myOrders, myOrdersState, myOrdersIssue, getShop, cancelMyOrder, completeMyOrder, refreshMyOrders } = useStore();
   const toast = useToast();
@@ -77,13 +88,24 @@ function OrdersView() {
   const [cancelBusy, setCancelBusy] = useState(false);
   const { statusState, statusOf, refreshStatus } = useReviews();
   const [query] = useSearchParams();
+  const online = useOnline();
+  const [dialog, setDialog] = useState<CancelDialog | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
 
-  // 線上付款的付款資訊（待付款、確認中、已付款…）。開關關著時不讀：舊資料庫沒有這支函式，也沒有線上付款訂單
+  // 線上付款的付款資訊（待付款、確認中、已付款…）。開關關著、也沒有任何線上付款訂單時不讀：舊資料庫沒有這支函式。
+  // 開關關著但已經有線上付款訂單（軟回滾）：退款照常（R-RF9），所以讀，但只認已付款／退款中／已退款，其餘維持開關關著時的樣子
+  const hasOnlineOrders = useMemo(() => myOrders.some(o => o.payment === 'ecpay_card'), [myOrders]);
   const refreshPayments = useCallback(async () => {
-    if (!paymentCfg.enabled) return;
-    try { setPayments(await fetchOrderPayments()); } catch { /* 讀不到：沒有付款資訊的線上單顯示成一般「信用卡」，不會被當成已付款 */ }
-  }, [paymentCfg.enabled]);
+    if (!paymentCfg.enabled && !hasOnlineOrders) return;
+    try {
+      const rows = await fetchOrderPayments();
+      setPayments(paymentCfg.enabled ? rows : rows.filter(r => PAID_FAMILY.has(r.payment_status)));
+    } catch { /* 讀不到：沒有付款資訊的線上單顯示成一般「信用卡」，不會被當成已付款 */ }
+  }, [paymentCfg.enabled, hasOnlineOrders]);
   useEffect(() => { void refreshPayments(); }, [refreshPayments, myOrders]);
+  // 取消申請與退款的細節。沒有線上付款訂單時不讀（舊資料庫沒有這支函式，畫面與上線前逐字相同）
+  const refunds = useOrderRefunds(fetchMyOrderRefunds, paymentCfg.enabled || hasOnlineOrders);
+  const reloadRefunds = refunds.reload;
 
   const payOf = useMemo(() => new Map(payments.map(p => [p.order_id, p])), [payments]);
   const stateOf = useCallback((o: Order) => orderPayState(o.payment, payOf.get(o.id)), [payOf]);
@@ -114,13 +136,13 @@ function OrdersView() {
     void refreshStatus(true).then(() => { if (current) setCheckedKey(completedKey); });
     return () => { current = false; };
   }, [refreshStatus, completedKey]);
-  useRefreshOnVisible(() => { void refreshStatus(true); void refreshMyOrders(true); });
+  useRefreshOnVisible(() => { void refreshStatus(true); void refreshMyOrders(true); void reloadRefunds(); void refreshPayments(); });
   // iOS Safari 返回鍵會還原整頁快照（例如從付款頁回來），畫面可能是舊的
   useEffect(() => {
-    const onShow = (e: PageTransitionEvent) => { if (e.persisted) { void refreshMyOrders(true); void refreshPayments(); } };
+    const onShow = (e: PageTransitionEvent) => { if (e.persisted) { void refreshMyOrders(true); void refreshPayments(); void reloadRefunds(); } };
     window.addEventListener('pageshow', onShow);
     return () => window.removeEventListener('pageshow', onShow);
-  }, [refreshMyOrders, refreshPayments]);
+  }, [refreshMyOrders, refreshPayments, reloadRefunds]);
 
   // 待付款逾時：最早的那一筆到期時，作廢自己逾時的單、退庫存，然後重讀
   const nextExpiry = payments.filter(p => p.payment_status === 'pending' && p.pay_expires_at).map(p => Date.parse(p.pay_expires_at!)).sort((a, b) => a - b)[0];
@@ -154,6 +176,34 @@ function OrdersView() {
       setBusy(null);
       void refreshPayments();
     }
+  };
+
+  // 送出成功後，焦點移到該卡的狀態區塊（讀屏念出新狀態）；失敗或關掉對話框由對話框自己把焦點還給原按鈕
+  useEffect(() => {
+    if (!focusId) return;
+    document.getElementById(`refund-status-${focusId}`)?.focus();
+    setFocusId(null);
+  }, [focusId]);
+
+  const reloadAll = () => Promise.all([reloadRefunds(), refreshPayments(), refreshMyOrders(true)]);
+
+  // 申請取消、撤回申請（已付款線上單）。回傳字串＝對話框欄位下方的錯誤；null＝已處理（成功或已用 toast 說明）
+  const runCancel = async (call: () => Promise<unknown>, okText: string, orderId: string): Promise<string | null> => {
+    try {
+      await call();
+    } catch (e) {
+      const f = buyerCancelFailure(e);
+      if (f.kind === 'field') return f.text;
+      toast(f.text, 'error');
+      if (f.reload) void reloadAll();
+      if (!f.keepOpen) setDialog(null);
+      return null;
+    }
+    setDialog(null);
+    toast(okText);
+    await reloadAll();
+    setFocusId(orderId);
+    return null;
   };
 
   // 一起付款的待付款訂單只能一起取消：逐張取消
@@ -217,12 +267,22 @@ function OrdersView() {
           const ps = stateOf(o);
           const batch = ps === 'pending' ? pendingBatch(o.id, payments, myOrders) : [o];
           const expired = o.payment === 'ecpay_card' && ps === 'expired';
+          const rv = buyerRefundView({ status: o.status, payState: ps, row: refunds.rows.get(o.id) }, { total: o.total, cardKnown: Boolean(pay?.card4), now: Date.now(), time: dateText, day: dayText });
+          // 資料庫還沒有退款函式（舊資料庫）：已付款線上單維持上線前的樣子（一行說明、沒有申請取消鈕）
+          const legacyPaid = refunds.status === 'missing' && ps === 'paid' && o.status === 'to_ship';
+          const cancelUi = legacyPaid ? 'none' : buyerCancelUi(o.status, ps, refunds.rows.get(o.id)?.cancel_request);
           return (
             <article key={o.id} className="bg-white md:rounded-md">
               <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line px-4 py-3 text-sm">
                 <Link to={`/shop/${o.shopId}`} className="flex items-center gap-1.5 font-medium"><Store size={16} />{getShop(o.shopId)?.name}</Link>
                 <span className="order-3 w-full font-mono text-xs text-muted md:order-none md:w-auto">訂單編號 {o.orderNo}</span>
-                {ps === 'pending' || ps === 'confirming' ? <OrderStateChip kind={ps} /> : expired ? <OrderStateChip kind="expired" /> : <span className="text-brand">{STATUS_LABEL[o.status]}</span>}
+                {ps === 'pending' || ps === 'confirming' ? <OrderStateChip kind={ps} /> : expired ? <OrderStateChip kind="expired" /> : rv.chip ? (
+                  <span className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+                    <span className="text-brand">{STATUS_LABEL[o.status]}</span>
+                    <span className="sr-only">，</span>
+                    <OrderStateChip kind={rv.chip} />
+                  </span>
+                ) : <span className="text-brand">{STATUS_LABEL[o.status]}</span>}
               </header>
               {o.lines.map(l => (
                 <Link to={`/product/${l.productId}`} key={l.variantId} className="flex gap-3 px-4 py-3">
@@ -255,6 +315,8 @@ function OrdersView() {
               {expired && (
                 <p className="border-t border-line px-4 py-3 text-sm text-muted">超過 30 分鐘沒有完成付款，訂單已自動取消，你沒有被請款。</p>
               )}
+
+              {rv.block && <StatusBlockView block={rv.block} variant="buyer" id={`refund-status-${o.id}`} card={cardOf(pay)} />}
 
               {/* 物流進度：買家與賣家看到同一份歷程。還沒付完款的單沒有物流可言 */}
               {!isUnfinished(ps) && !expired && (
@@ -300,12 +362,25 @@ function OrdersView() {
                       {pay?.group_id && <Link to={`/pay/${pay.group_id}`} className={`${btnPrimary} flex-1`}>重新付款</Link>}
                     </div>
                   )}
-                  {buyerCancelUi(o.status, ps) === 'button' && (
+                  {cancelUi === 'button' && (
                     busy?.id === o.id ? <BusyButton label="取消中…" /> : (
                       <button onClick={() => void act(o.id, 'cancel')} aria-disabled={busy ? true : undefined} className="inline-flex min-h-11 items-center rounded-sm border border-line px-3 text-sm">取消訂單</button>
                     )
                   )}
-                  {buyerCancelUi(o.status, ps) === 'paid_note' && <p className="w-full text-right text-xs text-muted">已付款的訂單目前無法自行取消</p>}
+                  {legacyPaid && <p className="w-full text-right text-xs text-muted">已付款的訂單目前無法自行取消</p>}
+                  {(cancelUi === 'request' || cancelUi === 'withdraw') && (
+                    <>
+                      <button
+                        type="button" aria-disabled={!online || undefined}
+                        aria-label={`${cancelUi === 'request' ? '申請取消' : '撤回申請'}，訂單 ${o.orderNo}`}
+                        onClick={online ? () => setDialog({ kind: cancelUi, order: o }) : undefined}
+                        className={`inline-flex min-h-11 items-center rounded-sm border border-line px-3 text-sm ${focusRing}`}
+                      >
+                        {cancelUi === 'request' ? '申請取消' : '撤回申請'}
+                      </button>
+                      {!online && <p className="w-full text-right text-sm text-muted">目前沒有網路連線，連上網路後才能{cancelUi === 'request' ? '申請取消' : '撤回申請'}。</p>}
+                    </>
+                  )}
                   {o.status === 'shipping' && (
                     busy?.id === o.id ? <BusyButton label="完成中…" /> : (
                       <button onClick={() => void act(o.id, 'complete')} aria-disabled={busy ? true : undefined} className="inline-flex min-h-11 items-center rounded-sm bg-brand px-3 text-sm text-white">完成訂單</button>
@@ -317,6 +392,20 @@ function OrdersView() {
           );
         })}
       </div>
+
+      {dialog?.kind === 'request' && (
+        <RequestCancelDialog
+          total={dialog.order.total} card={cardOf(payOf.get(dialog.order.id))} hasSiblings={hasBatchSiblings(dialog.order.id, payments)}
+          onClose={() => setDialog(null)}
+          onSubmit={(reason, note) => runCancel(() => requestOrderCancel(dialog.order.id, reason, note), '已送出取消申請，等賣家回應', dialog.order.id)}
+        />
+      )}
+      {dialog?.kind === 'withdraw' && (
+        <WithdrawCancelDialog
+          onStay={() => setDialog(null)}
+          onConfirm={async () => { await runCancel(() => withdrawOrderCancel(dialog.order.id), '已撤回取消申請', dialog.order.id); }}
+        />
+      )}
 
       {cancelBatch && (
         <LeaveDialog

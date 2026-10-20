@@ -17,6 +17,11 @@ interface Props {
   /** 處理中：兩顆按鈕都不能按、Esc 無效，leave 按鈕顯示 busyLabel（擋雙擊） */
   busy?: boolean;
   busyLabel?: string;
+  /**
+   * 離線時的一行說明（role="status"，放在按鈕列上方）。有值＝目前不能送出：leave 按鈕 aria-disabled；
+   * 安全選項（stay）永遠能按，離線時也要能關掉對話框
+   */
+  offlineNotice?: string;
   onStay: () => void;
   onLeave: () => void;
 }
@@ -26,7 +31,7 @@ interface Props {
  * 初始焦點與 Esc 都是 stay（安全選項）；Tab 只在兩顆按鈕之間循環；關閉後焦點還給原本的元素。
  */
 export default function LeaveDialog({
-  title, description, stayLabel, leaveLabel, leaveTone = 'danger', busy = false, busyLabel, onStay, onLeave,
+  title, description, stayLabel, leaveLabel, leaveTone = 'danger', busy = false, busyLabel, offlineNotice, onStay, onLeave,
 }: Props) {
   const stayRef = useRef<HTMLButtonElement>(null);
   const leaveRef = useRef<HTMLButtonElement>(null);
@@ -58,10 +63,11 @@ export default function LeaveDialog({
       >
         <h2 id="leave-title" className="text-lg font-bold">{title}</h2>
         <div id="leave-desc" className="mt-2 text-sm text-muted">{description}</div>
-        <div className="mt-5 flex flex-col-reverse gap-2 md:flex-row md:justify-end">
+        {offlineNotice && <p role="status" className="mt-4 text-sm text-muted">{offlineNotice}</p>}
+        <div className={`${offlineNotice ? 'mt-2' : 'mt-5'} flex flex-col-reverse gap-2 md:flex-row md:justify-end`}>
           <button
-            ref={leaveRef} type="button" aria-disabled={busy || undefined}
-            onClick={busy ? undefined : onLeave}
+            ref={leaveRef} type="button" aria-disabled={busy || offlineNotice !== undefined || undefined}
+            onClick={busy || offlineNotice !== undefined ? undefined : onLeave}
             className={primary ? btnPrimary : btnDangerText}
           >
             {busy && <LoaderCircle size={16} className="motion-safe:animate-spin" aria-hidden="true" />}

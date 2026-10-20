@@ -7,8 +7,9 @@ import type { BuyerOrderRow } from '../supabase';
 import type { CheckoutRejection } from '../../types';
 import { PaymentError, parseErrorBody, paymentErrorText } from './errors';
 import type {
-  BindConfirmResponse, BindStartResponse, BindStatusResponse, MethodDeleteResponse, OrderPaymentRow, PayResponse,
-  PaymentGroupView, PaymentMethodRow, PaymentStatusResponse, PlaceOnlineOrderArgs, PlaceOnlineOrderOk, SellerEcpayMerchantRow, ShopOnlinePayable,
+  BindConfirmResponse, BindStartResponse, BindStatusResponse, BuyerCancelReason, MethodDeleteResponse, OrderPaymentRow, OrderRefundRow, PayResponse,
+  PaymentGroupView, PaymentMethodRow, PaymentStatusResponse, PlaceOnlineOrderArgs, PlaceOnlineOrderOk, RequestCancelResult, RespondCancelResult,
+  SellerCancelReason, SellerEcpayMerchantRow, ShopCancelSummary, ShopOnlinePayable, ShopOrderRefundRow,
 } from './types';
 
 // 線上付款的前端呼叫（介面見 .work/account-payment-methods/interface-payment.md）。
@@ -98,6 +99,22 @@ export async function fetchMyMerchant(): Promise<SellerEcpayMerchantRow | null> 
   return (data as SellerEcpayMerchantRow | null) ?? null;
 }
 export const submitMerchantId = (id: string) => rpc<{ status: string }>('submit_seller_ecpay_merchant', { p_merchant_id: id });
+
+// ── 退款：已付款線上訂單的取消（介面 8.1、8.2；全部是 RPC，沒有 Edge Function）──
+const noteOrNull = (note: string | null | undefined): string | null => note?.trim() || null;
+
+export const requestOrderCancel = (orderId: string, reason: BuyerCancelReason, note?: string | null) =>
+  rpc<RequestCancelResult>('request_order_cancel', { p_order: orderId, p_reason: reason, p_note: noteOrNull(note) });
+export const withdrawOrderCancel = (orderId: string) => rpc<{ outcome: 'withdrawn' }>('withdraw_order_cancel', { p_order: orderId });
+export const acceptOrderCancel = (orderId: string) => rpc<RespondCancelResult>('respond_order_cancel', { p_order: orderId, p_accept: true });
+export const rejectOrderCancel = (orderId: string, rejectReason: string) =>
+  rpc<RespondCancelResult>('respond_order_cancel', { p_order: orderId, p_accept: false, p_reject_reason: rejectReason.trim() });
+export const sellerCancelPaidOrder = (orderId: string, reason: SellerCancelReason, note?: string | null) =>
+  rpc<{ outcome: 'refunding' }>('seller_cancel_paid_order', { p_order: orderId, p_reason: reason, p_note: noteOrNull(note) });
+
+export const fetchMyOrderRefunds = async () => (await rpc<OrderRefundRow[] | null>('get_my_order_refunds')) ?? [];
+export const fetchShopOrderRefunds = async () => (await rpc<ShopOrderRefundRow[] | null>('get_shop_order_refunds')) ?? [];
+export const fetchShopCancelSummary = () => rpc<ShopCancelSummary>('get_shop_cancel_summary');
 
 // ── 錯誤 ──
 /** 兩條路的錯誤（Edge Function 的 PaymentError、RPC 的 AccountError）統一取代碼與文字 */
