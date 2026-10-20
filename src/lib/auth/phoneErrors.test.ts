@@ -10,7 +10,7 @@ describe('錯誤對照：依 t2-local-tests 第 3 節，用 code／name／status
     ['驗證碼錯／過期／被重寄取代', api(403, 'otp_expired'), 'otp_invalid'],
     ['同一 IP 太多次', api(429, 'over_request_rate_limit'), 'rate_limit_ip'],
     ['其他 HTTP 429', api(429, ''), 'rate_limit_ip'],
-    ['簡訊供應商拒絕', api(422, 'sms_send_failed', 'Error sending confirmation code to provider: Twilio 21408'), 'sms_failed'],
+    ['簡訊供應商拒絕', api(422, 'sms_send_failed', 'Error sending confirmation code to provider: code 21408'), 'sms_failed'],
     ['綁定：手機已是別的帳號', api(422, 'phone_exists'), 'phone_exists'],
     ['手機登入關閉', api(400, 'phone_provider_disabled'), 'provider_disabled'],
     ['關閉註冊', api(422, 'signup_disabled'), 'signup_disabled'],
@@ -37,6 +37,40 @@ describe('錯誤對照：依 t2-local-tests 第 3 節，用 code／name／status
 
   it('不看英文訊息：訊息寫什麼都不影響結果', () => {
     expect(classifyPhoneError(api(403, 'otp_expired', 'Invalid login credentials'), { now: NOW }).kind).toBe('otp_invalid');
+  });
+});
+
+describe('簡訊供應端失敗（AC-M41）：只在送出驗證碼階段認得', () => {
+  const send = { now: NOW, op: 'send' as const };
+  const verify = { now: NOW, op: 'verify' as const };
+  const retryable502: AuthErrorLike = { name: 'AuthRetryableFetchError', status: 502, message: 'x' };
+
+  it('status 502（不論 name）→ sms_failed', () => {
+    expect(classifyPhoneError(retryable502, send).kind).toBe('sms_failed');
+    expect(classifyPhoneError(api(502, ''), send).kind).toBe('sms_failed');
+    expect(classifyPhoneError({ status: 502 }, send).kind).toBe('sms_failed');
+  });
+  it('code hook_timeout（422）→ sms_failed', () => {
+    expect(classifyPhoneError(api(422, 'hook_timeout'), send).kind).toBe('sms_failed');
+  });
+  it('code hook_timeout_after_retry（500 或 422）→ sms_failed', () => {
+    expect(classifyPhoneError(api(422, 'hook_timeout_after_retry'), send).kind).toBe('sms_failed');
+    expect(classifyPhoneError(api(500, 'hook_timeout_after_retry'), send).kind).toBe('sms_failed');
+    expect(classifyPhoneError({ name: 'AuthRetryableFetchError', status: 500, code: 'hook_timeout_after_retry' }, send).kind).toBe('sms_failed');
+  });
+  it('verifyOtp 階段的 502 仍是 server（沒有完成，請再試一次。）', () => {
+    expect(classifyPhoneError(retryable502, verify).kind).toBe('server');
+    expect(classifyPhoneError(api(502, ''), verify).kind).toBe('unknown');
+    expect(classifyPhoneError(api(422, 'hook_timeout'), verify).kind).toBe('unknown');
+    expect(phoneErrorView('server').title).toBe('沒有完成，請再試一次。');
+  });
+  it('沒給 op 時不當簡訊失敗（保守，避免 verify 路徑漏帶 op）', () => {
+    expect(classifyPhoneError(retryable502, { now: NOW }).kind).toBe('server');
+  });
+  it('其他 5xx 在送出階段不受影響：500 無 code（簽章不對）、503 仍是 server', () => {
+    expect(classifyPhoneError({ name: 'AuthRetryableFetchError', status: 500 }, send).kind).toBe('server');
+    expect(classifyPhoneError({ name: 'AuthRetryableFetchError', status: 503 }, send).kind).toBe('server');
+    expect(classifyPhoneError({ name: 'AuthRetryableFetchError', status: 0 }, send).kind).toBe('network');
   });
 });
 
