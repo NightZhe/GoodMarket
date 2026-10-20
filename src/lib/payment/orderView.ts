@@ -80,9 +80,6 @@ export function buyerCancelUi(status: OrderStatus, pay: OrderPayState, request: 
   return request.status === 'pending' ? 'withdraw' : 'none';
 }
 
-/** 賣家端：已付款的線上單先不給取消（舊版；RF-A2 改用 sellerCancelUi，這個之後移除） */
-export const sellerCanCancel = (payment: Order['payment']): boolean => payment !== 'ecpay_card';
-
 /**
  * 賣家端的取消鈕（待出貨才會問）：貨到付款與示範單直接取消；已付款的線上單走 seller_cancel_paid_order（取消並退款），
  * 前端不得再對它送 UPDATE status='cancelled'（資料庫會擋，介面 8.9）；買家申請中時要先同意或拒絕，沒有取消鈕

@@ -4,16 +4,28 @@ import { useStore } from '../../store/StoreContext';
 import { useRefreshOnVisible } from '../../store/ReviewsContext';
 import { orderActionErrorMessage } from '../../lib/orders/errors';
 import LeaveDialog from '../../components/import/LeaveDialog';
+import Banner from '../../components/import/Banner';
+import { btnOutline } from '../../components/import/ui';
+import { SellerBadgeView, StatusBlockView } from '../../components/payment/RefundBlocks';
+import { AcceptCancelDialog, RejectCancelDialog, SellerCancelDialog } from '../../components/payment/RefundDialogs';
+import { useCancelSummary } from '../../store/CancelSummaryContext';
 import { useToast } from '../../components/Toast';
 import ProductImage from '../../components/ProductImage';
 import OrderTimeline from '../../components/OrderTimeline';
 import { STATUS_LABEL } from '../buyer/Orders';
 import { dateText, money } from '../../lib/format';
 import { FEE_RATES, payoutOf } from '../../lib/payout';
-import { sellerCanCancel, sellerPayLabel } from '../../lib/payment/orderView';
+import { sellerCancelUi, sellerPayLabel } from '../../lib/payment/orderView';
+import { sellerRefundView, sortPendingFirst } from '../../lib/payment/refundView';
+import { sellerCancelFailure } from '../../lib/payment/refundErrors';
+import { acceptOrderCancel, fetchShopOrderRefunds, rejectOrderCancel, sellerCancelPaidOrder } from '../../lib/payment/api';
+import { useOrderRefunds } from '../../lib/payment/useOrderRefunds';
+import { useOnline } from '../../lib/useOnline';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useMerchantState } from '../../lib/payment/useMerchant';
 import type { Order, OrderStatus, ShippingMilestone } from '../../types';
+
+type SellerDialog = { kind: 'accept' | 'reject' | 'cancel'; order: Order };
 
 const TONE: Record<OrderStatus, string> = {
   to_ship: 'bg-brand-soft text-brand', shipping: 'bg-info-bg text-info-text',
@@ -194,6 +206,14 @@ export default function SellerOrders() {
   const toast = useToast();
   const { enabled: payEnabled } = usePaymentConfig();
   const merchantState = useMerchantState(payEnabled);
+  const online = useOnline();
+  const cancelSummary = useCancelSummary();
+  // 取消申請與退款的細節。沒有線上付款訂單、開關也關著時不讀（舊資料庫沒有這支函式，畫面與上線前逐字相同）；退款不跟開關走（R-RF9）
+  const hasOnlineOrders = shopOrders.some(o => o.payment === 'ecpay_card');
+  const refunds = useOrderRefunds(fetchShopOrderRefunds, payEnabled || hasOnlineOrders);
+  const reloadRefunds = refunds.reload;
+  const reloadSummary = cancelSummary.reload;
+  const [dialog, setDialog] = useState<SellerDialog | null>(null);
   // 操作失敗（多半是畫面資料過期，例如買家剛完成或取消了這張單）：顯示錯誤訊息，並重讀成實際狀態
   // 重讀不等結果：斷線時重讀本身也會卡住，按鈕不能因此一直停在處理中。
   const onActionError = async (e: unknown) => {
@@ -207,13 +227,36 @@ export default function SellerOrders() {
     if (now - lastRefreshAt.current < REFRESH_MIN_GAP_MS) return;
     lastRefreshAt.current = now;
     void refreshShopOrders();
+    void reloadRefunds();
   }, { onFocus: true });
   const [tab, setTab] = useState<OrderStatus | 'all'>('to_ship');
   const [shipId, setShipId] = useState<string | null>(null);   // 正在填出貨資訊的訂單
   const [openId, setOpenId] = useState<string | null>(null);   // 展開歷程的訂單
   const mine = shopOrders.filter(o => o.shopId === myShop?.id);
-  const list = mine.filter(o => tab === 'all' || o.status === tab);
+  // 申請中的訂單排在該分頁最上面，同組內維持原順序（退款設計 5.1）
+  const isRequested = (o: Order) => o.status === 'to_ship' && refunds.rows.get(o.id)?.cancel_request?.status === 'pending';
+  const list = sortPendingFirst(mine.filter(o => tab === 'all' || o.status === tab), isRequested);
   const tabs: (OrderStatus | 'all')[] = ['all', 'to_ship', 'shipping', 'completed', 'cancelled'];
+
+  // 同意、拒絕、取消並退款成功後：重讀訂單、申請與退款、側欄待辦數字；訂單離開了目前的分頁，焦點移到分頁鈕（念出更新後的計數）
+  const reloadAll = () => Promise.all([refreshShopOrders(), reloadRefunds(), reloadSummary()]);
+  const runRefundAction = async (call: () => Promise<unknown>, okText: string): Promise<string | null> => {
+    try {
+      await call();
+    } catch (e) {
+      const f = sellerCancelFailure(e);
+      if (f.kind === 'field') return f.text;
+      toast(f.text, 'error');
+      if (f.reload) void reloadAll();
+      if (!f.keepOpen) setDialog(null);
+      return null;
+    }
+    setDialog(null);
+    toast(okText);
+    await reloadAll();
+    document.getElementById(`seller-orders-tab-${tab}`)?.focus();
+    return null;
+  };
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -225,12 +268,23 @@ export default function SellerOrders() {
       )}
       <div className="no-scrollbar mt-4 flex overflow-x-auto rounded-t-lg border-b border-line bg-white px-2">
         {tabs.map(t => (
-          <button key={t} onClick={() => setTab(t)}
+          <button key={t} id={`seller-orders-tab-${t}`} onClick={() => setTab(t)}
             className={`shrink-0 border-b-2 px-4 py-3 text-sm ${tab === t ? 'border-brand text-brand' : 'border-transparent'}`}>
             {t === 'all' ? '全部' : STATUS_LABEL[t]} <span className="text-muted">({mine.filter(o => t === 'all' || o.status === t).length})</span>
           </button>
         ))}
       </div>
+
+      {refunds.status === 'error' && (
+        <div className="mt-3">
+          <Banner
+            kind="warning" role="status" title="取消申請與退款狀態暫時讀不到"
+            actions={<button type="button" onClick={() => void reloadRefunds()} className={`${btnOutline} px-4`}>重試</button>}
+          >
+            畫面上的申請與退款資訊可能不是最新的。
+          </Banner>
+        </div>
+      )}
 
       {list.length === 0 ? (
         <div className="rounded-b-lg bg-white py-16 text-center text-sm text-muted">
@@ -238,14 +292,27 @@ export default function SellerOrders() {
         </div>
       ) : (
         <ul className="mt-3 space-y-3">
-          {list.map(o => (
+          {list.map(o => {
+            const row = refunds.rows.get(o.id);
+            const rv = sellerRefundView({ status: o.status, payment: o.payment, row }, { total: o.total, now: Date.now(), time: dateText });
+            // 資料庫還沒有退款函式（舊資料庫）：已付款線上單維持上線前的樣子，沒有取消鈕
+            const cancelUi = refunds.status === 'missing' && o.payment === 'ecpay_card' ? 'none' : sellerCancelUi(o.payment, row?.cancel_request);
+            const requested = isRequested(o);
+            return (
             <li key={o.id} className="overflow-hidden rounded-lg bg-white">
               <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-[#fafafa] px-4 py-2.5 text-xs text-muted">
                 <span>訂單編號 <span className="font-mono text-ink">{o.orderNo}</span></span>
                 <span>{dateText(o.createdAt)}</span>
-                {o.payment === 'ecpay_card' && <span className="inline-flex items-center gap-1 text-ink"><CreditCard size={13} aria-hidden="true" />信用卡・已付款</span>}
+                {o.payment === 'ecpay_card' && <span className="inline-flex items-center gap-1 text-ink"><CreditCard size={13} aria-hidden="true" />{sellerPayLabel('ecpay_card', payEnabled, rv.refundStatus)}</span>}
                 {payEnabled && o.payment === 'cod' && <span className="inline-flex items-center gap-1"><Banknote size={13} aria-hidden="true" />貨到付款</span>}
-                <span className={`ml-auto rounded-full px-2 py-0.5 font-medium ${TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span>
+                {rv.badge ? (
+                  <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+                    <SellerBadgeView kind={rv.badge} />
+                    <span className={`rounded-full px-2 py-0.5 font-medium ${TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span>
+                  </span>
+                ) : (
+                  <span className={`ml-auto rounded-full px-2 py-0.5 font-medium ${TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span>
+                )}
               </header>
               <div className="grid gap-4 p-4 md:grid-cols-[1fr_240px]">
                 <div>
@@ -278,6 +345,32 @@ export default function SellerOrders() {
                   <p className="flex items-start gap-1.5"><MapPin size={13} className="mt-0.5 shrink-0 text-muted" />{o.buyer.address}</p>
                 </div>
               </div>
+              {rv.block && (
+                <StatusBlockView block={rv.block} variant="seller" id={`refund-status-${o.id}`} card={null}>
+                  {requested && row?.cancel_request && (
+                    <>
+                      <div className="flex flex-col gap-2 pt-2 min-[480px]:flex-row">
+                        <button
+                          type="button" aria-disabled={!online || undefined} aria-label={`拒絕，訂單 ${o.orderNo}`}
+                          onClick={online ? () => setDialog({ kind: 'reject', order: o }) : undefined}
+                          className={`${btnOutline} flex-1 min-[480px]:flex-none`}
+                        >
+                          拒絕
+                        </button>
+                        <button
+                          type="button" aria-disabled={!online || undefined} aria-label={`同意取消並退款，訂單 ${o.orderNo}`}
+                          onClick={online ? () => setDialog({ kind: 'accept', order: o }) : undefined}
+                          className={`${btnOutline} flex-1 min-[480px]:flex-none`}
+                        >
+                          同意取消並退款
+                        </button>
+                      </div>
+                      {!online && <p className="text-sm text-muted">目前沒有網路連線，連上網路後才能操作。</p>}
+                    </>
+                  )}
+                </StatusBlockView>
+              )}
+
               <div className="border-t border-line px-4 py-3">
                 <button onClick={() => setOpenId(openId === o.id ? null : o.id)}
                   className="flex w-full items-center justify-between text-sm">
@@ -290,15 +383,16 @@ export default function SellerOrders() {
                 {openId === o.id && <div className="mt-3"><OrderTimeline order={o} /></div>}
               </div>
 
-              <PayoutPanel order={o} />
-              {o.payment === 'ecpay_card' && <div className="border-t border-line px-4 pb-3"><SettlementBlock /></div>}
+              {/* 退款中、已退款的單不顯示進帳與撥款（退款設計 5.3；撥款文案之後從這裡接） */}
+              {!rv.hidePayout && <PayoutPanel order={o} />}
+              {o.payment === 'ecpay_card' && !rv.hidePayout && <div className="border-t border-line px-4 pb-3"><SettlementBlock /></div>}
               {payEnabled && o.payment === 'cod' && (
                 <p className="flex items-start gap-1.5 border-t border-line px-4 py-2.5 text-xs text-muted">
                   <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />貨到付款：買家收貨時直接付款給你，不經過好物集，也不會有撥款。
                 </p>
               )}
 
-              {shipId === o.id && o.status === 'to_ship' && (
+              {shipId === o.id && o.status === 'to_ship' && !requested && (
                 <ShipForm
                   onCancel={() => setShipId(null)}
                   onSubmit={async (carrier, trackingNo) => {
@@ -316,7 +410,7 @@ export default function SellerOrders() {
               )}
 
               <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-3">
-                <span className="mr-auto text-xs text-muted">{sellerPayLabel(o.payment, payEnabled)}・運費 {money(o.shippingFee)}</span>
+                <span className="mr-auto text-xs text-muted">{sellerPayLabel(o.payment, payEnabled, rv.refundStatus)}・運費 {money(o.shippingFee)}</span>
                 <span className="text-sm">訂單金額 <span className="text-lg font-medium text-brand">{money(o.total)}</span></span>
                 {o.status === 'shipping' && (
                   <MilestoneButtons
@@ -335,8 +429,7 @@ export default function SellerOrders() {
                 )}
                 {o.status === 'to_ship' && (
                   <>
-                    {/* 已付款的線上單先不給取消：取消不會退款（退款規格未補） */}
-                    {sellerCanCancel(o.payment) && <button onClick={async () => {
+                    {cancelUi === 'direct' && <button onClick={async () => {
                       try {
                         await updateOrderStatus(o.id, 'cancelled');
                       } catch (e) {
@@ -344,16 +437,55 @@ export default function SellerOrders() {
                         return;
                       }
                       toast('訂單已取消');
-                    }} className="rounded-sm border border-line px-3 py-2 text-sm hover:bg-canvas">取消訂單</button>}
-                    <button onClick={() => setShipId(shipId === o.id ? null : o.id)} className="flex items-center gap-1.5 rounded-sm bg-brand px-4 py-2 text-sm text-white hover:bg-brand-dark">
+                    }} className="min-h-11 rounded-sm border border-line px-3 text-sm hover:bg-canvas">取消訂單</button>}
+                    {cancelUi === 'refund' && (
+                      <button
+                        type="button" aria-disabled={!online || undefined} aria-label={`取消並退款，訂單 ${o.orderNo}`}
+                        onClick={online ? () => setDialog({ kind: 'cancel', order: o }) : undefined}
+                        className={btnOutline}
+                      >
+                        取消並退款
+                      </button>
+                    )}
+                    <button
+                      onClick={requested ? undefined : () => setShipId(shipId === o.id ? null : o.id)}
+                      aria-disabled={requested || undefined} aria-describedby={requested ? `ship-hint-${o.id}` : undefined}
+                      className="flex min-h-11 items-center gap-1.5 rounded-sm bg-brand px-4 text-sm text-white hover:bg-brand-dark aria-disabled:cursor-not-allowed aria-disabled:bg-disabled aria-disabled:hover:bg-disabled"
+                    >
                       <Truck size={16} /> 安排出貨
                     </button>
+                    {requested && <p id={`ship-hint-${o.id}`} className="w-full text-balance text-right text-sm text-muted">買家申請取消中，請先同意或拒絕，才能安排出貨。</p>}
+                    {!online && cancelUi === 'refund' && <p className="w-full text-balance text-right text-sm text-muted">目前沒有網路連線，連上網路後才能操作。</p>}
                   </>
                 )}
               </footer>
             </li>
-          ))}
+            );
+          })}
         </ul>
+      )}
+
+      {dialog?.kind === 'accept' && (() => {
+        const q = refunds.rows.get(dialog.order.id)?.cancel_request;
+        return q ? (
+          <AcceptCancelDialog
+            total={dialog.order.total} reason={q.reason} note={q.note}
+            onStay={() => setDialog(null)}
+            onConfirm={async () => { await runRefundAction(() => acceptOrderCancel(dialog.order.id), '已同意取消，退款處理中'); }}
+          />
+        ) : null;
+      })()}
+      {dialog?.kind === 'reject' && (
+        <RejectCancelDialog
+          onClose={() => setDialog(null)}
+          onSubmit={reason => runRefundAction(() => rejectOrderCancel(dialog.order.id, reason), '已拒絕取消申請，請安排出貨')}
+        />
+      )}
+      {dialog?.kind === 'cancel' && (
+        <SellerCancelDialog
+          total={dialog.order.total} onClose={() => setDialog(null)}
+          onSubmit={(reason, note) => runRefundAction(() => sellerCancelPaidOrder(dialog.order.id, reason, note), '已取消訂單，退款處理中')}
+        />
       )}
     </div>
   );

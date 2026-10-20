@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Order } from '../../types';
 import type { CancelRequestView, OrderPaymentRow } from './types';
-import { BUYER_PAY_LABEL, SELLER_PAY_LABEL, orderPayLine, buyerCancelUi, ordersTabFromQuery, orderPayLineIfOn, orderPayState, hasBatchSiblings, pendingBatch, sellerCanCancel, sellerCancelUi, sellerPayLabel } from './orderView';
+import { BUYER_PAY_LABEL, SELLER_PAY_LABEL, orderPayLine, buyerCancelUi, ordersTabFromQuery, orderPayLineIfOn, orderPayState, hasBatchSiblings, pendingBatch, sellerCancelUi, sellerPayLabel } from './orderView';
 
 const req = (status: CancelRequestView['status']): CancelRequestView => ({
   status, reason: 'no_longer_wanted', note: null, requested_at: '2026-10-20T06:00:00Z', respond_by: '2026-10-22T06:00:00Z', decided_at: status === 'pending' ? null : '2026-10-20T07:00:00Z', reject_reason: null,
@@ -143,13 +143,6 @@ describe('買家取消區：貨到付款照舊；已付款的線上單改成「�
     expect(buyerCancelUi('cancelled', 'refunding', undefined)).toBe('none');
     expect(buyerCancelUi('cancelled', 'refunded', undefined)).toBe('none');
     expect(buyerCancelUi('completed', 'refunded', undefined)).toBe('none');
-  });
-});
-
-describe('sellerCanCancel（舊版，RF-A2 移除）', () => {
-  it('已付款的線上單不顯示取消；貨到付款與示範單照舊', () => {
-    expect(sellerCanCancel('ecpay_card')).toBe(false);
-    expect(sellerCanCancel('cod')).toBe(true);
   });
 });
 
