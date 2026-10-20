@@ -162,3 +162,19 @@ export interface ShopOrderRefundRow extends OrderRefundRow { needs_manual: boole
 export interface ShopCancelSummary { pending: number; earliestRespondBy: string | null }
 export type RequestCancelResult = { outcome: 'requested'; respondBy: string };
 export type RespondCancelResult = { outcome: 'refunding' } | { outcome: 'rejected' };
+
+// ── 撥款對帳：賣家訂單的撥款狀態（interface-payment.md 第 9 章；PostgREST RPC get_seller_order_payouts）──
+export type PayoutStatus = 'captured' | 'scheduled' | 'paid_out' | 'clawed_back' | 'updating';
+export interface SellerOrderPayoutRow {
+  order_id: string;
+  payout_status: PayoutStatus;
+  expected_payout_date: string | null;  // 'YYYY-MM-DD'（台灣日期），只有 scheduled
+  paid_out_date: string | null;         // 只有 paid_out
+  payout_amount: number | null;         // 綠界的應收款項(淨額)；D42＝C 只在 scheduled／paid_out 顯示
+  fee_amount: null;                     // D42＝C：一律 null
+  clawback_amount: number | null;       // 只有 clawed_back
+  clawback_date: string | null;         // 只有 clawed_back，而且可能 null（綠界還沒排撥款日）
+  data_updated_at: string | null;       // ISO；updating 時 null
+  has_ledger_rows: boolean;             // §3.3：已取消且 false → 不顯示撥款區塊
+}
+export const PAYOUT_IDS_LIMIT = 200;    // 超過回 TOO_MANY_IDS

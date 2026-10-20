@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { Banknote, CircleDashed, ChevronDown, CreditCard, Info, MapPin, Phone, Receipt, Truck, User } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Banknote, CalendarClock, CircleAlert, CircleCheck, CircleDashed, ChevronDown, Clock, CreditCard, Info, MapPin, Phone, Receipt, Truck, User } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useRefreshOnVisible } from '../../store/ReviewsContext';
 import { orderActionErrorMessage } from '../../lib/orders/errors';
@@ -17,12 +17,14 @@ import { dateText, money } from '../../lib/format';
 import { FEE_RATES, payoutOf } from '../../lib/payout';
 import { sellerCancelUi, sellerPayLabel } from '../../lib/payment/orderView';
 import { sellerRefundView, sortPendingFirst } from '../../lib/payment/refundView';
+import { payoutView, taipeiToday, type PayoutTone, type PayoutView } from '../../lib/payment/payoutView';
 import { sellerCancelFailure } from '../../lib/payment/refundErrors';
-import { acceptOrderCancel, fetchShopOrderRefunds, rejectOrderCancel, sellerCancelPaidOrder } from '../../lib/payment/api';
+import { acceptOrderCancel, fetchSellerOrderPayouts, fetchShopOrderRefunds, rejectOrderCancel, sellerCancelPaidOrder } from '../../lib/payment/api';
 import { useOrderRefunds } from '../../lib/payment/useOrderRefunds';
 import { useOnline } from '../../lib/useOnline';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useMerchantState } from '../../lib/payment/useMerchant';
+import type { PayoutStatus } from '../../lib/payment/types';
 import type { Order, OrderStatus, ShippingMilestone } from '../../types';
 
 type SellerDialog = { kind: 'accept' | 'reject' | 'cancel'; order: Order };
@@ -90,18 +92,34 @@ function PayoutPanel({ order }: { order: Order }) {
   );
 }
 
+const PAYOUT_TAG: Record<PayoutTone, string> = {
+  info: 'bg-info-bg text-info-text', success: 'bg-success-soft text-success-text',
+  warning: 'bg-warning-bg text-warning-text', neutral: 'bg-canvas text-ink',
+};
+const PAYOUT_ICON: Record<PayoutStatus, typeof Clock> = {
+  captured: Clock, scheduled: CalendarClock, paid_out: CircleCheck, clawed_back: CircleAlert, updating: CircleDashed,
+};
+
 /**
- * 撥款狀態（設計 12.2）。撥款資料來自綠界的撥款對帳檔，這個對帳還沒做（後端 runbook 第 11 節），所以目前只會是「資料更新中」；
- * 文案全部保守（「以綠界科技為準」），不寫天數、不寫頻率（都未查證）
+ * 撥款狀態（設計 12.2、撥款對帳規格 8.1）。文字與日期都來自綠界的撥款對帳檔（payoutView），不推算；
+ * 狀態靠標籤文字表達（圖示 aria-hidden，顏色不是唯一線索）；日期給讀屏念完整的「10 月 28 日」。
+ * 狀態改變不朗讀、沒有動畫
  */
-function SettlementBlock() {
+function SettlementBlock({ view }: { view: PayoutView }) {
+  const Icon = PAYOUT_ICON[view.status];
   return (
     <div className="mt-3 rounded-md border border-line bg-subtle p-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-sm font-medium">撥款狀態</span>
-        <span className="inline-flex items-center gap-1 rounded-sm bg-canvas px-1.5 py-0.5 text-xs font-medium text-ink"><CircleDashed size={12} aria-hidden="true" />撥款資料更新中</span>
+        <span className={`inline-flex min-w-0 items-start gap-1 rounded-sm px-1.5 py-0.5 text-xs font-medium ${PAYOUT_TAG[view.tone]}`}>
+          <Icon size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span aria-hidden="true" className="min-w-0 break-words">{view.label}</span>
+          <span className="sr-only">{view.labelSr}</span>
+        </span>
       </div>
-      <p className="mt-1.5 text-sm text-muted">綠界科技的對帳資料還沒送來。資料送來後這裡會更新，不影響出貨。預計撥款日與實際入帳時間以綠界科技為準。</p>
+      {view.amountLine && <p className="mt-1.5 text-sm font-medium">{view.amountLine}</p>}
+      <p className={`${view.amountLine ? 'mt-0.5' : 'mt-1.5'} text-sm text-muted`}>{view.description}</p>
+      {view.updatedLine && <p className="mt-1 text-xs text-muted">{view.updatedLine}</p>}
     </div>
   );
 }
@@ -212,6 +230,15 @@ export default function SellerOrders() {
   const hasOnlineOrders = shopOrders.some(o => o.payment === 'ecpay_card');
   const refunds = useOrderRefunds(fetchShopOrderRefunds, payEnabled || hasOnlineOrders);
   const reloadRefunds = refunds.reload;
+  // 撥款狀態：整頁的線上付款訂單一次取（AC-R24）。讀不到（斷線、對帳開關關著、舊資料庫沒有這支函式）時畫面維持「撥款資料更新中」，不提示錯誤；斷線時保留上一份
+  const onlineOrderIds = useMemo(
+    () => shopOrders.filter(o => o.shopId === myShop?.id && o.payment === 'ecpay_card').map(o => o.id),
+    [shopOrders, myShop?.id],
+  );
+  const onlineIdsKey = onlineOrderIds.join(',');
+  const fetchPayouts = useCallback(() => fetchSellerOrderPayouts(onlineIdsKey.split(',')), [onlineIdsKey]); // 以編號字串當依賴：訂單內容變動但編號不變時不重打
+  const payouts = useOrderRefunds(fetchPayouts, onlineIdsKey !== '');
+  const reloadPayouts = payouts.reload;
   const reloadSummary = cancelSummary.reload;
   const [dialog, setDialog] = useState<SellerDialog | null>(null);
   // 操作失敗（多半是畫面資料過期，例如買家剛完成或取消了這張單）：顯示錯誤訊息，並重讀成實際狀態
@@ -228,6 +255,7 @@ export default function SellerOrders() {
     lastRefreshAt.current = now;
     void refreshShopOrders();
     void reloadRefunds();
+    void reloadPayouts();
   }, { onFocus: true });
   const [tab, setTab] = useState<OrderStatus | 'all'>('to_ship');
   const [shipId, setShipId] = useState<string | null>(null);   // 正在填出貨資訊的訂單
@@ -236,6 +264,7 @@ export default function SellerOrders() {
   // 申請中的訂單排在該分頁最上面，同組內維持原順序（退款設計 5.1）
   const isRequested = (o: Order) => o.status === 'to_ship' && refunds.rows.get(o.id)?.cancel_request?.status === 'pending';
   const list = sortPendingFirst(mine.filter(o => tab === 'all' || o.status === tab), isRequested);
+  const today = taipeiToday(Date.now());
   const tabs: (OrderStatus | 'all')[] = ['all', 'to_ship', 'shipping', 'completed', 'cancelled'];
 
   // 同意、拒絕、取消並退款成功後：重讀訂單、申請與退款、側欄待辦數字；訂單離開了目前的分頁，焦點移到分頁鈕（念出更新後的計數）
@@ -298,6 +327,7 @@ export default function SellerOrders() {
             // 資料庫還沒有退款函式（舊資料庫）：已付款線上單維持上線前的樣子，沒有取消鈕
             const cancelUi = refunds.status === 'missing' && o.payment === 'ecpay_card' ? 'none' : sellerCancelUi(o.payment, row?.cancel_request);
             const requested = isRequested(o);
+            const pv = o.payment === 'ecpay_card' ? payoutView({ orderStatus: o.status, hidePayout: rv.hidePayout, row: payouts.rows.get(o.id) }, { today }) : null;
             return (
             <li key={o.id} className="overflow-hidden rounded-lg bg-white">
               <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-[#fafafa] px-4 py-2.5 text-xs text-muted">
@@ -383,9 +413,9 @@ export default function SellerOrders() {
                 {openId === o.id && <div className="mt-3"><OrderTimeline order={o} /></div>}
               </div>
 
-              {/* 退款中、已退款的單不顯示進帳與撥款（退款設計 5.3；撥款文案之後從這裡接） */}
-              {!rv.hidePayout && <PayoutPanel order={o} />}
-              {o.payment === 'ecpay_card' && !rv.hidePayout && <div className="border-t border-line px-4 pb-3"><SettlementBlock /></div>}
+              {/* 預估進帳是示範費率（D23 未定）：線上付款訂單不顯示，撥款以綠界算好的金額為準（D42）；退款中、已退款的單也不顯示（退款設計 5.3） */}
+              {o.payment !== 'ecpay_card' && !rv.hidePayout && <PayoutPanel order={o} />}
+              {pv && <div className="border-t border-line px-4 pb-3"><SettlementBlock view={pv} /></div>}
               {payEnabled && o.payment === 'cod' && (
                 <p className="flex items-start gap-1.5 border-t border-line px-4 py-2.5 text-xs text-muted">
                   <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />貨到付款：買家收貨時直接付款給你，不經過好物集，也不會有撥款。

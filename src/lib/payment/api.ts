@@ -9,8 +9,9 @@ import { PaymentError, parseErrorBody, paymentErrorText } from './errors';
 import type {
   BindConfirmResponse, BindStartResponse, BindStatusResponse, BuyerCancelReason, MethodDeleteResponse, OrderPaymentRow, OrderRefundRow, PayResponse,
   PaymentGroupView, PaymentMethodRow, PaymentStatusResponse, PlaceOnlineOrderArgs, PlaceOnlineOrderOk, RequestCancelResult, RespondCancelResult,
-  SellerCancelReason, SellerEcpayMerchantRow, ShopCancelSummary, ShopOnlinePayable, ShopOrderRefundRow,
+  SellerCancelReason, SellerEcpayMerchantRow, SellerOrderPayoutRow, ShopCancelSummary, ShopOnlinePayable, ShopOrderRefundRow,
 } from './types';
+import { chunkIds } from './payoutView';
 
 // 線上付款的前端呼叫（介面見 .work/account-payment-methods/interface-payment.md）。
 // 前端永遠碰不到 BindCardID、卡號、HashKey：卡號只輸入在綠界的欄位，這裡只傳「綁卡編號」與綠界 SDK 給的一次性代碼。
@@ -115,6 +116,12 @@ export const sellerCancelPaidOrder = (orderId: string, reason: SellerCancelReaso
 export const fetchMyOrderRefunds = async () => (await rpc<OrderRefundRow[] | null>('get_my_order_refunds')) ?? [];
 export const fetchShopOrderRefunds = async () => (await rpc<ShopOrderRefundRow[] | null>('get_shop_order_refunds')) ?? [];
 export const fetchShopCancelSummary = () => rpc<ShopCancelSummary>('get_shop_cancel_summary');
+
+/** 賣家訂單頁的撥款狀態：整頁的訂單一次請求（AC-R24），超過 200 張才分批 */
+export async function fetchSellerOrderPayouts(orderIds: string[]): Promise<SellerOrderPayoutRow[]> {
+  const parts = await Promise.all(chunkIds(orderIds).map(ids => rpc<SellerOrderPayoutRow[] | null>('get_seller_order_payouts', { p_order_ids: ids })));
+  return parts.flatMap(rows => rows ?? []);
+}
 
 // ── 錯誤 ──
 /** 兩條路的錯誤（Edge Function 的 PaymentError、RPC 的 AccountError）統一取代碼與文字 */

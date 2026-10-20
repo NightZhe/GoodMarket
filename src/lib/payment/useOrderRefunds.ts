@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toAccountError } from '../account/errors';
-import type { OrderRefundRow } from './types';
 
-// 取消申請與退款資料（get_my_order_refunds／get_shop_order_refunds）。不輪詢：進頁、送出後、回到前景才重讀（介面 8.6）。
+// 以訂單編號為鍵的逐單資料（取消申請與退款 get_my_order_refunds／get_shop_order_refunds；撥款狀態 get_seller_order_payouts）。不輪詢：進頁、送出後、回到前景才重讀（介面 8.6）。
 // 讀不到時保留上一份資料（畫面不會因為一次失敗就把已知的申請藏起來），state 告訴畫面要不要提示。
 
 /**
@@ -11,7 +10,7 @@ import type { OrderRefundRow } from './types';
  */
 export type RefundsState = 'idle' | 'loading' | 'ok' | 'error' | 'missing';
 
-export function useOrderRefunds<T extends OrderRefundRow>(fetcher: () => Promise<T[]>, enabled: boolean) {
+export function useOrderRefunds<T extends { order_id: string }>(fetcher: () => Promise<T[]>, enabled: boolean) {
   const [state, setState] = useState<{ status: RefundsState; rows: Map<string, T> }>({ status: enabled ? 'loading' : 'idle', rows: new Map() });
   const seq = useRef(0);
 
