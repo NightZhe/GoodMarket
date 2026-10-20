@@ -252,6 +252,66 @@ describe('設定檢查', () => {
   });
 });
 
+describe('供應商分派（SMS_PROVIDER）', () => {
+  const urlOf = () => fetchMock.mock.calls[0][0];
+  it('沒設 SMS_PROVIDER → 三竹（既有行為不變），log 帶 provider=mitake', async () => {
+    expect((await make()(signedReq(payload()))).status).toBe(200);
+    expect(urlOf()).toBe('https://api.example.com/b2c/mtk/SmSend?CharsetURL=UTF-8');
+    expect(sendSmsLogs()[0]).toMatchObject({ provider: 'mitake', outcome: 'sent' });
+  });
+  it.each(['mitake', 'MITAKE', ' mitake\n', ''])('SMS_PROVIDER=%j → 三竹', async (v) => {
+    env.SMS_PROVIDER = v;
+    await make()(signedReq(payload()));
+    expect(urlOf()).toContain('/b2c/mtk/SmSend');
+  });
+  it.each(['maacgo', 'MaacGo', ' maacgo\n'])('SMS_PROVIDER=%j → MAAC Go（只改 env，不動程式）', async (v) => {
+    Object.assign(env, { SMS_PROVIDER: v, MAACGO_API_KEY: 'sk_test_k' });
+    expect((await make()(signedReq(payload()))).status).toBe(200);
+    expect(urlOf()).toBe('https://sms.cresclab.com/api/sms/send');
+    expect(sendSmsLogs()[0]).toMatchObject({ provider: 'maacgo' });
+  });
+  it('同一個 handler 實例：env 改了下一次請求就換供應商（不需重建）', async () => {
+    const h = make();
+    await h(signedReq(payload()));
+    Object.assign(env, { SMS_PROVIDER: 'maacgo', MAACGO_API_KEY: 'sk_test_k' });
+    await h(signedReq(payload()));
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(['https://api.example.com/b2c/mtk/SmSend?CharsetURL=UTF-8', 'https://sms.cresclab.com/api/sms/send']);
+  });
+  it.each(['twilio', 'maac go', 'maacgo2', 'x'.repeat(200)])('不認得的值 %j → HTTP 500、critical bad_provider、兩家都不呼叫', async (v) => {
+    env.SMS_PROVIDER = v;
+    const res = await make()(signedReq(payload()));
+    expect(res.status).toBe(500);
+    expect(res.headers.get('retry-after')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendSmsLogs()[0]).toMatchObject({ outcome: 'failed', reason: 'bad_provider', level: 'critical' });
+    expect(logs().join('')).not.toContain('x'.repeat(50)); // 設定值長得怪就不整串寫進 log
+  });
+  it('簽章驗證在分派之前：簽章錯＋供應商設錯 → 仍是 401（外人探不到設定）', async () => {
+    env.SMS_PROVIDER = 'twilio';
+    expect((await make()(new Request('https://x/', { method: 'POST', body: payload() }))).status).toBe(401);
+  });
+  it('maacgo 但缺 MAACGO_API_KEY（三竹三組齊全也不會自動退回三竹）→ 200＋502、bad_config', async () => {
+    env.SMS_PROVIDER = 'maacgo';
+    await expectFailed(await make()(signedReq(payload())));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendSmsLogs()[0]).toMatchObject({ provider: 'maacgo', reason: 'bad_config', missing: ['MAACGO_API_KEY'] });
+  });
+  it('mitake 但三竹三組缺（只有 MAACGO_API_KEY）→ 200＋502、bad_config', async () => {
+    Object.assign(env, { MITAKE_HOST: undefined, MITAKE_USERNAME: undefined, MITAKE_PASSWORD: undefined, MAACGO_API_KEY: 'sk_test_k' });
+    await expectFailed(await make()(signedReq(payload())));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendSmsLogs()[0]).toMatchObject({ provider: 'mitake', reason: 'bad_config', missing: ['MITAKE_HOST', 'MITAKE_USERNAME', 'MITAKE_PASSWORD'] });
+  });
+  it('共用的前置檢查兩家一樣：壞 OTP、非台灣門號都不呼叫任何一家', async () => {
+    for (const provider of ['mitake', 'maacgo']) {
+      env.SMS_PROVIDER = provider; env.MAACGO_API_KEY = 'sk_test_k';
+      await expectFailed(await make()(signedReq(payload({ otp: 'abc' }))));
+      await expectFailed(await make()(signedReq(payload({ phone: '+14155550123' }))));
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('三竹回覆 → hook 回應', () => {
   const run = async (code: string) => {
     fetchMock.mockResolvedValueOnce(new Response(mitakeText(code), { status: 200 }));
