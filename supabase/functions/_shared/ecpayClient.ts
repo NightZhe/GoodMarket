@@ -28,8 +28,8 @@ export type CardStatus = 'authorized' | 'unauthorized' | 'cancelled' | 'to_captu
 
 export type Inquiry =
   | { kind: 'none' }                                                    // 綠界沒有這筆（error_nopay）
-  | { kind: 'found'; tradeNo: string; status: CardStatus; amount: number }
-  | { kind: 'unknown' };
+  | { kind: 'found'; tradeNo: string; status: CardStatus; amount: number; refunded: number }
+  | { kind: 'unknown'; rtnMsg?: string };
 
 export type AuthorizeResult =
   | { kind: 'authorized'; tradeNo: string; card6: string | null; card4: string | null }
@@ -37,6 +37,13 @@ export type AuthorizeResult =
   | { kind: 'unknown'; reason: string };
 
 export type ActionResult = { kind: 'done' } | { kind: 'failed'; rtnMsg: string } | { kind: 'unknown' };
+/** 已付款訂單的全額退款（spec-refund.md §6.2）。method：void＝取消授權（N 或 E＋N，或綠界上已是已取消／未授權）、card_refund＝退刷（R）。
+ *  ecpayStatus 'none'（綠界查無這筆）只會出現在結帳的 abandon；退款遇到查無是 failed。
+ *  failed.hint：balance＝綠界回覆帳戶餘額不足（R）；stop＝綠界回覆查無商家或商家已到期（error_Stop）。兩者都要人工處理（R-RF11） */
+export type RefundResult =
+  | { kind: 'done'; method: 'void' | 'card_refund'; ecpayStatus: CardStatus | 'none' }
+  | { kind: 'failed'; action: 'N' | 'E' | 'R' | 'query'; rtnCode: number | null; rtnMsg: string; ecpayStatus: CardStatus | null; hint: 'balance' | 'stop' | null }
+  | { kind: 'unknown'; action: 'N' | 'E' | 'R' | 'query'; reason: string };
 /** 刪除綁卡（35608）的結果：失敗時帶回綠界的代碼與訊息、逾時帶原因（管理刪卡要逐張回報綠界回了什麼） */
 export type DeleteCardResult = { kind: 'done' } | { kind: 'failed'; rtnCode: number | null; rtnMsg: string } | { kind: 'unknown'; reason: string };
 
@@ -62,6 +69,25 @@ const STATUS_MAP: Record<string, CardStatus> = {
   'to be captured': 'to_capture', 'captured': 'captured', 'operation canceled': 'op_canceled', 'operation cancelled': 'op_canceled',
 };
 export const mapCardStatus = (raw: unknown): CardStatus => STATUS_MAP[String(raw ?? '').trim().toLowerCase()] ?? 'other';
+
+/**
+ * 關帳明細（35662 的 CloseData；文件範例放在 Data 最外層、參數表列在 RtnValue 底下，兩處都讀）。
+ * 35637 全額退款流程：「判斷訂單 close_data 中最後一筆 amount 為正向的資料狀態」——退刷會多一筆明細，主狀態可能跟著變成「要關帳」，
+ * 只看主狀態會把已關帳的訂單誤當成要關帳去做 E＋N。退刷明細以負向金額表示是依文件推論（未查證，AC-RF30 正式實刷時確認）。
+ * 回傳：有效狀態與已退刷金額（負向、且不是已取消／操作取消的明細合計）。有效狀態：主狀態是已取消／未授權（終點，明細可能還留著舊列）就用主狀態；
+ * 否則用最後一筆正向明細的狀態；沒有明細時用主狀態。
+ */
+export function readCloseData(data: Raw, mainStatus: CardStatus): { status: CardStatus; refunded: number } {
+  const raw: Raw[] = Array.isArray(data.CloseData) ? data.CloseData : Array.isArray(data.RtnValue?.CloseData) ? data.RtnValue.CloseData : [];
+  const rows: { status: CardStatus; amount: number }[] = raw.map((c) => ({ status: mapCardStatus(c.Status), amount: Number(c.Amount) })).filter((c) => Number.isFinite(c.amount));
+  const lastPositive = [...rows].reverse().find((c) => c.amount > 0);
+  const refunded = rows.filter((c) => c.amount < 0 && c.status !== 'cancelled' && c.status !== 'op_canceled').reduce((sum, c) => sum - c.amount, 0);
+  const terminal = mainStatus === 'cancelled' || mainStatus === 'unauthorized';
+  return { status: !terminal && lastPositive ? lastPositive.status : mainStatus, refunded };
+}
+
+/** 綠界 R 被拒時，訊息看起來是「帳戶餘額不足」（35642：「如帳戶餘額低於退刷金額，將無法退刷」）。綠界沒公布代碼，只能看訊息字樣（未查證） */
+export const looksLikeBalanceShortage = (msg: string) => /餘額|balance|insufficient/i.test(msg);
 
 const tw = (ms: number) => {
   const d = new Date(ms + 8 * 3600_000), p = (n: number) => String(n).padStart(2, '0');
@@ -151,18 +177,20 @@ export function createEcpayClient(cfg: EcpayConfig, fetchFn: typeof fetch = fetc
     const d = await ecpayment('/1.0.0/CreditDetail/QueryTrade', { MerchantID: a.merchantId, MerchantTradeNo: a.merchantTradeNo });
     if (d.kind !== 'ok') return { kind: 'unknown' };
     if (d.data.RtnMsg === 'error_nopay' || d.data.RtnCode === NO_TRADE_CODE) return { kind: 'none' };
-    if (d.data.RtnMsg || !d.data.RtnValue) return { kind: 'unknown' }; // error_Stop／error／空
+    if (d.data.RtnMsg || !d.data.RtnValue) return { kind: 'unknown', rtnMsg: String(d.data.RtnMsg ?? '') }; // error_Stop／error／空
     const t = await ecpayment('/1.0.0/Cashier/QueryTrade', { MerchantID: a.merchantId, MerchantTradeNo: a.merchantTradeNo });
     if (t.kind !== 'ok') return { kind: 'unknown' };
     if (t.data.RtnCode === NO_TRADE_CODE) return { kind: 'none' };
     if (t.data.RtnCode !== 1 || !t.data.OrderInfo?.TradeNo) return { kind: 'unknown' };
-    return { kind: 'found', tradeNo: String(t.data.OrderInfo.TradeNo), status: mapCardStatus(d.data.RtnValue.Status), amount: Number(d.data.RtnValue.Amount ?? t.data.OrderInfo.TradeAmt ?? 0) };
+    const cd = readCloseData(d.data, mapCardStatus(d.data.RtnValue.Status));
+    return { kind: 'found', tradeNo: String(t.data.OrderInfo.TradeNo), status: cd.status, amount: Number(d.data.RtnValue.Amount ?? t.data.OrderInfo.TradeAmt ?? 0), refunded: cd.refunded };
   }
 
-  async function doAction(ref: { merchantId: string; merchantTradeNo: string; tradeNo: string; amount: number }, action: 'C' | 'R' | 'E' | 'N'): Promise<'ok' | 'rejected' | 'unknown'> {
+  async function doAction(ref: { merchantId: string; merchantTradeNo: string; tradeNo: string; amount: number }, action: 'C' | 'R' | 'E' | 'N'): Promise<{ r: 'ok' | 'rejected' | 'unknown'; rtnCode: number | null; rtnMsg: string }> {
     const r = await ecpayment('/1.0.0/Credit/DoAction', { MerchantID: ref.merchantId, MerchantTradeNo: ref.merchantTradeNo, TradeNo: ref.tradeNo, Action: action, TotalAmount: ref.amount });
-    if (r.kind === 'unknown') return 'unknown';
-    return r.kind === 'ok' && r.data.RtnCode === 1 ? 'ok' : 'rejected';
+    if (r.kind === 'unknown') return { r: 'unknown', rtnCode: null, rtnMsg: unknownMsg(r.error) };
+    if (r.kind === 'rejected') return { r: 'rejected', rtnCode: null, rtnMsg: r.transMsg };
+    return { r: r.data.RtnCode === 1 ? 'ok' : 'rejected', rtnCode: codeOf(r.data.RtnCode), rtnMsg: String(r.data.RtnMsg ?? '') };
   }
 
   /** 做完動作（或動作被拒）後再查一次，以綠界的實際狀態為準 */
@@ -180,41 +208,73 @@ export function createEcpayClient(cfg: EcpayConfig, fetchFn: typeof fetch = fetc
     if (q.status === 'to_capture' || q.status === 'captured') return { kind: 'done' };      // 自動關帳可能已先動手
     if (q.status !== 'authorized' && q.status !== 'op_canceled') return { kind: 'failed', rtnMsg: `status ${q.status}` };
     const a = await doAction({ ...ref, tradeNo: q.tradeNo, amount: q.amount || ref.amount }, 'C');
-    if (a === 'unknown') return { kind: 'unknown' };
+    if (a.r === 'unknown') return { kind: 'unknown' };
     return verified(ref, ['to_capture', 'captured'], 'capture rejected');
   }
 
-  /** 放棄這筆授權：依綠界現況選動作（35642）——已授權 N；要關帳 E 再 N；已關帳 R；已取消／沒授權／沒有這筆 → 已完成 */
+  /** 放棄這筆授權（結帳失敗、請款途中改放棄）：跟退款同一套依綠界現況選動作的邏輯（35642）——已授權 N；要關帳 E 再 N；已關帳 R
+   *  （退刷前後讀關帳明細，C-13）；已取消／沒授權／沒有這筆 → 已完成。 */
   async function abandon(ref: { merchantId: string; merchantTradeNo: string; amount: number }): Promise<ActionResult> {
+    const r = await settle(ref, true, 0);
+    if (r.kind === 'done') return { kind: 'done' };
+    if (r.kind === 'unknown') return { kind: 'unknown' };
+    return { kind: 'failed', rtnMsg: r.rtnMsg || `${r.action} rejected` };
+  }
+
+  /** 已付款訂單的全額退款（35637 全額退款流程）。動作前先查、動作後再查，以綠界狀態為準（R-RF12）。
+   *  跟結帳的 abandon 唯一的差別：綠界「查無這筆」不算完成——已付款的訂單一定有已請款的交易，查無代表資料或特約商店編號不對，
+   *  要重試、滿 36 小時轉人工，不能把沒退的錢記成已退款（spec §6.2 原寫「查無＝完成」，t7 整合測試發現不安全）。 */
+  const refund = (ref: { merchantId: string; merchantTradeNo: string; amount: number }) => settle(ref, false, 0);
+
+  async function settle(ref: { merchantId: string; merchantTradeNo: string; amount: number }, noneIsDone: boolean, depth: number): Promise<RefundResult> {
     const q = await inquire(ref);
-    if (q.kind === 'unknown') return { kind: 'unknown' };
-    if (q.kind === 'none') return { kind: 'done' };
+    if (q.kind === 'unknown') {
+      if (q.rtnMsg === 'error_Stop') return { kind: 'failed', action: 'query', rtnCode: null, rtnMsg: q.rtnMsg, ecpayStatus: null, hint: 'stop' };
+      return { kind: 'unknown', action: 'query', reason: q.rtnMsg || 'query' };
+    }
+    if (q.kind === 'none') {
+      return noneIsDone ? { kind: 'done', method: 'void', ecpayStatus: 'none' }
+        : { kind: 'failed', action: 'query', rtnCode: null, rtnMsg: 'trade not found', ecpayStatus: null, hint: null };
+    }
     const full = { ...ref, tradeNo: q.tradeNo, amount: q.amount || ref.amount };
+    const statusOf = (v: Inquiry) => (v.kind === 'found' ? v.status : null);
+    if (q.refunded >= full.amount) return { kind: 'done', method: 'card_refund', ecpayStatus: q.status };
     switch (q.status) {
-      case 'cancelled': case 'unauthorized': return { kind: 'done' };
+      case 'cancelled': case 'unauthorized': return { kind: 'done', method: 'void', ecpayStatus: q.status };
       case 'authorized': case 'op_canceled': {
         const n = await doAction(full, 'N');
-        if (n === 'unknown') return { kind: 'unknown' };
-        return verified(ref, ['cancelled'], 'abandon rejected');
+        if (n.r === 'unknown') return { kind: 'unknown', action: 'N', reason: n.rtnMsg };
+        const v = await inquire(ref);
+        if (v.kind === 'unknown') return { kind: 'unknown', action: 'N', reason: 'verify' };
+        if (statusOf(v) === 'cancelled') return { kind: 'done', method: 'void', ecpayStatus: 'cancelled' };
+        return { kind: 'failed', action: 'N', rtnCode: n.rtnCode, rtnMsg: n.rtnMsg, ecpayStatus: statusOf(v), hint: null };
       }
       case 'to_capture': {
+        // 全額：先取消關帳（E）再放棄（N）。系統自動關帳時 E 要在授權隔日 6:00 後才會成功（35642），被拒就交給重試
         const e = await doAction(full, 'E');
-        if (e === 'unknown') return { kind: 'unknown' };
-        if (e === 'rejected') return verified(ref, ['cancelled', 'op_canceled'], 'cancel-close rejected').then((v) => v.kind === 'done' ? abandon(ref) : v);
-        const n = await doAction(full, 'N');
-        if (n === 'unknown') return { kind: 'unknown' };
-        return verified(ref, ['cancelled'], 'abandon rejected');
+        if (e.r === 'unknown') return { kind: 'unknown', action: 'E', reason: e.rtnMsg };
+        if (e.r === 'rejected') {
+          const v = await inquire(ref);
+          if (v.kind === 'unknown') return { kind: 'unknown', action: 'E', reason: 'verify' };
+          if (depth < 1 && (statusOf(v) === 'op_canceled' || statusOf(v) === 'cancelled')) return settle(ref, noneIsDone, depth + 1);
+          return { kind: 'failed', action: 'E', rtnCode: e.rtnCode, rtnMsg: e.rtnMsg, ecpayStatus: statusOf(v), hint: null };
+        }
+        return depth < 1 ? settle(ref, noneIsDone, depth + 1) : { kind: 'unknown', action: 'E', reason: 'loop' };
       }
       case 'captured': {
-        const rr = await doAction(full, 'R');
-        if (rr === 'unknown') return { kind: 'unknown' };
-        return rr === 'ok' ? { kind: 'done' } : { kind: 'failed', rtnMsg: 'refund rejected' };
+        // C-13：退刷前後都讀關帳明細。已經有全額退刷（前一次 R 回應不明但其實成功）就不再發 R——第二次 R 會被綠界以超過訂單金額拒絕
+        const r = await doAction(full, 'R');
+        if (r.r === 'ok') return { kind: 'done', method: 'card_refund', ecpayStatus: 'captured' };
+        const v = await inquire(ref);
+        if (v.kind === 'found' && v.refunded >= full.amount) return { kind: 'done', method: 'card_refund', ecpayStatus: v.status };
+        if (r.r === 'unknown' || v.kind === 'unknown') return { kind: 'unknown', action: 'R', reason: r.r === 'unknown' ? r.rtnMsg : 'verify' };
+        return { kind: 'failed', action: 'R', rtnCode: r.rtnCode, rtnMsg: r.rtnMsg, ecpayStatus: statusOf(v), hint: looksLikeBalanceShortage(r.rtnMsg) ? 'balance' : null };
       }
-      default: return { kind: 'failed', rtnMsg: `status ${q.status}` };
+      default: return { kind: 'failed', action: 'query', rtnCode: null, rtnMsg: `status ${q.status}`, ecpayStatus: q.status, hint: null };
     }
   }
 
-  return { getBindToken, createBindCard, queryBindCards, deleteBindCard, authorize, inquire, capture, abandon, now: () => tw(nowMs()) };
+  return { getBindToken, createBindCard, queryBindCards, deleteBindCard, authorize, inquire, capture, abandon, refund, now: () => tw(nowMs()) };
 }
 
 export type EcpayClient = ReturnType<typeof createEcpayClient>;

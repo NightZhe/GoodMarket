@@ -1,5 +1,7 @@
-// POST（標頭 x-cron-secret）→ { ok, expiredOrders, resolvedGroups, stillConfirming, voidedBind, revoked, bindSynced }
-// 排程用（pg_cron 每分鐘）：待付款逾時作廢並退庫存、補償確認中的付款、放棄綁卡驗證授權、重試撤銷卡片、反查沒收到結果的綁卡。
+// POST（標頭 x-cron-secret）→ { ok, expiredOrders, resolvedGroups, stillConfirming, autoAccepted, refunded, refundRetry, refundManual, refundErrors,
+//                               refundBlackout, voidedBind, revoked, bindSynced }
+// 排程用（pg_cron 每分鐘）：待付款逾時作廢並退庫存、補償確認中的付款、取消申請逾時自動同意、已取消訂單的退款（放棄授權／退刷）、
+// 放棄綁卡驗證授權、重試撤銷卡片、反查沒收到結果的綁卡。
 import { admin, json, PayError, serve } from '../_shared/http.ts';
 import { loadConfig } from '../_shared/env.ts';
 import { createEcpayClient } from '../_shared/ecpayClient.ts';

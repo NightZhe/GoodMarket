@@ -7,6 +7,8 @@ import { driveGroup, type DriveResult } from './paymentRunner.ts';
 import { createSupabaseStore } from './supabaseStore.ts';
 import { asUser, PayError, type AuthedUser } from './http.ts';
 import { finishDelete, syncBindByQuery, voidBindTransaction } from './bindFlow.ts';
+import { sweepRefunds } from './refundRunner.ts';
+import { createRefundStore } from './refundStore.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (v: unknown): v is string => typeof v === 'string' && UUID.test(v);
@@ -71,10 +73,12 @@ export async function handlePayNotification(db: SupabaseClient, data: Record<str
     .eq('merchant_trade_no', no).eq('state', 'calling');
 }
 
-/** 排程（pg_cron 每分鐘，或手動）：逾時作廢、補償確認中的付款、放棄綁卡驗證授權、重試撤銷卡片、反查沒收到結果的綁卡 */
+/** 排程（pg_cron 每分鐘，或手動）：逾時作廢、補償確認中的付款、取消申請逾時自動同意與退款（spec-refund.md）、
+ *  放棄綁卡驗證授權、重試撤銷卡片、反查沒收到結果的綁卡。退款不看功能開關（R-RF9：關開關只停新的線上付款）。 */
 export async function sweep(db: SupabaseClient, cfg: AppConfig, ecpay: EcpayClient) {
   const deadline = Date.now() + 100_000;
-  const out = { expiredOrders: 0, resolvedGroups: 0, stillConfirming: 0, voidedBind: 0, revoked: 0, bindSynced: 0 };
+  const out = { expiredOrders: 0, resolvedGroups: 0, stillConfirming: 0, autoAccepted: 0, refunded: 0, refundRetry: 0, refundManual: 0, refundErrors: 0,
+    refundBlackout: false, voidedBind: 0, revoked: 0, bindSynced: 0 };
 
   const ex = await db.rpc('expire_pending_online_orders', { p_limit: 200 });
   if (ex.error) throw new Error('expire: ' + ex.error.message);
@@ -87,6 +91,13 @@ export async function sweep(db: SupabaseClient, cfg: AppConfig, ecpay: EcpayClie
     const r = await resolveGroup(db, ecpay, id, null);
     if (r) { if (r.outcome === 'confirming') out.stillConfirming++; else out.resolvedGroups++; }
   }
+
+  // 取消申請逾時 48 小時 → 自動同意（D27＝A），訂單變已取消＋退款處理中；接著同一輪就跑退款
+  const aa = await db.rpc('refund_auto_accept_due', { p_limit: 100 });
+  if (aa.error) throw new Error('auto-accept: ' + aa.error.message);
+  out.autoAccepted = aa.data as number;
+  const rf = await sweepRefunds({ store: createRefundStore(db), gateway: ecpay, now: Date.now }, { limit: 50, deadlineMs: deadline });
+  out.refunded = rf.refunded; out.refundRetry = rf.retry; out.refundManual = rf.manual; out.refundErrors = rf.errors; out.refundBlackout = rf.blackout;
 
   const { data: voids } = await db.from('ecpay_bind_attempts').select('merchant_trade_no').eq('void_state', 'pending').lt('void_failures', 20).limit(50);
   for (const v of (voids ?? []) as any[]) {

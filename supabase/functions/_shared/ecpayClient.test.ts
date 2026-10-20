@@ -68,7 +68,7 @@ describe('inquire（查這筆授權在綠界的樣子）', () => {
     const { client } = mk((p) => p.includes('Cashier')
       ? { RtnCode: 1, OrderInfo: { TradeNo: 'E9', TradeAmt: 120 } }
       : { RtnMsg: '', RtnValue: { Status: 'Authorized', Amount: 120, ClsAmt: 0 }, CloseData: {} });
-    expect(await client.inquire({ merchantId: '3002607', merchantTradeNo: 'T1' })).toEqual({ kind: 'found', tradeNo: 'E9', status: 'authorized', amount: 120 });
+    expect(await client.inquire({ merchantId: '3002607', merchantTradeNo: 'T1' })).toEqual({ kind: 'found', tradeNo: 'E9', status: 'authorized', amount: 120, refunded: 0 });
   });
 
   it.each([['To be captured', 'to_capture'], ['Captured', 'captured'], ['Operation canceled', 'op_canceled'], ['Cancelled', 'cancelled'], ['Canceled', 'cancelled'], ['Unauthorized', 'unauthorized']])('狀態 %s → %s', async (raw, mapped) => {
@@ -224,5 +224,127 @@ describe('createBindCard（35596）', () => {
   it('逾時 → unknown（要靠查詢綁卡清單反查）', async () => {
     const { client } = mk(() => 'timeout');
     expect((await client.createBindCard(args)).kind).toBe('unknown');
+  });
+});
+
+/**
+ * 退款用的綠界交易模擬：照 35637／35642／35662 的描述保存「主狀態」與關帳明細 CloseData。
+ * 退刷 R 會在明細加一筆負向金額（狀態「要關帳」），而且主狀態跟著變成「要關帳」——
+ * 這正是 35637 要求「看明細裡最後一筆正向金額的狀態」的原因（只看主狀態會誤做 E＋N）。
+ * 負向明細的表示法是依文件推論（未查證，正式環境 AC-RF30 實刷時確認）。
+ */
+function refundTrade(initial: string, opt: { rTimeout?: boolean; rReject?: string; eReject?: boolean; rAppliedButRejected?: boolean; queryDownAfterR?: number } = {}) {
+  let queryDown = 0;
+  let status = initial;
+  const close: { Status: string; Amount: number; DateTime: string }[] =
+    ['To be captured', 'Captured', 'Operation canceled'].includes(initial) ? [{ Status: initial, Amount: 120, DateTime: '2026/10/20 10:00:00' }] : [];
+  const actions: string[] = [];
+  const positive = () => [...close].reverse().find((c) => c.Amount > 0);
+  const refunded = () => close.filter((c) => c.Amount < 0).reduce((s, c) => s - c.Amount, 0);
+  return {
+    actions, close, get status() { return status; },
+    handler: ((p: string, d: Record<string, any>) => {
+      if (p.includes('QueryTrade') && queryDown > 0) { queryDown--; return 'timeout'; }
+      if (p.includes('Cashier/QueryTrade')) return { RtnCode: 1, OrderInfo: { TradeNo: 'E9', TradeAmt: 120 } };
+      if (p.includes('CreditDetail/QueryTrade')) return { RtnMsg: '', RtnValue: { Status: status, Amount: 120, ClsAmt: 120 - refunded() }, CloseData: close.length ? close : {} };
+      if (p.includes('Credit/DoAction')) {
+        actions.push(d.Action);
+        const eff = positive()?.Status ?? status;
+        if (d.Action === 'N' && (eff === 'Authorized' || eff === 'Operation canceled' || status === 'Authorized')) { status = 'Cancelled'; return { RtnCode: 1, RtnMsg: 'ok' }; }
+        if (d.Action === 'E' && eff === 'To be captured' && !opt.eReject) { positive()!.Status = 'Operation canceled'; status = 'Operation canceled'; return { RtnCode: 1, RtnMsg: 'ok' }; }
+        if (d.Action === 'R' && eff === 'Captured') {
+          if (opt.rReject) return { RtnCode: 10000099, RtnMsg: opt.rReject };
+          if (refunded() + d.TotalAmount > 120) return { RtnCode: 10000002, RtnMsg: '更新失敗.(error_amount)' };
+          close.push({ Status: 'To be captured', Amount: -d.TotalAmount, DateTime: '2026/10/21 10:00:00' }); status = 'To be captured';
+          queryDown = opt.queryDownAfterR ?? 0;
+          if (opt.rTimeout) return 'timeout';
+          if (opt.rAppliedButRejected) return { RtnCode: 10000002, RtnMsg: '更新失敗.(error_amount)' };
+          return { RtnCode: 1, RtnMsg: 'ok' };
+        }
+        return { RtnCode: 10000002, RtnMsg: '更新失敗.(error_closed)' };
+      }
+      return { RtnCode: 0 };
+    }) as Parameters<typeof fakeEcpay>[0],
+  };
+}
+
+describe('refund（已付款訂單全額退款：依綠界狀態選 N／E＋N／R，並在 R 前後讀關帳明細）', () => {
+  it('已授權 → N，方式＝取消授權', async () => {
+    const t = refundTrade('Authorized'); const { client } = mk(t.handler);
+    expect(await client.refund(ref)).toMatchObject({ kind: 'done', method: 'void' });
+    expect(t.actions).toEqual(['N']); expect(t.status).toBe('Cancelled');
+  });
+  it('要關帳（付款當天）→ E 再 N，方式＝取消授權（AC-RF15）', async () => {
+    const t = refundTrade('To be captured'); const { client } = mk(t.handler);
+    expect(await client.refund(ref)).toMatchObject({ kind: 'done', method: 'void' });
+    expect(t.actions).toEqual(['E', 'N']); expect(t.status).toBe('Cancelled');
+  });
+  it('已關帳 → 退刷 R 全額，方式＝退刷（AC-RF16）', async () => {
+    const t = refundTrade('Captured'); const { client, calls } = mk(t.handler);
+    expect(await client.refund(ref)).toMatchObject({ kind: 'done', method: 'card_refund' });
+    expect(t.actions).toEqual(['R']);
+    expect(calls.find((c) => c.data.Action === 'R')!.data).toMatchObject({ MerchantID: '3002607', MerchantTradeNo: 'T1', TradeNo: 'E9', TotalAmount: 120 });
+  });
+  it('C-13：R 回應逾時、其實已退成功 → 動作後馬上讀明細看到退刷 → 退刷完成', async () => {
+    const t = refundTrade('Captured', { rTimeout: true }); const { client } = mk(t.handler);
+    expect(await client.refund(ref)).toMatchObject({ kind: 'done', method: 'card_refund' });
+    expect(t.actions).toEqual(['R']);
+  });
+  it('C-13：R 逾時而且動作後查詢也失敗 → 這次結果不明；下一輪先讀明細看到退刷 → 記為退刷完成，不發第二次 R、也不誤做 E（AC-RF17）', async () => {
+    const t = refundTrade('Captured', { rTimeout: true, queryDownAfterR: 1 }); const { client } = mk(t.handler);
+    expect(await client.refund(ref)).toMatchObject({ kind: 'unknown', action: 'R' });
+    // 退刷後主狀態變成「要關帳」（退刷那一筆），但最後一筆正向明細仍是「已關帳」
+    expect(t.status).toBe('To be captured');
+    expect(await client.refund(ref)).toMatchObject({ kind: 'done', method: 'card_refund' });
+    expect(t.actions).toEqual(['R']);
+  });
+  it('C-13：R 被拒，但動作後讀明細發現已有全額退刷（例如前一次其實成功）→ 退刷完成，不記成失敗', async () => {
+    const t = refundTrade('Captured', { rAppliedButRejected: true }); const { client } = mk(t.handler);
+    expect(await client.refund(ref)).toMatchObject({ kind: 'done', method: 'card_refund' });
+    expect(t.actions).toEqual(['R']);
+  });
+  it('R 被拒且明細沒有退刷，綠界訊息是餘額不足 → failed，hint＝balance（AC-RF20）', async () => {
+    const t = refundTrade('Captured', { rReject: '帳戶餘額不足，無法退刷' }); const { client } = mk(t.handler);
+    expect(await client.refund(ref)).toMatchObject({ kind: 'failed', action: 'R', rtnCode: 10000099, hint: 'balance' });
+  });
+  it('R 被拒、其他原因 → failed，hint＝null（交給重試）', async () => {
+    const t = refundTrade('Captured', { rReject: 'error_other' }); const { client } = mk(t.handler);
+    expect(await client.refund(ref)).toMatchObject({ kind: 'failed', action: 'R', hint: null });
+  });
+  it('E 被拒（系統自動關帳，授權隔日 6:00 前）且仍是要關帳 → failed（action E，交給重試，不是人工）；之後變已關帳 → 改走 R 成功（AC-RF18）', async () => {
+    const t = refundTrade('To be captured', { eReject: true }); const { client } = mk(t.handler);
+    expect(await client.refund(ref)).toMatchObject({ kind: 'failed', action: 'E', hint: null, ecpayStatus: 'to_capture' });
+    t.close[0].Status = 'Captured'; // 綠界批次請款完成
+    expect(await client.refund(ref)).toMatchObject({ kind: 'done', method: 'card_refund' });
+    expect(t.actions).toEqual(['E', 'R']);
+  });
+  it('綠界查無這筆 → 不能當成退款完成（已付款的訂單一定有已請款的交易；查無＝資料或特約商店編號不對）→ failed，交給重試／36 小時轉人工', async () => {
+    // t7 整合測試抓到：特約商店編號不對時綠界測試環境回 10000185，舊規則（查無＝完成）會把沒退的錢記成已退款
+    const none = mk(() => ({ RtnCode: 10000185, RtnMsg: 'Cant not find the trade data' }));
+    expect(await none.client.refund(ref)).toMatchObject({ kind: 'failed', action: 'query', hint: null, ecpayStatus: null });
+    expect(none.calls.some((c) => c.path.includes('DoAction'))).toBe(false);
+  });
+  it('結帳的「放棄」維持舊規則：查無這筆 → 完成（授權可能根本沒成立）', async () => {
+    const none = mk(() => ({ RtnCode: 10000185, RtnMsg: 'Cant not find the trade data' }));
+    expect(await none.client.abandon(ref)).toEqual({ kind: 'done' });
+  });
+  it('綠界已取消 → 視為完成（取消授權），不打任何動作', async () => {
+    const t = refundTrade('Cancelled'); const { client } = mk(t.handler);
+    expect(await client.refund(ref)).toMatchObject({ kind: 'done', method: 'void' }); expect(t.actions).toEqual([]);
+  });
+  it('查詢回 error_Stop（查無商家或商家已到期）→ failed，hint＝stop（要人工）', async () => {
+    const { client } = mk(() => ({ RtnMsg: 'error_Stop' }));
+    expect(await client.refund(ref)).toMatchObject({ kind: 'failed', action: 'query', hint: 'stop' });
+  });
+  it('查詢逾時 → unknown，不打任何動作', async () => {
+    const { client, calls } = mk(() => 'timeout');
+    expect(await client.refund(ref)).toMatchObject({ kind: 'unknown', action: 'query' });
+    expect(calls.some((c) => c.path.includes('DoAction'))).toBe(false);
+  });
+  it('結帳的「放棄」也受惠於 C-13：已關帳且明細已有全額退刷 → abandon 直接完成，不發第二次 R', async () => {
+    const t = refundTrade('Captured', { rTimeout: true, queryDownAfterR: 1 }); const { client } = mk(t.handler);
+    expect((await client.abandon(ref)).kind).toBe('unknown');
+    expect(await client.abandon(ref)).toEqual({ kind: 'done' });
+    expect(t.actions).toEqual(['R']);
   });
 });
