@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fingerprint, importBytes, INGEST_CHUNK, manualFetch, runTick, type ImportCounts, type IngestRow, type PayoutJob, type PayoutStore, type TickClaim } from './payoutRunner.ts';
+import { contentHash, fingerprint, importBytes, INGEST_CHUNK, manualFetch, runTick, type ImportCounts, type IngestRow, type PayoutJob, type PayoutStore, type TickClaim } from './payoutRunner.ts';
 import type { DownloadRequest, DownloadResult } from './payoutClient.ts';
 import { parsePayoutFile } from './payoutFile.ts';
 
@@ -59,6 +59,22 @@ describe('fingerprint（§6.3）', () => {
     expect(await fingerprint('3999001', ref1)).not.toBe(await fingerprint('3999001', ref2));
     expect(await fingerprint('3999001', pos)).not.toBe(await fingerprint('3999002', pos));
     expect(await fingerprint('3999001', pos)).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe('fingerprint／contentHash（小q BUG-1／BUG-2）', () => {
+  const base = { line: 2, occurrence: 1, merchantTradeNo: 'P261020100001a1b2c3d', ecpayTradeNo: '2610201000011001', tradeAt: '2026-10-20 10:00:01', payMethod: '信用卡', feeRate: '2.45%',
+    settleDate: '2026-10-21', payoutDate: null, amount: 1200, gatewayFee: '30.40', platformFee: 0, refundAmount: 0, netAmount: 1170, processingFee: '1.0000' };
+  it('同一筆交易：撥款日（與手續費等綠界之後才補的欄位）從空變有值 → 指紋相同、contentHash 不同', async () => {
+    const later = { ...base, line: 7, payoutDate: '2026-10-28', gatewayFee: '30.41' };
+    expect(await fingerprint('3999001', later)).toBe(await fingerprint('3999001', base));
+    expect(await contentHash(later)).not.toBe(await contentHash(base));
+    expect(await contentHash({ ...base, line: 9 })).toBe(await contentHash(base));
+  });
+  it('交易編號、金額、結算日、交易時間、第幾次出現不同 → 不同指紋', async () => {
+    const f = await fingerprint('3999001', base);
+    for (const d of [{ ecpayTradeNo: 'X' }, { amount: -1200 }, { settleDate: '2026-10-22' }, { tradeAt: '2026-10-20 10:00:02' }, { occurrence: 2 }])
+      expect(await fingerprint('3999001', { ...base, ...d })).not.toBe(f);
   });
 });
 

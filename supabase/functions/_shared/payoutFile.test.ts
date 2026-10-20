@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { parsePayoutFile } from './payoutFile.ts';
+import { maskCardLike, parsePayoutFile } from './payoutFile.ts';
 
 const fx = (name: string) => new Uint8Array(readFileSync(new URL(`./fixtures/payout/${name}`, import.meta.url)));
 
@@ -80,5 +80,41 @@ describe('parsePayoutFile：35670 對帳檔（綠界實際格式：BOM、CRLF、
   it('引號裡有逗號、"" 跳脫', () => {
     const csv = new TextEncoder().encode('特店交易編號,綠界交易編號,撥款日期,交易金額\n"P,1","T""1",,"1,200"\n');
     expect(parsePayoutFile(csv)).toMatchObject({ ok: true, rows: [{ merchantTradeNo: 'P,1', ecpayTradeNo: 'T"1', payoutDate: null, amount: 1200 }] });
+  });
+
+  // ── 小q 驗收退回（qa-report-payout.md）──
+  const H4 = '特店交易編號,綠界交易編號,交易日期,撥款日期,交易金額,金流手續費';
+  const enc = (rows: string[]) => new TextEncoder().encode([H4, ...rows].join('\n') + '\n');
+  it('BUG-3：放不進資料庫的值在解析層就擋成壞列（D43＝A：同檔其他列照常）——金額超過 int、時間 25:61、手續費整數超過 10 位', () => {
+    const r = parsePayoutFile(enc([
+      'P1,T1,2026/10/20 10:00:00,,99999999999,1.00',
+      'P2,T2,2026/10/20 25:61:00,,100,1.00',
+      'P3,T3,2026/10/20 10:00:00,,100,12345678901.5',
+      'P4,T4,2026/10/20 10:00:00,2026/10/20 24:00:00,100,1.00',
+      'P5,T5,2026/10/20 23:59:59,,2147483647,9999999999.9999',
+    ]));
+    if (!r.ok) throw new Error(r.code);
+    expect(r.invalid.map((x) => [x.line, x.reason])).toEqual([[2, '交易金額格式不正確'], [3, '交易日期格式不正確'], [4, '金流手續費格式不正確'], [5, '撥款日期格式不正確']]);
+    expect(r.rows.map((x) => x.merchantTradeNo)).toEqual(['P5']);
+  });
+  it('BUG-4：某一列格數跟表頭不同（銀行名的逗號沒加引號）→ 壞列，原始欄位裡像卡號的字串一律遮罩', () => {
+    const r = parsePayoutFile(fx('card-columns-misaligned.csv'));
+    if (!r.ok) throw new Error(r.code);
+    expect(r.rows.map((x) => x.merchantTradeNo)).toEqual(['P261020100001a1b2c3d']);
+    expect(r.invalid).toEqual([expect.objectContaining({ line: 3, reason: '這一列的欄位數（16）跟表頭（15）不同' })]);
+    const dump = JSON.stringify(r);
+    expect(dump).not.toMatch(/431195|\*{4}/);
+    expect(dump).toContain('[已遮罩]');
+  });
+  it('BUG-1：occurrence 只看「這一列是哪一筆交易」的欄位（不看綠界之後才補的撥款日、手續費）', () => {
+    const a = parsePayoutFile(enc(['P1,T1,2026/10/20 10:00:00,,-200,-4.9', 'P1,T1,2026/10/20 10:00:00,2026/10/29,-200,-4.9']));
+    if (!a.ok) throw new Error(a.code);
+    expect(a.rows.map((x) => x.occurrence)).toEqual([1, 2]);
+  });
+  it('maskCardLike：前六後四（含空白、連字號）與 Luhn 合法的 13～19 位數字遮罩；日期、金額、綠界交易編號（Luhn 不合）不動', () => {
+    expect(maskCardLike('431195******1111')).toBe('[已遮罩]');
+    expect(maskCardLike('卡號 4311 95** **** 2222 結束')).toBe('卡號 [已遮罩] 結束');
+    expect(maskCardLike('4111111111111111')).toBe('[已遮罩]');
+    for (const v of ['2026/10/20 10:00:01', '-1,200', '2610201000011001', '2.45%', 'P261020100001a1b2c3d']) expect(maskCardLike(v)).toBe(v);
   });
 });

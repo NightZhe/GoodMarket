@@ -1,18 +1,20 @@
 // 撥款對帳的執行器（spec-payout-reconcile.md §7；工單 PR-B3）。只管流程：取工作 → 下載 → 解析 → 分段送進資料庫 → 記結果與重試。
 // 「這一列對到哪張訂單、算哪一類」全部在資料庫（payout_ingest／payout_classify，§5），同一套規則給排程、人工重抓、人工匯入共用。
-// 冪等：每一列有指紋（§6.3＋同檔第幾次出現），資料庫以指紋去重；所以中途失敗再跑一次，結果跟只跑一次相同（AC-R13）。
+// 冪等：每一列有指紋（＝這一列是哪一筆交易＋同檔第幾次出現）與內容雜湊（全部欄位）。資料庫以指紋找同一列：
+// 內容相同＝duplicate；內容不同（綠界之後補上撥款日、更正手續費）＝updated，更新那一列（小q BUG-1／BUG-2）。中途失敗再跑一次，結果跟只跑一次相同（AC-R13）。
 // 任何失敗都不動既有的撥款資料（§7.2）：失敗只會讓這次匯入少寫，不會刪或改已寫入的列。
 import { parsePayoutFile, type InvalidRow, type PayoutRow } from './payoutFile.ts';
 import { classifyEcpayMessage, type DownloadRequest, type DownloadResult } from './payoutClient.ts';
 
-export type RowClass = 'matched' | 'duplicate' | 'foreign' | 'unmatched' | 'not_captured' | 'bind_auth' | 'key_conflict' | 'amount_mismatch' | 'invalid';
+export type RowClass = 'matched' | 'updated' | 'duplicate' | 'foreign' | 'unmatched' | 'not_captured' | 'bind_auth' | 'key_conflict' | 'amount_mismatch' | 'invalid';
 export type ImportCounts = Partial<Record<RowClass | 'ordersChanged', number>>;
 export type ErrorCode = 'ECPAY_UNAVAILABLE' | 'RATE_LIMITED' | 'ECPAY_DENIED' | 'PARSE_HEADER' | 'PARSE_ENCODING' | 'INTERNAL';
 export type Trigger = 'schedule' | 'manual_fetch' | 'manual_file';
 
 export interface PayoutJob { id: string; merchantId: string; dateType: 'settle' | 'payout'; from: string; to: string; attempts: number }
 export type TickClaim = { state: 'job'; job: PayoutJob } | { state: 'disabled' | 'halted' | 'idle' } | { state: 'wait'; retryAfterSeconds: number };
-export type IngestRow = ({ kind: 'row' } & PayoutRow & { fp: string }) | ({ kind: 'invalid' } & InvalidRow & { fp: string });
+/** fp＝指紋（同一列的身分）；ch＝內容雜湊（任何欄位變了就不同） */
+export type IngestRow = ({ kind: 'row' } & PayoutRow & { fp: string; ch: string }) | ({ kind: 'invalid' } & InvalidRow & { fp: string; ch: string });
 
 export interface ImportMeta { trigger: Trigger; merchantId: string; dateType: 'settle' | 'payout' | null; from: string | null; to: string | null; jobId: string | null }
 export interface ImportFinish {
@@ -49,11 +51,19 @@ export const TICK_MAX_WAIT_SECONDS = 15;
 const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 const sha256 = async (bytes: Uint8Array) => hex(await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>));
 
-/** 列指紋：特約商店編號＋這一列所有保留欄位（行號以外）＋同檔第幾次出現 */
+/** 列指紋（§6.3，小q BUG-1 修正後）：特約商店編號＋「這一列是哪一筆交易」（特店交易編號、綠界交易編號、交易時間、結算日、交易金額）＋同檔第幾次出現。
+ *  撥款日、手續費、淨額等綠界之後才補或更正的欄位不在指紋裡（那些變了算同一列「更新」，見 contentHash）。壞列沒有可信的欄位 → 用全部原始欄位 */
 export async function fingerprint(merchantId: string, row: PayoutRow | InvalidRow): Promise<string> {
-  const { line: _line, ...rest } = row as PayoutRow & InvalidRow;
-  const canon = JSON.stringify([merchantId, Object.keys(rest).sort().map((k) => [k, (rest as Record<string, unknown>)[k]])]);
+  const canon = 'reason' in row
+    ? JSON.stringify([merchantId, 'invalid', Object.keys(row.cells).sort().map((k) => [k, row.cells[k]]), row.occurrence])
+    : JSON.stringify([merchantId, row.merchantTradeNo, row.ecpayTradeNo, row.tradeAt, row.settleDate, row.amount, row.occurrence]);
   return sha256(new TextEncoder().encode(canon));
+}
+
+/** 內容雜湊：這一列所有保留欄位（行號以外）。指紋相同、內容雜湊不同＝綠界改了這一列 */
+export async function contentHash(row: PayoutRow | InvalidRow): Promise<string> {
+  const { line: _line, ...rest } = row as PayoutRow & InvalidRow;
+  return sha256(new TextEncoder().encode(JSON.stringify(Object.keys(rest).sort().map((k) => [k, (rest as Record<string, unknown>)[k]]))));
 }
 
 const add = (a: ImportCounts, b: ImportCounts): ImportCounts => {
@@ -75,8 +85,8 @@ async function process(store: PayoutStore, merchantId: string, bytes: Uint8Array
     return { ok: false, code, message: p.message.slice(0, 200), fileBytes, fileSha256, encoding: p.code === 'ECPAY_MESSAGE' ? p.encoding : null };
   }
   const rows: IngestRow[] = [
-    ...(await Promise.all(p.rows.map(async (r) => ({ kind: 'row' as const, ...r, fp: await fingerprint(merchantId, r) })))),
-    ...(await Promise.all(p.invalid.map(async (r) => ({ kind: 'invalid' as const, ...r, fp: await fingerprint(merchantId, r) })))),
+    ...(await Promise.all(p.rows.map(async (r) => ({ kind: 'row' as const, ...r, fp: await fingerprint(merchantId, r), ch: await contentHash(r) })))),
+    ...(await Promise.all(p.invalid.map(async (r) => ({ kind: 'invalid' as const, ...r, fp: await fingerprint(merchantId, r), ch: await contentHash(r) })))),
   ].sort((a, b) => a.line - b.line);
   let counts: ImportCounts = {};
   try {

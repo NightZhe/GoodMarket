@@ -68,4 +68,9 @@ describe('classifyEcpayMessage：綠界回錯的訊息 → 代碼（§7.2）', (
     expect(classifyEcpayMessage('Date range must not be greater than one month.')).toBe('ECPAY_UNAVAILABLE');
     expect(classifyEcpayMessage('System busy')).toBe('ECPAY_UNAVAILABLE');
   });
+  it('小q：不能因為訊息裡剛好有 ip／不符 就判全部停（multiple、equipment、日期格式不符）', () => {
+    for (const m of ['Multiple requests are being processed', 'equipment maintenance', '日期格式不符', 'Description error', 'MerchantTradeNo is required'])
+      expect(classifyEcpayMessage(m)).toBe('ECPAY_UNAVAILABLE');
+    expect(classifyEcpayMessage('Your IP address 1.2.3.4 is not in whitelist')).toBe('ECPAY_DENIED');
+  });
 });

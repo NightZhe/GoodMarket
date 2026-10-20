@@ -9,7 +9,8 @@
 export interface PayoutRow {
   /** 檔案裡的行號（表頭是第 1 行） */
   line: number;
-  /** 同一個檔裡內容完全相同的第幾列（從 1 開始）：讓同日同金額的兩筆部分退款指紋不同（A-7） */
+  /** 同一個檔裡「同一筆交易」（IDENTITY_HEADERS 相同）的第幾列（從 1 開始）：讓同日同金額的兩筆部分退款指紋不同（A-7）。
+   *  不看綠界之後才補的欄位（撥款日、手續費）：同一列今天沒撥款日、明天補上，仍是同一列（小q BUG-1） */
   occurrence: number;
   merchantTradeNo: string;
   ecpayTradeNo: string;
@@ -91,11 +92,22 @@ export function splitCsvLine(line: string): string[] {
   }
 }
 
+/** 決定「這一列是哪一筆交易」的欄位（指紋也只用這幾個，見 payoutRunner.fingerprint）。撥款日、手續費、淨額等綠界會之後補上或更正，不在裡面 */
+export const IDENTITY_HEADERS = ['特店交易編號', '綠界交易編號', '交易日期', '結算日期', '交易金額'];
+
+/** 像卡號的字串一律遮罩（AC-R4、小q BUG-4）：前六後四隱碼（431195******1111，含中間有空白、連字號的寫法；至少兩個隱碼字元），以及 13～19 位、通過 Luhn 檢查的連續數字。
+ *  只用在壞列的原始欄位：錯位的列裡卡號可能落在任何欄名底下，不能靠欄位位置判斷 */
+const luhn = (d: string) => { let sum = 0; for (let i = 0; i < d.length; i++) { let n = Number(d[d.length - 1 - i]); if (i % 2) { n *= 2; if (n > 9) n -= 9; } sum += n; } return sum % 10 === 0; };
+export const maskCardLike = (v: string) => v
+  .replace(/\d[\d -]*[*＊•●][\d *＊•●-]*[*＊•●][\d *＊•●-]*\d/g, '[已遮罩]')
+  .replace(/(?<!\d)\d{13,19}(?!\d)/g, (m) => (luhn(m) ? '[已遮罩]' : m));
+
 const pad = (n: string) => n.padStart(2, '0');
+const timeOk = (h?: string, m?: string, sec?: string) => (h === undefined || Number(h) <= 23) && (m === undefined || Number(m) <= 59) && (sec === undefined || Number(sec) <= 59);
 function toDate(s: string): string | null | undefined {
   if (s === '' || s === '-') return null;
-  const m = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/) ?? s.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (!m) return undefined;
+  const m = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/) ?? s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (!m || !timeOk(m[4], m[5], m[6])) return undefined;
   const [y, mo, d] = [m[1], pad(m[2]), pad(m[3])];
   const t = new Date(`${y}-${mo}-${d}T00:00:00Z`);
   if (Number.isNaN(t.getTime()) || t.getUTCMonth() + 1 !== Number(mo) || t.getUTCDate() !== Number(d)) return undefined;
@@ -104,19 +116,20 @@ function toDate(s: string): string | null | undefined {
 function toDateTime(s: string): string | null | undefined {
   if (s === '' || s === '-') return null;
   const m = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-  if (!m || toDate(`${m[1]}/${m[2]}/${m[3]}`) === undefined) return undefined;
+  if (!m || toDate(`${m[1]}/${m[2]}/${m[3]}`) === undefined || !timeOk(m[4], m[5], m[6])) return undefined;
   return `${m[1]}-${pad(m[2])}-${pad(m[3])} ${pad(m[4] ?? '0')}:${m[5] ?? '00'}:${m[6] ?? '00'}`;
 }
 const numText = (s: string) => s.replace(/[,\s]/g, '');
 function toInt(s: string): number | null | undefined {
   if (s === '' || s === '-') return null;
   const t = numText(s);
-  return /^-?\d{1,12}$/.test(t) ? Number(t) : undefined;
+  // 資料庫欄位是 integer（±2,147,483,647）：放不進去的值在這裡就判壞列，不讓整段寫入失敗（小q BUG-3）
+  return /^-?\d{1,10}$/.test(t) && Math.abs(Number(t)) <= 2_147_483_647 ? Number(t) : undefined;
 }
 function toDecimal(s: string): string | null | undefined {
   if (s === '' || s === '-') return null;
   const t = numText(s);
-  return /^-?\d{1,12}(\.\d{1,6})?$/.test(t) ? t : undefined;
+  return /^-?\d{1,10}(\.\d{1,4})?$/.test(t) ? t : undefined;   // 資料庫是 numeric(14,4)
 }
 
 /** 綠界的錯誤列：認得的欄位裡只有一格不是「-」，那一格就是訊息 */
@@ -145,16 +158,17 @@ export function parsePayoutFile(bytes: Uint8Array): ParseResult {
     const raw = splitCsvLine(lines[n]);
     const cells: Record<string, string> = {};
     for (const c of COLUMNS) if (index.has(c.field)) cells[c.header] = raw[index.get(c.field)!] ?? '';
+    const widthError = raw.length !== header.length ? `這一列的欄位數（${raw.length}）跟表頭（${header.length}）不同` : null;
     if (totalRows === 0) {
       const msg = ecpayMessage(cells);
       if (msg) return { ok: false, code: 'ECPAY_MESSAGE', message: msg, encoding: dec.encoding };
     }
     totalRows++;
-    const key = JSON.stringify(cells);
+    const key = JSON.stringify(IDENTITY_HEADERS.map((h) => cells[h] ?? null));
     const occurrence = (seen.get(key) ?? 0) + 1;
     seen.set(key, occurrence);
     const row: Record<string, unknown> = { line: n + 1, occurrence };
-    let reason: string | null = null;
+    let reason: string | null = widthError;
     for (const c of COLUMNS) {
       const s = cells[c.header];
       if (s === undefined) { row[c.field] = null; continue; }
@@ -164,7 +178,7 @@ export function parsePayoutFile(bytes: Uint8Array): ParseResult {
       if (v === null && c.required && c.field !== 'payoutDate') { reason ??= `${c.header}是空的`; continue; }
       row[c.field] = v;
     }
-    if (reason) invalid.push({ line: n + 1, occurrence, reason, cells });
+    if (reason) invalid.push({ line: n + 1, occurrence, reason, cells: Object.fromEntries(Object.entries(cells).map(([k, v]) => [k, maskCardLike(v)])) });
     else rows.push(row as unknown as PayoutRow);
   }
   return { ok: true, encoding: dec.encoding, totalRows, rows, invalid };

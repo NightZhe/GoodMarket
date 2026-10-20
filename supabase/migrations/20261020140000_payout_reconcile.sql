@@ -98,8 +98,10 @@ revoke all on public.payout_imports from public, anon, authenticated;
 
 create table if not exists public.payout_ledger (
   id                uuid primary key default gen_random_uuid(),
-  fingerprint       text not null unique check (fingerprint ~ '^[0-9a-f]{64}$'),   -- §6.3（＋同檔第幾次出現）：重跑不重複寫
-  import_id         uuid not null references public.payout_imports(id),
+  fingerprint       text not null unique check (fingerprint ~ '^[0-9a-f]{64}$'),   -- 這一列是哪一筆交易（＋同檔第幾次出現）：重跑不重複寫
+  content_hash      text not null check (content_hash ~ '^[0-9a-f]{64}$'),         -- 全部欄位：指紋相同、這個不同＝綠界補上撥款日／更正手續費 → 更新這一列（不是新的一列）
+  import_id         uuid not null references public.payout_imports(id),            -- 第一次寫入的匯入
+  last_import_id    uuid not null references public.payout_imports(id),            -- 最近一次改到這一列的匯入
   merchant_id       text not null,
   order_id          uuid not null references public.orders(id) on delete cascade,
   auth_id           uuid not null references public.payment_auths(id),
@@ -119,6 +121,7 @@ create table if not exists public.payout_ledger (
   processing_fee    numeric(14, 4),
   line              integer,
   created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),                            -- 撥款資料最後真的有變的時間（AC-R7：重跑同內容不會動）
   check ((kind = 'refund') = (amount < 0))
 );
 create index if not exists payout_ledger_order_idx on public.payout_ledger (order_id);
@@ -159,6 +162,24 @@ language sql immutable set search_path = public as $$
   select coalesce(p_no ~ '^[PB][0-9]{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])([01][0-9]|2[0-3])[0-5][0-9][0-5][0-9][0-9a-f]{7}$', false);
 $$;
 
+-- 這一列的值放不放得進資料表（型別、範圍）。放不進去回原因，放得進去回 null。
+-- 解析器（payoutFile.ts）已經擋過；這是第二道：不讓一列怪資料讓整段寫入失敗（D43＝A，小q BUG-3）
+create or replace function public._payout_row_problem(r jsonb) returns text
+language plpgsql immutable set search_path = public as $$
+declare v_x numeric; v_d date; v_t timestamp; v_i integer;
+begin
+  v_i := (r->>'amount')::integer; v_i := (r->>'platformFee')::integer; v_i := (r->>'refundAmount')::integer; v_i := (r->>'netAmount')::integer;
+  v_i := (r->>'line')::integer;
+  v_x := (r->>'gatewayFee')::numeric(14, 4); v_x := (r->>'processingFee')::numeric(14, 4);
+  v_d := (r->>'settleDate')::date; v_d := (r->>'payoutDate')::date; v_t := (r->>'tradeAt')::timestamp;
+  if coalesce(r->>'merchantTradeNo', '') = '' then return '特店交易編號是空的'; end if;
+  if r->>'amount' is null then return '交易金額是空的'; end if;
+  if coalesce(r->>'ch', '') !~ '^[0-9a-f]{64}$' then return '內容雜湊格式不正確'; end if;
+  return null;
+exception when data_exception then
+  return '值放不進資料表（' || sqlstate || '）';
+end $$;
+
 -- 分類一段列（p_rows：Edge Function 解析好的 JSON 陣列，見 payoutRunner.ts 的 IngestRow）。只讀，不寫。
 -- 同一段裡的列依序處理，前面的列會影響後面的（同訂單第二個正數列、退款加總），跟寫入時的結果一致。
 create or replace function public._payout_classify_rows(p_merchant text, p_rows jsonb)
@@ -172,11 +193,17 @@ declare
   v_amt    integer;
   v_charge jsonb := '{}'::jsonb;   -- 這一段裡已判 matched 的正數列：order_id → true
   v_refund jsonb := '{}'::jsonb;   -- 這一段裡已判 matched 的退款合計：order_id → 金額
+  v_same   boolean;
 begin
   for r in select value from jsonb_array_elements(coalesce(p_rows, '[]'::jsonb)) loop
     i := i + 1; idx := i; order_id := null; auth_id := null; reason := null;
     if r->>'kind' = 'invalid' then cls := 'invalid'; reason := r->>'reason'; return next; continue; end if;
-    if exists (select 1 from public.payout_ledger l where l.fingerprint = r->>'fp') then cls := 'duplicate'; return next; continue; end if;
+    reason := public._payout_row_problem(r);
+    if reason is not null then cls := 'invalid'; return next; continue; end if;
+    -- 同一列已寫入：內容相同＝duplicate；內容不同（綠界補上撥款日、更正手續費）＝updated（小q BUG-1／BUG-2：不能當成第二列）
+    select l.order_id, l.auth_id, (l.content_hash = r->>'ch') into order_id, auth_id, v_same from public.payout_ledger l where l.fingerprint = r->>'fp';
+    if found then cls := case when v_same then 'duplicate' else 'updated' end; return next; continue; end if;
+    order_id := null; auth_id := null;
     v_no := r->>'merchantTradeNo';
     v_amt := (r->>'amount')::integer;
     if not public._payout_is_ours(v_no) then cls := 'foreign'; return next; continue; end if;
@@ -217,13 +244,21 @@ language sql stable security definer set search_path = public as $$
   select public._payout_counts(coalesce(array_agg(c.cls), '{}')) from public._payout_classify_rows(p_merchant, p_rows) c;
 $$;
 
--- 異常列只留固定欄位（卡號等其他欄位就算混進來也丟掉，AC-R4）
+-- 像卡號的字串（前六後四隱碼，例如 431195******1111）一律遮罩。錯位的列裡卡號可能落在任何欄名底下，不能靠欄位位置（AC-R4、小q BUG-4）。
+-- 解析器（maskCardLike）已經遮過一次（另含 Luhn 檢查的 13～19 位數字）；這是第二道
+create or replace function public._payout_mask(v jsonb) returns jsonb
+language sql immutable set search_path = public as $$
+  select case when jsonb_typeof(v) = 'string'
+    then to_jsonb(regexp_replace(v #>> '{}', '[0-9][0-9 -]*[*＊•●][0-9 *＊•●-]*[*＊•●][0-9 *＊•●-]*[0-9]', '[已遮罩]', 'g')) else v end;
+$$;
+
+-- 異常列只留固定欄位（卡號等其他欄位就算混進來也丟掉，AC-R4），字串值再遮罩一次
 create or replace function public._payout_row_data(r jsonb) returns jsonb
 language sql immutable set search_path = public as $$
   select case when r->>'kind' = 'invalid'
-    then jsonb_build_object('line', r->'line', 'reason', r->'reason', 'cells', (select coalesce(jsonb_object_agg(k, v), '{}'::jsonb) from jsonb_each(coalesce(r->'cells', '{}'::jsonb)) e(k, v)
+    then jsonb_build_object('line', r->'line', 'reason', r->'reason', 'cells', (select coalesce(jsonb_object_agg(k, public._payout_mask(v)), '{}'::jsonb) from jsonb_each(coalesce(r->'cells', '{}'::jsonb)) e(k, v)
            where k in ('特店交易編號', '綠界交易編號', '交易日期', '付款方式', '手續費率', '結算日期', '撥款日期', '交易金額', '金流手續費', '平台手續費', '退款金額', '應收款項(淨額)', '金流處理費')))
-    else (select coalesce(jsonb_object_agg(k, v), '{}'::jsonb) from jsonb_each(r) e(k, v)
+    else (select coalesce(jsonb_object_agg(k, public._payout_mask(v)), '{}'::jsonb) from jsonb_each(r) e(k, v)
            where k in ('line', 'occurrence', 'merchantTradeNo', 'ecpayTradeNo', 'tradeAt', 'payMethod', 'feeRate', 'settleDate', 'payoutDate', 'amount',
                        'gatewayFee', 'platformFee', 'refundAmount', 'netAmount', 'processingFee')) end;
 $$;
@@ -247,22 +282,32 @@ begin
   for c in select * from public._payout_classify_rows(imp.merchant_id, p_rows) loop
     r := p_rows -> (c.idx - 1);
     if c.cls = 'matched' then
-      insert into public.payout_ledger (fingerprint, import_id, merchant_id, order_id, auth_id, merchant_trade_no, ecpay_trade_no, kind, trade_at, pay_method, fee_rate,
+      insert into public.payout_ledger (fingerprint, content_hash, import_id, last_import_id, merchant_id, order_id, auth_id, merchant_trade_no, ecpay_trade_no, kind, trade_at, pay_method, fee_rate,
                                         settle_date, payout_date, amount, gateway_fee, platform_fee, refund_amount, net_amount, processing_fee, line)
-      values (r->>'fp', p_import, imp.merchant_id, c.order_id, c.auth_id, r->>'merchantTradeNo', nullif(r->>'ecpayTradeNo', ''),
+      values (r->>'fp', r->>'ch', p_import, p_import, imp.merchant_id, c.order_id, c.auth_id, r->>'merchantTradeNo', nullif(r->>'ecpayTradeNo', ''),
               case when (r->>'amount')::integer < 0 then 'refund' else 'charge' end, (r->>'tradeAt')::timestamp, r->>'payMethod', r->>'feeRate',
               (r->>'settleDate')::date, (r->>'payoutDate')::date, (r->>'amount')::integer, (r->>'gatewayFee')::numeric, (r->>'platformFee')::integer,
               (r->>'refundAmount')::integer, (r->>'netAmount')::integer, (r->>'processingFee')::numeric, (r->>'line')::integer)
       on conflict (fingerprint) do nothing;
       get diagnostics v_n = row_count;
       if v_n = 1 then v_cls := v_cls || 'matched'::text; v_ord := v_ord || c.order_id; else v_cls := v_cls || 'duplicate'::text; end if;
+    elsif c.cls = 'updated' then
+      -- 同一列，綠界補上／更正了欄位：只改「之後才會變」的欄位；身分欄位（編號、交易時間、結算日、金額）在指紋裡，不會變
+      update public.payout_ledger set content_hash = r->>'ch', last_import_id = p_import, updated_at = now(),
+             payout_date = (r->>'payoutDate')::date, gateway_fee = (r->>'gatewayFee')::numeric, platform_fee = (r->>'platformFee')::integer,
+             refund_amount = (r->>'refundAmount')::integer, net_amount = (r->>'netAmount')::integer, processing_fee = (r->>'processingFee')::numeric,
+             pay_method = r->>'payMethod', fee_rate = r->>'feeRate', line = (r->>'line')::integer
+       where fingerprint = r->>'fp' and content_hash is distinct from r->>'ch';
+      get diagnostics v_n = row_count;
+      if v_n = 1 then v_cls := v_cls || 'updated'::text; v_ord := v_ord || c.order_id; else v_cls := v_cls || 'duplicate'::text; end if;
     elsif c.cls in ('duplicate', 'foreign') then
       v_cls := v_cls || c.cls;
     else
       insert into public.payout_anomalies (fingerprint, first_import_id, last_import_id, merchant_id, class, priority, merchant_trade_no, order_id, reason, row_data)
       values (r->>'fp', p_import, p_import, imp.merchant_id, c.cls, case when c.cls in ('not_captured', 'bind_auth') then 'high' else 'normal' end,
               coalesce(r->>'merchantTradeNo', r->'cells'->>'特店交易編號'), c.order_id, left(c.reason, 200), public._payout_row_data(r))
-      on conflict (fingerprint) do update set last_import_id = excluded.last_import_id, last_seen_at = now(), seen_count = payout_anomalies.seen_count + 1;
+      on conflict (fingerprint) do update set last_import_id = excluded.last_import_id, last_seen_at = now(), seen_count = payout_anomalies.seen_count + 1,
+        row_data = excluded.row_data, reason = excluded.reason;
       v_cls := v_cls || c.cls;
     end if;
   end loop;
@@ -479,7 +524,7 @@ begin
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
     execute format('grant execute on function public.%s to service_role', f);
   end loop;
-  foreach f in array array['_payout_is_ours(text)', '_payout_classify_rows(text,jsonb)', '_payout_counts(text[])', '_payout_row_data(jsonb)',
+  foreach f in array array['_payout_is_ours(text)', '_payout_classify_rows(text,jsonb)', '_payout_counts(text[])', '_payout_row_data(jsonb)', '_payout_mask(jsonb)', '_payout_row_problem(jsonb)',
                            '_payout_merchants()', '_payout_view(uuid,timestamptz)'] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
   end loop;

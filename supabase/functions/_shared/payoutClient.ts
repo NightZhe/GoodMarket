@@ -21,8 +21,10 @@ export const DOWNLOAD_TIMEOUT_MS = 60_000;
 
 /** 綠界回錯的訊息 → 代碼。綠界沒公布錯誤格式與代碼（摘要檔 §0），依實打看到的訊息與常見字樣判斷（未查證的字樣：IP、頻率） */
 export function classifyEcpayMessage(msg: string): PayoutErrorCode {
-  if (/frequen|too many|rate limit|per minute|一分鐘|頻率|太頻繁/i.test(msg)) return 'RATE_LIMITED';
-  if (/\bip\b|permission|denied|not allowed|forbidden|does not match|decrypt|merchantid|platformid|權限|驗證失敗|不符|未開通|IP/i.test(msg)) return 'ECPAY_DENIED';
+  // 只認明確的字樣（小q：舊版結尾 IP 加 /i 會吃到 multiple／equipment、「不符」會吃到「日期格式不符」→ 誤判會讓排程全部停）
+  if (/one file per minute|only one .*per minute|too many requests|rate limit|一分鐘.*一個|頻率過高|太頻繁/i.test(msg)) return 'RATE_LIMITED';
+  if (/MerchantID does not match|decrypt fail|PlatformID|permission denied|access denied|forbidden/i.test(msg)
+      || /(?<![A-Za-z])IP(?![A-Za-z])/.test(msg) || /權限|廠商驗證失敗|未開通|IP 位址|IP位址/.test(msg)) return 'ECPAY_DENIED';
   return 'ECPAY_UNAVAILABLE';
 }
 
