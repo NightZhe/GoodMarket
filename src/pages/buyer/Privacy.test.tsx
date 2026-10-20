@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { PrivacyView } from './Privacy';
+import { PRIVACY_EFFECTIVE } from '../../lib/site';
 
 const html = (payOn: boolean) => renderToStaticMarkup(<MemoryRouter><PrivacyView payOn={payOn} /></MemoryRouter>);
 
@@ -32,5 +33,20 @@ describe('隱私政策隨線上付款開關顯示付款段落', () => {
     expect(on).toContain('你下單的賣家看得到訂單是否已付款，看不到你的卡片資料');
     expect(on).toContain('通知綠界科技撤銷綁定');
     expect(on).toContain('信用卡可以隨時在「我的帳號 › 付款方式」刪除');
+  });
+});
+
+describe('驗證碼簡訊服務商（AC-M40）', () => {
+  it('資料項目寫三竹資訊（位於台灣），不再寫 Twilio 與美國', () => {
+    const page = html(false);
+    expect(page).toContain('驗證碼簡訊由簡訊服務商三竹資訊股份有限公司（位於台灣）代為傳送，它會處理你的手機號碼與簡訊內容。');
+    expect(page).not.toContain('位於美國');
+    // 修訂紀錄是歷史，會提到 Twilio；正文（修訂紀錄之前）不能再有
+    expect(page.split('修訂紀錄')[0]).not.toContain('Twilio');
+  });
+  it('修訂紀錄：最新一筆用生效日、說明服務商更換；上一筆是固定日期且維持當時的原句', () => {
+    const page = html(false);
+    expect(page).toContain(`${PRIVACY_EFFECTIVE}</dt><dd class="mt-0.5 text-sm leading-6 text-muted">驗證碼簡訊服務商由 Twilio 改為三竹資訊股份有限公司（位於台灣）。`);
+    expect(page).toContain('2026/10/19</dt><dd class="mt-0.5 text-sm leading-6 text-muted">新增手機號碼登入與綁定手機');
   });
 });
