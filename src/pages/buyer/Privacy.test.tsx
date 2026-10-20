@@ -31,6 +31,7 @@ describe('隱私政策隨線上付款開關顯示付款段落', () => {
     expect(on).toContain('你按下付款時，向綠界科技請求用你選的卡付款');
     expect(on).toContain('你下單的賣家看得到訂單是否已付款，看不到你的卡片資料');
     expect(on).toContain('通知綠界科技撤銷綁定');
+    expect(on).toContain('刪除帳號時，我們會先請綠界科技刪除你綁定的所有信用卡。');
     expect(on).toContain('信用卡可以隨時在「我的帳號 › 付款方式」刪除');
   });
 });
