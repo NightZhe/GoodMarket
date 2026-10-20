@@ -76,19 +76,21 @@ describe('買家 B1～B9', () => {
     expect(v.chip).toBeNull();
     expect(v.block?.tone).toBe('neutral');
     expect(v.block?.title).toBe('賣家沒有同意取消');
-    expect(lines(v.block)).toEqual(['原因：商品已打包。', '訂單照常出貨。每張訂單只能申請一次，這筆訂單不能再申請取消。', '如有疑問請聯絡我們：‹信箱›']);
+    expect(lines(v.block)).toEqual(['原因：商品已打包', '訂單照常出貨。每張訂單只能申請一次，這筆訂單不能再申請取消。', '如有疑問請聯絡我們：‹信箱›。']);
   });
-  it('B3 拒絕原因本身已以句號結尾時不重複加句號（使用者輸入的文字）', () => {
+  it('引述拒絕原因的那一行不另加句號（使用者輸入的文字，原樣顯示）；說明句才一律以「。」結尾', () => {
     const v = buyer('to_ship', 'paid', row({ cancel_request: req('rejected', { reject_reason: '商品已經打包，今天會寄出。' }) }));
     expect(lines(v.block)[0]).toBe('原因：商品已經打包，今天會寄出。');
-    const s = seller('to_ship', shopRow({ cancel_request: req('rejected', { reject_reason: 'Already packed!' }) }));
-    expect(lines(s.block)[0]).toBe('原因：Already packed!');
+    const v2 = buyer('to_ship', 'paid', row({ cancel_request: req('rejected', { reject_reason: '已打包' }) }));
+    expect(lines(v2.block)[0]).toBe('原因：已打包');
+    const s = seller('to_ship', shopRow({ cancel_request: req('rejected', { reject_reason: 'Already packed' }) }));
+    expect(lines(s.block)[0]).toBe('原因：Already packed');
   });
   it('B4 已撤回（採用小u 補的文案）', () => {
     const v = buyer('to_ship', 'paid', row({ cancel_request: req('withdrawn') }));
     expect(v.block?.tone).toBe('neutral');
     expect(v.block?.title).toBe('你已撤回取消申請');
-    expect(lines(v.block)).toEqual(['訂單照常出貨。每張訂單只能申請一次，這筆訂單不能再申請取消。', '如有疑問請聯絡我們：‹信箱›']);
+    expect(lines(v.block)).toEqual(['訂單照常出貨。每張訂單只能申請一次，這筆訂單不能再申請取消。', '如有疑問請聯絡我們：‹信箱›。']);
   });
   it('B5 已取消＋退款處理中：晶片、金額、卡、誰（三種發起者）', () => {
     const base = { refund: refund(), cancel_reason: 'no_longer_wanted' as const };
@@ -109,10 +111,10 @@ describe('買家 B1～B9', () => {
   it("B5′ 退款處理中超過 3 天（用 started_at）或被標記需要人工：多一行聯絡信箱，不出現失敗字樣（D29）", () => {
     const old = buyer('cancelled', 'refunding', row({ refund: refund({ started_at: '2026-10-17T23:59:00Z' }), cancelled_by: 'seller', cancel_reason: 'other' }));
     expect(lines(old.block)).toEqual([
-      '全額 $1,234 會退回 ‹卡›。完成後這裡會顯示退款方式。', '賣家取消了這筆訂單。原因：其他。', '如有疑問請聯絡我們：‹信箱›',
+      '全額 $1,234 會退回 ‹卡›。完成後這裡會顯示退款方式。', '賣家取消了這筆訂單。原因：其他。', '如有疑問請聯絡我們：‹信箱›。',
     ]);
     const flagged = buyer('cancelled', 'refunding', row({ refund: refund({ needs_attention_since: '2026-10-20T20:00:00Z' }), cancelled_by: 'seller', cancel_reason: 'other' }));
-    expect(lines(flagged.block).at(-1)).toBe('如有疑問請聯絡我們：‹信箱›');
+    expect(lines(flagged.block).at(-1)).toBe('如有疑問請聯絡我們：‹信箱›。');
     const almost = buyer('cancelled', 'refunding', row({ refund: refund({ started_at: '2026-10-18T00:01:00Z' }) }));
     expect(lines(almost.block)).toHaveLength(1);
     for (const r of [old, flagged]) expect(JSON.stringify(r)).not.toMatch(/失敗|異常|錯誤/);
@@ -217,7 +219,7 @@ describe('賣家 S1～S11', () => {
     expect(v.badge).toBeNull();
     expect(v.block?.tone).toBe('neutral');
     expect(v.block?.title).toBe('你已拒絕買家的取消申請');
-    expect(lines(v.block)).toEqual(['原因：今天會寄出。', '買家不能再申請取消這筆訂單。']);
+    expect(lines(v.block)).toEqual(['原因：今天會寄出', '買家不能再申請取消這筆訂單。']);
   });
   it('S4 買家撤回（灰色）', () => {
     const v = seller('to_ship', shopRow({ cancel_request: req('withdrawn') }));

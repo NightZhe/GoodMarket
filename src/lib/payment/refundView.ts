@@ -43,15 +43,14 @@ export type Line = Seg[];
 export type Tone = 'info' | 'success' | 'neutral' | 'warning';
 export interface StatusBlock { tone: Tone; title: string; lines: Line[] }
 
-const CONTACT: Line = ['如有疑問請聯絡我們：', { mail: true }];
+const CONTACT: Line = ['如有疑問請聯絡我們：', { mail: true }, '。'];
 const ONCE_ONLY = '訂單照常出貨。每張訂單只能申請一次，這筆訂單不能再申請取消。';
 
 /** 期限已過、排程還沒處理（最久約 1～2 分鐘）。只用來決定第二行字，不用來判斷訂單狀態（設計 8 第 5 點） */
 export const isRespondOverdue = (respondBy: string, now: number): boolean => Date.parse(respondBy) < now;
 
 const present = <T>(xs: (T | null | false)[]): T[] => xs.filter((x): x is T => Boolean(x));
-/** 使用者輸入的文字已經以句末標點結尾時，不再多加句號 */
-const stop = (text: string): string => (/[。.!！?？]$/.test(text) ? text : `${text}。`);
+// 文案句號規則（主對話裁定）：說明句一律以「。」結尾；引述使用者輸入的原因那一行，原樣顯示、不另加句號
 const oneLine = (text: string | null): Line | null => (text ? [text] : null);
 
 /** 句子裡的卡別：讀到就接元件畫的「Visa •••• 4242」，讀不到整段寫成 unknown（買家端「你付款的信用卡」） */
@@ -150,7 +149,7 @@ export function buyerRefundView(
       ] } };
     }
     if (req.status === 'rejected') {
-      return { chip: null, block: { tone: 'neutral', title: '賣家沒有同意取消', lines: [[`原因：${stop(req.reject_reason ?? '')}`], [ONCE_ONLY], CONTACT] } };
+      return { chip: null, block: { tone: 'neutral', title: '賣家沒有同意取消', lines: [[`原因：${req.reject_reason ?? ''}`], [ONCE_ONLY], CONTACT] } };
     }
     if (req.status === 'withdrawn') {
       return { chip: null, block: { tone: 'neutral', title: '你已撤回取消申請', lines: [[ONCE_ONLY], CONTACT] } };
@@ -221,7 +220,7 @@ export function sellerRefundView(
     ] } };
   }
   if (req?.status === 'rejected' && status === 'to_ship') {
-    return { ...none, block: { tone: 'neutral', title: '你已拒絕買家的取消申請', lines: [[`原因：${stop(req.reject_reason ?? '')}`], ['買家不能再申請取消這筆訂單。']] } };
+    return { ...none, block: { tone: 'neutral', title: '你已拒絕買家的取消申請', lines: [[`原因：${req.reject_reason ?? ''}`], ['買家不能再申請取消這筆訂單。']] } };
   }
   if (req?.status === 'withdrawn' && status === 'to_ship') {
     return { ...none, block: { tone: 'neutral', title: '買家已撤回取消申請', lines: [['訂單照常出貨。']] } };
