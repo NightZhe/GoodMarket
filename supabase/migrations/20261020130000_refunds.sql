@@ -275,17 +275,19 @@ begin
 end $$;
 
 -- 賣家回應申請：同意 → 已取消＋退款處理中；拒絕（必填原因）→ 照常待出貨。回 {outcome:'refunding'|'rejected'}
-create or replace function public.respond_order_cancel(p_order uuid, p_accept boolean, p_reject_reason text default null)
+-- p_accept 給 default null：前端漏帶時 PostgREST 才找得到函式，回中文的 REQUEST_INVALID（不是 404 PGRST202）。先驗參數再找訂單。
+create or replace function public.respond_order_cancel(p_order uuid, p_accept boolean default null, p_reject_reason text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare o public.orders; q public.order_cancel_requests; v_rr text := public._refund_text(p_reject_reason);
 begin
+  perform public._acct_uid();
+  if p_accept is null then perform public._rv_raise('REQUEST_INVALID', '請求格式不正確'); end if;
   o := public._seller_order_locked(p_order);
   select * into q from public.order_cancel_requests where order_id = o.id and status = 'pending' for update;
   if not found then
     if o.status <> 'to_ship' or o.payment_status <> 'paid' then perform public._rv_raise('ORDER_STATE_CHANGED', '訂單狀態已變更，請重新整理'); end if;
     perform public._rv_raise('CANCEL_REQUEST_NOT_FOUND', '這筆申請已經被處理（買家可能剛撤回），請重新整理');
   end if;
-  if p_accept is null then perform public._rv_raise('REQUEST_INVALID', '請求格式不正確'); end if;
   if not p_accept then
     if v_rr is null then perform public._rv_raise('REJECT_REASON_REQUIRED', '請填寫拒絕原因'); end if;
     if char_length(v_rr) > 100 then perform public._rv_raise('REASON_INVALID', '拒絕原因最多 100 字'); end if;
