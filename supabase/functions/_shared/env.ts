@@ -18,6 +18,8 @@ export interface AppConfig {
   functionsBaseUrl: string;   // 綠界打得到的公開網址，例如 https://<ref>.supabase.co/functions/v1
   siteUrl: string;            // 前端網址（含 GitHub Pages 子路徑），綁卡結果導回用
   cronSecret?: string;
+  /** 管理函式（payment-admin-revoke-account-cards）的密碼。只存在使用者的密碼管理員，不放資料庫 Vault（D34＝B） */
+  adminSecret?: string;
   allowedOrigins: string[];
 }
 
@@ -40,6 +42,7 @@ export function loadConfig(): AppConfig {
     functionsBaseUrl,
     siteUrl: need('PAYMENT_SITE_URL').replace(/\/$/, ''),
     cronSecret: opt('PAYMENT_CRON_SECRET'),
+    adminSecret: opt('PAYMENT_ADMIN_SECRET'),
     allowedOrigins: (opt('PAYMENT_ALLOWED_ORIGINS') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   };
   return cached;
