@@ -14,7 +14,7 @@ export type PhoneErrorKind =
   | 'rate_limit_resend'   // over_sms_send_rate_limit：同一門號 60 秒內
   | 'rate_limit_site'     // over_sms_send_rate_limit：全站每小時額度用完
   | 'rate_limit_ip'       // over_request_rate_limit、其他 429
-  | 'sms_failed'          // sms_send_failed
+  | 'sms_failed'          // sms_send_failed；送出階段另認得 Send SMS hook 失敗（502、hook_timeout、hook_timeout_after_retry）
   | 'phone_exists'        // 綁定：這支手機已是另一個帳號
   | 'provider_disabled'   // phone_provider_disabled
   | 'signup_disabled'     // signup_disabled、otp_disabled
@@ -38,6 +38,9 @@ export const RESEND_WINDOW_MS = 60_000;
 
 export function classifyPhoneError(e: AuthErrorLike, ctx: PhoneErrorContext): { kind: PhoneErrorKind } {
   const kind = ((): PhoneErrorKind => {
+    // 簡訊供應端失敗（Send SMS hook 回 502、或逾時）只在送出驗證碼階段認得，要排在 name 判斷之前
+    // （502 的 name 可能是 AuthRetryableFetchError）；verifyOtp 沒有 hook，同樣的錯誤維持原本的「沒有完成」。
+    if (ctx.op === 'send' && isSmsProviderFailure(e)) return 'sms_failed';
     // 同名不同事：status 0＝離線，≥500＝伺服器錯（Captcha 驗證流程失敗也是這個）
     if (e.name === 'AuthRetryableFetchError') return (e.status ?? 0) === 0 ? 'network' : 'server';
     if (e.name === 'AuthSessionMissingError') return 'session_missing';
@@ -57,6 +60,13 @@ export function classifyPhoneError(e: AuthErrorLike, ctx: PhoneErrorContext): { 
     return e.status === 429 ? 'rate_limit_ip' : 'unknown';
   })();
   return { kind };
+}
+
+const HOOK_TIMEOUT_CODES = ['hook_timeout', 'hook_timeout_after_retry'];
+
+/** Send SMS hook 的失敗：函式回 502（不論 name），或 GoTrue 等 hook 逾時（spec-mitake 第 2 節） */
+function isSmsProviderFailure(e: AuthErrorLike): boolean {
+  return e.status === 502 || HOOK_TIMEOUT_CODES.includes(e.code ?? '');
 }
 
 /**

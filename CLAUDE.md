@@ -59,7 +59,8 @@
 上線前置（使用者）：以公司申請綠界平台商與綁卡白名單、拿 HashKey／IV、確認綁卡用特店與最低金額；之後照 `prod-runbook-pb.md`：套 migration → 設 Edge Function secrets → 部署函式 → 後台啟用 pg_cron／pg_net 排程 → 開開關 → 實刷。待補規格：退款、刪帳號同步向綠界刪卡、撥款對帳。
 **手機號碼簡訊登入**（`phone-otp-auth/`，前端 2026-10-19 推上線 fba774c，**後台尚未設定**）：買家與賣家改用 Apple／Google／台灣手機號碼＋簡訊驗證碼，
 Email＋密碼登入已從畫面移除（規格 `.work/email-password-auth/` 作廢）；帳號頁可綁手機（`#/account/phone`）；傳送驗證碼前走 Cloudflare Turnstile（sitekey 由 GitHub secret `VITE_TURNSTILE_SITEKEY` 注入）。
-**上線進度**：runbook `.work/phone-otp-auth/prod-runbook.md` 步驟 3（推前端）已完成，**步驟 0～1（Twilio 帳號、Turnstile widget、GitHub secret、Supabase Phone provider＋Confirm phone＋範本＋Rate Limits）由使用者補做**；
+**簡訊供應商 2026-10-20 改為三竹（Mitake）**：Supabase 沒有原生整合，走 Auth Send SMS hook → Edge Function `supabase/functions/send-sms/`（簽章驗證、只寄 +886、3 秒逾時不重試、失敗回 200＋`{"error":{"http_code":502}}`、log 遮罩）→ 三竹 `SmSend`（主機 `smsb2c.mitake.com.tw`）。規格附錄 `spec-mitake.md`。Twilio 作廢。函式已部署正式站（35da05a，冒煙 401 正常）。
+**上線進度**：runbook `.work/phone-otp-auth/prod-runbook.md`「步驟 1（三竹版）」1b 部署已完成；**待使用者做 1a（`MITAKE_HOST`／`MITAKE_USERNAME`／`MITAKE_PASSWORD` secrets）、1d（後台 Hooks → Send SMS hook 開啟、產生 secret 並設成函式 secret `SEND_SMS_HOOK_SECRET`）、1e（Phone provider 開、Confirm phone 開、OTP 6／300、Rate Limits 20）、Turnstile widget 與 GitHub secret**；
 在那之前正式站 `external.phone=false`，前端自動隱藏手機欄位，買家仍只有 Apple／Google。之後依序：步驟 4 開 Captcha（前有硬性檢查）→ 步驟 5 刪「只有 Email 身分的開店帳號」（P10，不可逆，預覽→使用者確認→刪除→驗證→Storage）→ 步驟 6 關 Email provider。
 已知問題（不擋上線，P15）：驗證請求逾時後才成功時待辦動作不執行（L-1）；Safari 桌機外接鍵盤 Tab 第一下落到背景（S-3）。
 多 session 並行同一 repo 的做法（2026-10-18 起）：各自用 git worktree 分支與隔離的本機 Supabase 實例（複製 `supabase/` 到暫存區換 project_id／port），不改 repo `config.toml`；合併前互相知會。

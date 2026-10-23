@@ -6,13 +6,15 @@ import { CONTACT_EMAIL, DELETION_WINDOW, PRIVACY_EFFECTIVE, PRIVACY_FIRST_PUBLIS
 
 /** 帳號頁 P-A（個人檔案、地址簿）上線日：已發生的修訂，不會再變 */
 const PRIVACY_P_A = '2026/10/18';
+/** 手機號碼登入與綁定手機上線日：已發生的修訂，不會再變 */
+const PRIVACY_PHONE_LOGIN = '2026/10/19';
 const TURNSTILE_PRIVACY_URL = 'https://www.cloudflare.com/turnstile-privacy-policy/';
 
 // 「付款資料」「收款帳戶」兩項與第 2～5 節的付款相關句子是設計稿 S-11 的草稿（綠界科技為官方名稱簡稱，合約上的正式公司名稱、
 // 保存期限的數字、生效日期與修訂紀錄都待使用者確認）；「不會儲存完整卡號」要等 AC-E8 驗收通過後才能上線。
 const dataItems = (payOn: boolean): { name: string; detail: ReactNode }[] => [
   { name: '登入帳號', detail: '帳號識別碼，以及你選用的登入方式提供的資料：用 Google 或 Apple 登入時是它們提供的電子郵件（如果 Apple 讓你選「隱藏我的電子郵件」，我們收到的是轉寄信箱，不是你的真實 email）；用手機號碼登入或綁定手機時是你的手機號碼。' },
-  { name: '驗證碼簡訊', detail: '用手機號碼登入或綁定手機時，驗證碼簡訊由簡訊服務商 Twilio（位於美國）代為傳送，它會處理你的手機號碼與簡訊內容。' },
+  { name: '驗證碼簡訊', detail: '用手機號碼登入或綁定手機時，驗證碼簡訊由簡訊服務商三竹資訊股份有限公司（位於台灣）代為傳送，它會處理你的手機號碼與簡訊內容。' },
   {
     name: '安全驗證',
     detail: (
@@ -113,6 +115,10 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
         <dl className="mt-2 rounded-md border border-line px-4">
           <div className="border-t border-line py-3 first:border-t-0">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_EFFECTIVE}</dt>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">驗證碼簡訊服務商由 Twilio 改為三竹資訊股份有限公司（位於台灣）。</dd>
+          </div>
+          <div className="border-t border-line py-3">
+            <dt className="text-sm font-medium tabular-nums">{PRIVACY_PHONE_LOGIN}</dt>
             <dd className="mt-0.5 text-sm leading-6 text-muted">
               新增手機號碼登入與綁定手機：說明手機號碼的用途、驗證碼簡訊由 Twilio 傳送、傳送前會經過 Cloudflare Turnstile 安全驗證，以及登入用的手機號碼不會提供給賣家。登入方式的說明改為 Google、Apple、手機號碼三種。
             </dd>
