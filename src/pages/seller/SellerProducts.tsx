@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useBlocker, useLocation, useSearchParams } from 'react-router-dom';
-import { Check, Eye, EyeOff, FileSpreadsheet, Loader2, Pencil, PlusCircle, Search, Trash2, X } from 'lucide-react';
+import { Check, CircleCheck, Eye, EyeOff, FileSpreadsheet, Loader2, Pencil, PlusCircle, Search, Trash2, X } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useToast } from '../../components/Toast';
 import ProductImage from '../../components/ProductImage';
@@ -49,12 +49,13 @@ const writeState = (base: URLSearchParams, s: ListState) => {
   return next;
 };
 
-/** 自動下架／仍是下架的提示條：不自動消失，按 × 或開始下一次快改才收 */
-function NoticeBar({ text, onClose }: { text: string; onClose: () => void }) {
+/** 自動下架／仍是下架（warn）與自動上架（success）的提示條：不自動消失，按 × 或開始下一次快改才收 */
+function NoticeBar({ text, tone, onClose }: { text: string; tone: 'warn' | 'success'; onClose: () => void }) {
+  const Icon = tone === 'success' ? CircleCheck : EyeOff;
   return (
-    <div className="rounded-sm border border-warning-border bg-warning-bg px-3 py-2 text-sm">
+    <div className={`rounded-sm border px-3 py-2 text-sm ${tone === 'success' ? 'border-success bg-success-soft' : 'border-warning-border bg-warning-bg'}`}>
       <p className="flex items-start gap-2 text-ink">
-        <EyeOff size={18} className="mt-0.5 shrink-0 text-warning-text" aria-hidden="true" />
+        <Icon size={18} className={`mt-0.5 shrink-0 ${tone === 'success' ? 'text-success-text' : 'text-warning-text'}`} aria-hidden="true" />
         <span className="min-w-0 flex-1">{text}</span>
         <button
           type="button" aria-label="關閉提示" onClick={onClose}
@@ -81,7 +82,7 @@ export default function SellerProducts() {
   const [status, setStatus] = useState({ dirty: false, busy: false });
   const [nag, setNag] = useState(0);
   const [flash, setFlash] = useState<{ productId: string; kind: EditKind } | null>(null);
-  const [notice, setNotice] = useState<{ productId: string; kind: EditKind; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ productId: string; kind: EditKind; text: string; tone: 'warn' | 'success' } | null>(null);
   const [announce, setAnnounce] = useState({ id: 0, text: '' });
   const [focusBack, setFocusBack] = useState<{ productId: string; kind: EditKind; index: number; gone: boolean } | null>(null);
 
@@ -161,7 +162,7 @@ export default function SellerProducts() {
     const total = stockOf(updated);
     const leftTab = tab !== 'all' && !match[tab](updated) ? (updated.status === 'hidden' ? 'hidden' : 'active') : null;
     const outcome = resultNotice({
-      autoHidden: info.result.autoHidden, status: updated.status, stockChanged: hasStockChange(info), stockTotal: total, leftTab,
+      autoHidden: info.result.autoHidden, autoRelisted: info.result.autoRelisted, status: updated.status, stockChanged: hasStockChange(info), stockTotal: total, leftTab,
     });
     const index = rows.findIndex(r => r.id === p.id);
     closeEdit({ productId: p.id, kind, index, gone: leftTab !== null });
@@ -170,9 +171,9 @@ export default function SellerProducts() {
       toast(outcome.text, outcome.kind === 'warn' ? 'info' : 'success');
       return;
     }
-    if (outcome.kind === 'warn') {
+    if (outcome.kind !== 'plain') {
       setFlash(null);
-      setNotice({ productId: p.id, kind, text: outcome.text });
+      setNotice({ productId: p.id, kind, text: outcome.text, tone: outcome.kind === 'warn' ? 'warn' : 'success' });
       say(`${p.title}　${outcome.text}`);
       return;
     }
@@ -387,10 +388,10 @@ export default function SellerProducts() {
                     {shownNotice && (
                       <>
                         <div className={`hidden lg:block ${shownNotice.kind === 'stock' ? 'lg:col-span-3 lg:col-start-3' : 'lg:col-span-4 lg:col-start-2'}`}>
-                          <NoticeBar text={shownNotice.text} onClose={() => setNotice(null)} />
+                          <NoticeBar text={shownNotice.text} tone={shownNotice.tone} onClose={() => setNotice(null)} />
                         </div>
                         <div className="col-span-full pl-[68px] max-[319px]:pl-0 lg:hidden">
-                          <NoticeBar text={shownNotice.text} onClose={() => setNotice(null)} />
+                          <NoticeBar text={shownNotice.text} tone={shownNotice.tone} onClose={() => setNotice(null)} />
                         </div>
                       </>
                     )}

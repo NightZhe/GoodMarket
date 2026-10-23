@@ -49,6 +49,8 @@
 **商品表單上限**（售價／原價 499,999、庫存 999,999，`src/lib/products/variants.ts`）；帳號頁拿掉「刪除帳號」區塊（申請方式只在隱私政策頁）；
 **我的商品列表快改**（點價格／庫存格就地改、多規格展開、手機底部面板；走資料庫函式 `quick_edit_product`：只寫被改的值、比對舊值回衝突、
 庫存全 0 自動下架、留 `product_change_log` 異動紀錄；列表斷點改 1024；上下架改只寫 status）。
+**快改補貨自動上架**（2026-10-23，`list-quick-edit/spec-auto-relist.md`、D-5 修訂與 D-11～D-14）：只有被快改自動下架（`products.auto_hidden=true`，由觸發器維護，status 經任何途徑變動就清掉）的商品，快改把任一規格從 0 改成 > 0 時同交易自動上架，回傳 `autoRelisted`，提示「已更新，已重新上架」；手動下架補貨不上架；編輯頁「儲存但不上架」不清旗標（D-14）。
+正式站**已套** `20261023130000_quick_edit_auto_relist.sql`（2026-10-23，precheck／v1／v2 all_ok，`prod-apply-log.md` 第 9～12 步）；前端在 PR #4，merge 後部署。runbook `prod-runbook-auto-relist.md`，驗收 `qa-report-auto-relist.md`。
 每個功能的決策、規格、驗收報告、上線紀錄都在 `.work/<功能>/`（不進版控）：
 `product-reviews/`、`picked-up-complete/`、`buyer-auth/`、`list-quick-edit/`（含 `prod-runbook.md`、`prod-apply-log.md`、`tools/metrics/` 成功指標查詢）。
 **帳號頁「我的帳戶」＋個人檔案（暱稱，預填評價）＋地址簿**（2026-10-18 晚間上線，`account-payment-methods/`：縣市／鄉鎮市區下拉＋郵遞區號自動帶出、每帳號最多 10 筆、唯一預設；

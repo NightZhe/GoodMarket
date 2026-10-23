@@ -47,6 +47,8 @@ export interface QuickEditOk {
   productId: string;
   status: 'active' | 'hidden';
   autoHidden: boolean;
+  /** 這次補貨讓被自動下架的商品重新上架（資料庫在同一交易改 status） */
+  autoRelisted: boolean;
   variants: Variant[];
   changed: { variantId: string; field: string; old: number | null; new: number | null }[];
 }
@@ -143,6 +145,7 @@ export function invalidToErrors(errors: QuickInvalid[]): Record<string, string> 
 
 export interface NoticeInput {
   autoHidden: boolean;
+  autoRelisted: boolean;
   status: 'active' | 'hidden';
   /** 這次有實際改到庫存 */
   stockChanged: boolean;
@@ -155,9 +158,15 @@ export interface NoticeInput {
 export const AUTO_HIDDEN_TEXT = '已更新，庫存為 0，已自動下架';
 export const STILL_HIDDEN_TEXT = '已更新。商品仍是下架狀態，要賣請按上架';
 
-/** plain＝一般成功；warn＝要賣家注意商品是下架的（自動下架、仍是下架） */
-export function resultNotice(i: NoticeInput): { kind: 'plain' | 'warn'; text: string } {
+export const AUTO_RELISTED_TEXT = '已更新，已重新上架';
+
+/** plain＝一般成功；warn＝要賣家注意商品是下架的（自動下架、仍是下架）；note＝成功但有要讓賣家看到的說明（自動上架） */
+export function resultNotice(i: NoticeInput): { kind: 'plain' | 'warn' | 'note'; text: string } {
   if (i.autoHidden) return { kind: 'warn', text: AUTO_HIDDEN_TEXT };
+  if (i.autoRelisted) {
+    // 在「已下架」「已售完」分頁籤操作時，上架後這列會離開目前頁面
+    return { kind: 'note', text: i.leftTab !== null ? `${AUTO_RELISTED_TEXT}（已移到「架上商品」）` : AUTO_RELISTED_TEXT };
+  }
   const stillHidden = i.status === 'hidden' && i.stockChanged && i.stockTotal > 0;
   if (i.leftTab !== null) {
     // 唯一會走到這裡的是在「已售完」補貨：商品上架就進「架上商品」，下架就進「已下架」
@@ -241,19 +250,23 @@ export const needsConfirm = (big: ConfirmLine[], key: string, confirmedKey: stri
 
 /**
  * 回 conflict，但每一筆都是「現在的值就是我要寫的值」：代表前一次送出其實已經寫入（逾時才會這樣），
- * 當成功處理（interface.md 第 4 節）。wasActive＝送出前商品是上架中，用來推算有沒有被自動下架。
+ * 當成功處理（interface.md 第 4 節）。prevStatus＝送出前商品的狀態，用來推算有沒有被自動下架或自動上架。
  * 衝突沒有涵蓋全部 changes（有些值沒被寫入）就不算。
  */
-export function settleConflict(res: QuickEditConflict, changes: QuickChange[], wasActive: boolean): QuickEditOk | null {
+export function settleConflict(res: QuickEditConflict, changes: QuickChange[], prevStatus: 'active' | 'hidden'): QuickEditOk | null {
   if (res.conflicts.length !== changes.length) return null;
   const settled = changes.every(c => res.conflicts.some(k =>
     k.variantId === c.variantId && k.field === c.field && k.current === c.value && k.attempted === c.value));
   if (!settled) return null;
+  const stockChanged = changes.some(c => c.field === 'stock');
   return {
     outcome: 'ok',
     productId: res.productId,
     status: res.status,
-    autoHidden: wasActive && res.status === 'hidden' && changes.some(c => c.field === 'stock') && res.variants.every(v => v.stock === 0),
+    autoHidden: prevStatus === 'active' && res.status === 'hidden' && stockChanged && res.variants.every(v => v.stock === 0),
+    // D-13：要有被改的規格「從 0 變成 > 0」才算補貨（5→4 不算）
+    autoRelisted: prevStatus === 'hidden' && res.status === 'active'
+      && changes.some(c => c.field === 'stock' && c.expected === 0 && c.value > 0) && res.variants.some(v => v.stock > 0),
     variants: res.variants,
     changed: res.conflicts.map(k => ({ variantId: k.variantId, field: k.field, old: k.seen, new: k.current })),
   };
