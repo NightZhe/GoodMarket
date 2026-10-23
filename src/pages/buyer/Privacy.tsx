@@ -6,6 +6,8 @@ import { CONTACT_EMAIL, DELETION_WINDOW, PRIVACY_EFFECTIVE, PRIVACY_FIRST_PUBLIS
 
 /** 帳號頁 P-A（個人檔案、地址簿）上線日：已發生的修訂，不會再變 */
 const PRIVACY_P_A = '2026/10/18';
+/** 驗證碼簡訊服務商由 Twilio 改為三竹的修訂日：已發生的修訂，不會再變（修訂紀錄的「最新一筆」改用 PRIVACY_EFFECTIVE，所以這筆要有自己的固定日期） */
+const PRIVACY_SMS_VENDOR = '2026/10/20';
 /** 手機號碼登入與綁定手機上線日：已發生的修訂，不會再變 */
 const PRIVACY_PHONE_LOGIN = '2026/10/19';
 const TURNSTILE_PRIVACY_URL = 'https://www.cloudflare.com/turnstile-privacy-policy/';
@@ -86,6 +88,7 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
           <li>你下單的賣家只看得到那張訂單用的收件資料、訂單編號，以及你評價時填的完整暱稱；看不到你「我的地址」裡的其他地址。</li>
           {payOn && <li>綠界科技：為了處理付款與綁卡，會收到卡片資料（只在綠界科技的畫面輸入）、付款金額與訂單編號。</li>}
           {payOn && <li>你下單的賣家看得到訂單是否已付款，看不到你的卡片資料。</li>}
+          <li>有開店的賣家在『物流設定』填的退貨收件資料（收件人姓名、手機、退貨門市或地址、退貨說明），會顯示給向這家店購買、且訂單已出貨或已完成的買家；賣場頁與商品頁不會顯示。</li>
           <li>其他人只看得到遮罩後的暱稱（例如「王*****明」）。</li>
           <li>我們不會公開你的電子郵件、手機號碼與帳號識別碼。</li>
           <li>我們不會把你登入用的手機號碼提供給賣家；賣家看到的是你下單時填寫的收件人電話。</li>
@@ -115,6 +118,10 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
         <dl className="mt-2 rounded-md border border-line px-4">
           <div className="border-t border-line py-3 first:border-t-0">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_EFFECTIVE}</dt>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">新增賣家『物流設定』：說明賣家的退貨收件資料會顯示給哪些買家。</dd>
+          </div>
+          <div className="border-t border-line py-3">
+            <dt className="text-sm font-medium tabular-nums">{PRIVACY_SMS_VENDOR}</dt>
             <dd className="mt-0.5 text-sm leading-6 text-muted">驗證碼簡訊服務商由 Twilio 改為三竹資訊股份有限公司（位於台灣）。</dd>
           </div>
           <div className="border-t border-line py-3">
