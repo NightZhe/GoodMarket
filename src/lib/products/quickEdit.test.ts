@@ -105,7 +105,7 @@ describe('invalidToErrors：伺服器的 invalid 標到輸入框旁', () => {
 });
 
 describe('resultNotice：存完要顯示什麼', () => {
-  const base = { autoHidden: false, status: 'active' as const, stockChanged: false, stockTotal: 10, leftTab: null as string | null };
+  const base = { autoHidden: false, autoRelisted: false, status: 'active' as const, stockChanged: false, stockTotal: 10, leftTab: null as string | null };
 
   it('一般成功', () => {
     expect(resultNotice(base)).toEqual({ kind: 'plain', text: '已更新' });
@@ -134,6 +134,18 @@ describe('resultNotice：存完要顯示什麼', () => {
   it('列離開目前分頁籤：補貨但仍是下架', () => {
     expect(resultNotice({ ...base, status: 'hidden', stockChanged: true, leftTab: 'soldout' }))
       .toEqual({ kind: 'warn', text: '已更新。商品仍是下架狀態，要賣請按上架（已移到「已下架」）' });
+  });
+
+  it('自動上架：提示「已更新，已重新上架」，kind 是 note（成功但有自訂文案）', () => {
+    expect(resultNotice({ ...base, autoRelisted: true, stockChanged: true }))
+      .toEqual({ kind: 'note', text: '已更新，已重新上架' });
+  });
+
+  it('自動上架且列離開目前分頁籤（在「已下架」「已售完」操作）：補上已移到「架上商品」', () => {
+    expect(resultNotice({ ...base, autoRelisted: true, stockChanged: true, leftTab: 'hidden' }))
+      .toEqual({ kind: 'note', text: '已更新，已重新上架（已移到「架上商品」）' });
+    expect(resultNotice({ ...base, autoRelisted: true, stockChanged: true, leftTab: 'soldout' }))
+      .toEqual({ kind: 'note', text: '已更新，已重新上架（已移到「架上商品」）' });
   });
 
   it('列離開目前分頁籤：自動下架用同一句', () => {
@@ -229,22 +241,59 @@ describe('settleConflict：逾時但其實已寫入，重試只會看到「現�
   });
 
   it('每一筆都是 current＝attempted：當成功，帶回目前的規格與狀態', () => {
-    const ok = settleConflict(conflict(), changes, true);
-    expect(ok).toMatchObject({ outcome: 'ok', productId: 'p', status: 'hidden', autoHidden: true });
+    const ok = settleConflict(conflict(), changes, 'active');
+    expect(ok).toMatchObject({ outcome: 'ok', productId: 'p', status: 'hidden', autoHidden: true, autoRelisted: false });
     expect(ok?.variants).toHaveLength(1);
     expect(ok?.changed).toEqual([{ variantId: 'a', field: 'stock', old: 10, new: 0 }]);
   });
 
   it('原本就是下架、或庫存沒有全部歸零：不算自動下架', () => {
-    expect(settleConflict(conflict(), changes, false)?.autoHidden).toBe(false);
+    expect(settleConflict(conflict(), changes, 'hidden')?.autoHidden).toBe(false);
     const some = conflict({ variants: [{ id: 'a', name: 'x', price: 1, stock: 0 }, { id: 'b', name: 'y', price: 1, stock: 3 }] });
-    expect(settleConflict(some, changes, true)?.autoHidden).toBe(false);
+    expect(settleConflict(some, changes, 'active')?.autoHidden).toBe(false);
+  });
+
+  describe('自動上架（逾時後衝突視為成功）', () => {
+    const restock: QuickChange[] = [{ variantId: 'a', field: 'stock', expected: 0, value: 3 }];
+    const relisted = (over: Partial<QuickEditConflict> = {}): QuickEditConflict => conflict({
+      status: 'active',
+      variants: [{ id: 'a', name: '標準款', price: 100, stock: 3 }, { id: 'b', name: '大', price: 100, stock: 0 }],
+      conflicts: [{ variantId: 'a', variantName: '標準款', field: 'stock', seen: 0, current: 3, attempted: 3 }],
+      ...over,
+    });
+
+    it('送出前是下架、現在是上架、改了庫存、任一規格庫存大於 0：autoRelisted 為 true，autoHidden 為 false', () => {
+      expect(settleConflict(relisted(), restock, 'hidden')).toMatchObject({ status: 'active', autoRelisted: true, autoHidden: false });
+    });
+
+    it('只改價格：不算自動上架', () => {
+      const price: QuickChange[] = [{ variantId: 'a', field: 'price', expected: 90, value: 100 }];
+      const res = relisted({ conflicts: [{ variantId: 'a', variantName: '標準款', field: 'price', seen: 90, current: 100, attempted: 100 }] });
+      expect(settleConflict(res, price, 'hidden')?.autoRelisted).toBe(false);
+    });
+
+    it('改的庫存不是從 0 變成 > 0（5→4）：不算自動上架（D-13）', () => {
+      const adjust: QuickChange[] = [{ variantId: 'a', field: 'stock', expected: 5, value: 4 }];
+      const res = relisted({ variants: [{ id: 'a', name: '標準款', price: 100, stock: 4 }],
+        conflicts: [{ variantId: 'a', variantName: '標準款', field: 'stock', seen: 5, current: 4, attempted: 4 }] });
+      expect(settleConflict(res, adjust, 'hidden')?.autoRelisted).toBe(false);
+    });
+
+    it('送出前就是上架：不算自動上架', () => {
+      expect(settleConflict(relisted(), restock, 'active')?.autoRelisted).toBe(false);
+    });
+
+    it('現在還是下架（手動下架的補貨），或所有規格庫存都是 0：不算自動上架', () => {
+      expect(settleConflict(relisted({ status: 'hidden' }), restock, 'hidden')?.autoRelisted).toBe(false);
+      const zero = relisted({ variants: [{ id: 'a', name: 'x', price: 1, stock: 0 }] });
+      expect(settleConflict(zero, restock, 'hidden')?.autoRelisted).toBe(false);
+    });
   });
 
   it('有任何一筆是別人改的（current≠attempted）、或衝突沒涵蓋全部 changes：不是成功', () => {
     const other = conflict({ conflicts: [{ variantId: 'a', variantName: '標準款', field: 'stock', seen: 10, current: 3, attempted: 0 }] });
-    expect(settleConflict(other, changes, true)).toBeNull();
+    expect(settleConflict(other, changes, 'active')).toBeNull();
     const two: QuickChange[] = [...changes, { variantId: 'a', field: 'price', expected: 100, value: 120 }];
-    expect(settleConflict(conflict(), two, true)).toBeNull();
+    expect(settleConflict(conflict(), two, 'active')).toBeNull();
   });
 });

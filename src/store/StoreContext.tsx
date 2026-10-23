@@ -454,8 +454,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let result = data as QuickEditResult;
     // 前一次逾時但其實已寫入：重試看到的「衝突」是自己的值，當成功
     if (result.outcome === 'conflict') {
-      const wasActive = productsRef.current.find(p => p.id === productId)?.status === 'active';
-      result = settleConflict(result, changes, wasActive) ?? result;
+      const prevStatus = productsRef.current.find(p => p.id === productId)?.status ?? 'active';
+      result = settleConflict(result, changes, prevStatus) ?? result;
     }
     if (result.outcome === 'ok') {
       const ok = result;
