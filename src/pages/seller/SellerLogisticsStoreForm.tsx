@@ -34,6 +34,13 @@ const legendCls = 'text-sm font-bold';
 
 /** 新增退貨門市 #/seller/logistics/stores/new、編輯退貨門市 #/seller/logistics/stores/:id（設計 S-L2） */
 export default function SellerLogisticsStoreForm() {
+  // 兩條路由共用同一個元件；只改網址 hash 換成另一筆 id 時 React Router 不會重新掛載，
+  // 表單會留著前一筆的資料，儲存就把 A 的內容蓋到 B。用 key 綁 id，換 id 就整頁重置。
+  const { id } = useParams();
+  return <StoreForm key={id ?? 'new'} />;
+}
+
+function StoreForm() {
   const { id } = useParams();
   const editing = id !== undefined;
   const navigate = useNavigate();
