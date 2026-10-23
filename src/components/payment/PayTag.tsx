@@ -29,14 +29,20 @@ export function PayTag({ kind }: { kind: PayTagKind }) {
   );
 }
 
-/** 「我的訂單」訂單卡標題列右側的狀態標籤（設計 3.2「訂單狀態標籤」） */
-export function OrderStateChip({ kind }: { kind: 'pending' | 'confirming' | 'expired' }) {
+/** 「我的訂單」訂單卡標題列右側的狀態標籤（設計 3.2「訂單狀態標籤」；退款設計 3 新增 cancelRequested、refunding、refunded） */
+export function OrderStateChip({ kind }: { kind: 'pending' | 'confirming' | 'expired' | 'cancelRequested' | 'refunding' | 'refunded' }) {
   if (kind === 'expired') {
     return <span className="inline-flex items-center gap-1 text-sm text-muted"><Ban size={14} aria-hidden="true" />付款逾時，已取消</span>;
   }
   const [Icon, tone, text] = kind === 'pending'
     ? [Clock, 'bg-warning-bg text-warning-text', '待付款'] as const
-    : [Hourglass, 'bg-info-bg text-info-text', '付款確認中'] as const;
+    : kind === 'confirming'
+      ? [Hourglass, 'bg-info-bg text-info-text', '付款確認中'] as const
+      : kind === 'cancelRequested'
+        ? [Hourglass, 'bg-info-bg text-info-text', '取消申請中'] as const
+        : kind === 'refunding'
+          ? [Hourglass, 'bg-info-bg text-info-text', '退款處理中'] as const
+          : [CircleCheck, 'bg-success-soft text-success-text', '已退款'] as const;
   return (
     <span className={`inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-sm font-medium ${tone}`}>
       <Icon size={14} aria-hidden="true" />{text}

@@ -24,7 +24,7 @@ export type PaymentErrorCode =
   | 'ORDER_EXPIRED'              // 410 待付款逾時（30 分鐘）或已取消，請重新下單
   | 'SHOP_NOT_ONLINE'            // 400 有商店目前不能線上付款
   | 'ONLINE_AMOUNT_LIMIT'        // 400 單一商店線上付款上限 200,000 元
-  | 'ORDER_PAID_NO_CANCEL'       // RPC：已付款的訂單不能自行取消（退款流程另一份規格）
+  | 'ORDER_PAID_NO_CANCEL'       // RPC：已付款的訂單不能用 cancel_account_order 取消（要走取消申請／退款，見檔尾）
   | 'FORBIDDEN' | 'METHOD_NOT_ALLOWED' | 'INTERNAL';
 
 // ── 付款方式（卡片）──
@@ -103,7 +103,7 @@ export interface PaymentStatusRequest { groupId: string }
 export interface PaymentStatusResponse { ok: true; group: PaymentGroupView }
 
 export type PaymentGroupStatus = 'pending' | 'processing' | 'confirming' | 'paid' | 'failed' | 'expired' | 'cancelled';
-export type OrderPaymentStatus = 'none' | 'pending' | 'confirming' | 'paid' | 'failed' | 'expired';
+export type OrderPaymentStatus = 'none' | 'pending' | 'confirming' | 'paid' | 'failed' | 'expired' | 'refunding' | 'refunded';
 export interface PaymentGroupView {
   groupId: string;
   status: PaymentGroupStatus;
@@ -140,3 +140,41 @@ export interface SellerEcpayMerchantRow {
   updated_at: string;
   activated_at: string | null;
 }
+
+// ── 退款：已付款線上訂單的取消（interface-payment.md 第 8 章；全部是 PostgREST RPC，沒有 Edge Function）──
+export type BuyerCancelReason = 'no_longer_wanted' | 'change_item' | 'duplicate_order' | 'seller_too_slow' | 'other';
+export type SellerCancelReason = 'out_of_stock' | 'buyer_asked' | 'listing_error' | 'other';
+export type CancelRequestStatus = 'pending' | 'withdrawn' | 'accepted' | 'rejected' | 'auto_accepted';
+export interface CancelRequestView {
+  status: CancelRequestStatus; reason: BuyerCancelReason; note: string | null;
+  requested_at: string; respond_by: string; decided_at: string | null; reject_reason: string | null;
+}
+export type RefundMethod = 'void' | 'card_refund' | 'manual';
+export interface RefundView {
+  status: 'refunding' | 'refunded'; method: RefundMethod | null; amount: number;
+  started_at: string; refunded_at: string | null; needs_attention_since: string | null;
+}
+export interface OrderRefundRow {
+  order_id: string; cancel_request: CancelRequestView | null; cancelled_by: 'buyer' | 'seller' | 'auto' | null;
+  cancel_reason: BuyerCancelReason | SellerCancelReason | null; cancel_note: string | null; refund: RefundView | null;
+}
+export interface ShopOrderRefundRow extends OrderRefundRow { needs_manual: boolean; manual_hint: 'balance' | 'other' | null }
+export interface ShopCancelSummary { pending: number; earliestRespondBy: string | null }
+export type RequestCancelResult = { outcome: 'requested'; respondBy: string };
+export type RespondCancelResult = { outcome: 'refunding' } | { outcome: 'rejected' };
+
+// ── 撥款對帳：賣家訂單的撥款狀態（interface-payment.md 第 9 章；PostgREST RPC get_seller_order_payouts）──
+export type PayoutStatus = 'captured' | 'scheduled' | 'paid_out' | 'clawed_back' | 'updating';
+export interface SellerOrderPayoutRow {
+  order_id: string;
+  payout_status: PayoutStatus;
+  expected_payout_date: string | null;  // 'YYYY-MM-DD'（台灣日期），只有 scheduled
+  paid_out_date: string | null;         // 只有 paid_out
+  payout_amount: number | null;         // 綠界的應收款項(淨額)；D42＝C 只在 scheduled／paid_out 顯示
+  fee_amount: null;                     // D42＝C：一律 null
+  clawback_amount: number | null;       // 只有 clawed_back
+  clawback_date: string | null;         // 只有 clawed_back，而且可能 null（綠界還沒排撥款日）
+  data_updated_at: string | null;       // ISO；updating 時 null
+  has_ledger_rows: boolean;             // §3.3：已取消且 false → 不顯示撥款區塊
+}
+export const PAYOUT_IDS_LIMIT = 200;    // 超過回 TOO_MANY_IDS

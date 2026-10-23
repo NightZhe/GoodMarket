@@ -4,7 +4,8 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { loadConfig } from './env.ts';
 
 export class PayError extends Error {
-  constructor(readonly code: string, message: string, readonly status = 400) { super(message); }
+  /** extra：放進 error 物件的附加欄位（例如 retryAfter），不得含卡號、BindCardID、金鑰 */
+  constructor(readonly code: string, message: string, readonly status = 400, readonly extra?: Record<string, unknown>) { super(message); }
 }
 
 export function corsHeaders(req: Request): Record<string, string> {
@@ -57,7 +58,7 @@ export function serve(name: string, handler: (req: Request) => Promise<Response>
       if (req.method !== 'POST') throw new PayError('METHOD_NOT_ALLOWED', '不支援的請求', 405);
       return await handler(req);
     } catch (e) {
-      if (e instanceof PayError) return json(req, { ok: false, error: { code: e.code, message: e.message } }, e.status);
+      if (e instanceof PayError) return json(req, { ok: false, error: { ...e.extra, code: e.code, message: e.message } }, e.status);
       console.error(`[${name}] unexpected`, e instanceof Error ? `${e.name}: ${e.message}` : 'unknown');
       return json(req, { ok: false, error: { code: 'INTERNAL', message: '系統忙碌，請稍後再試' } }, 500);
     }

@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ChevronRight, PlusCircle, Smartphone } from 'lucide-react';
+import { AlertTriangle, ChevronRight, PlusCircle, Smartphone, TriangleAlert } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
 import { useLoginProvider } from '../../components/auth/useLoginProvider';
-import { btnOutline } from '../../components/import/ui';
+import { btnOutline, focusRing } from '../../components/import/ui';
 import { phoneOf, providerLabel } from '../../lib/auth/identity';
 import ProductImage from '../../components/ProductImage';
-import { money, soldText } from '../../lib/format';
+import { dateText, money, soldText } from '../../lib/format';
+import { pendingCount, useCancelSummary } from '../../store/CancelSummaryContext';
+import { dashboardCancelPrompt } from '../../lib/payment/refundView';
 import { getSellerReviewCounts } from '../../lib/reviews/api';
 import { useRefreshOnVisible } from '../../store/ReviewsContext';
 import PayoutCard from '../../components/payment/PayoutCard';
@@ -17,6 +19,8 @@ export default function SellerDashboard() {
   const provider = useLoginProvider(user);
   const { providers } = useAuth();
   const shop = myShop!;
+  const cancelSummary = useCancelSummary().summary;
+  const pendingCancel = pendingCount(cancelSummary);
   const mine = products.filter(p => p.shopId === shop.id);
   const valid = shopOrders.filter(o => o.status !== 'cancelled');
 
@@ -66,6 +70,19 @@ export default function SellerDashboard() {
       {/* 待辦 */}
       <section className="rounded-lg bg-white p-4 md:p-5">
         <h2 className="font-medium">待辦事項</h2>
+        {pendingCancel > 0 && (() => {
+          const prompt = dashboardCancelPrompt(pendingCancel, cancelSummary?.earliestRespondBy ?? null, dateText);
+          return (
+            <Link to="/seller/orders" className={`mt-3 flex min-h-12 items-start gap-3 rounded-md border border-warning-border bg-warning-bg p-3 text-sm ${focusRing}`}>
+              <TriangleAlert size={20} className="mt-0.5 shrink-0 text-warning-text" aria-hidden="true" />
+              <span className="min-w-0 flex-1 text-ink">
+                <span className="block font-medium">{prompt.title}</span>
+                <span className="mt-0.5 block">{prompt.body}</span>
+              </span>
+              <ChevronRight size={18} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
+            </Link>
+          );
+        })()}
         <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md bg-line md:grid-cols-5">
           <Todo to="/seller/orders" n={toShip} label="待出貨" highlight={toShip > 0} />
           <Todo to="/seller/orders" n={shopOrders.filter(o => o.status === 'shipping').length} label="運送中" />

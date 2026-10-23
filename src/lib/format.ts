@@ -15,6 +15,10 @@ export const priceRange = (prices: number[]) => {
 export const dateText = (iso: string) =>
   new Date(iso).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 
+/** 「10/22」：只有月/日（退刷日期） */
+export const dayText = (iso: string) =>
+  new Date(iso).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
+
 /** 一件商品對外顯示的「最低價那個規格」：卡片價格與折扣都以它為準 */
 export const cheapestVariant = <T extends { price: number }>(variants: T[]) =>
   variants.reduce((min, v) => (v.price < min.price ? v : min), variants[0]);
