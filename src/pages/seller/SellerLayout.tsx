@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ClipboardList, ExternalLink, LayoutDashboard, LogOut, Package, PlusCircle, Star } from 'lucide-react';
+import { ClipboardList, ExternalLink, LayoutDashboard, LogOut, Package, PlusCircle, Star, Truck } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { CancelSummaryProvider, pendingCount, useCancelSummary } from '../../store/CancelSummaryContext';
 import { ordersNavLabel } from '../../lib/payment/refundView';
@@ -10,7 +10,14 @@ const NAV = [
   { to: '/seller/products/new', label: '新增商品', icon: PlusCircle, end: true },
   { to: '/seller/orders', label: '訂單管理', icon: ClipboardList, end: true },
   { to: '/seller/reviews', label: '評價管理', icon: Star, end: true },
+  // 物流設定的新增／編輯表單是 /seller/logistics 底下的子路由，側欄要保持選中（end: false）
+  { to: '/seller/logistics', label: '物流設定', icon: Truck, end: false },
 ];
+
+// 手機底欄只放前 5 項（寫死 grid-cols-5；加第六格在 200% 文字下每格不到 44pt）。物流設定從賣場總覽進（決策 N4＝B）
+const TAB_COUNT = 5;
+// 新增／編輯表單頁會跳出鍵盤，固定在底部的底欄在 iOS Safari 鍵盤開關時會跳，所以這幾頁不顯示底欄
+const isLogisticsForm = (pathname: string) => /^\/seller\/logistics\/(stores|address)(\/|$)/.test(pathname);
 
 export default function SellerLayout() {
   return (
@@ -26,7 +33,12 @@ function SellerLayoutView() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   // 匯入精靈是「我的商品」底下的流程，側欄與分頁列都要高亮「我的商品」
-  const isOn = (to: string, isActive: boolean) => isActive || (to === '/seller/products' && pathname.startsWith('/seller/products/import'));
+  // 物流設定在底欄沒有自己的格子，所以底欄的「賣場總覽」代它高亮（側欄有第六項，不套這條）
+  const isOn = (to: string, isActive: boolean, bottom = false) =>
+    isActive
+    || (to === '/seller/products' && pathname.startsWith('/seller/products/import'))
+    || (bottom && to === '/seller' && pathname.startsWith('/seller/logistics'));
+  const hideTabBar = isLogisticsForm(pathname);
   const shop = myShop!; // SellerGate 已確保登入且有店
   const toShip = shopOrders.filter(o => o.status === 'to_ship').length;
 
@@ -70,27 +82,29 @@ function SellerLayoutView() {
           <Link to="/" className="mt-6 block border-t border-line px-3 pt-4 text-xs text-muted hover:text-brand">← 回到買家首頁</Link>
         </aside>
 
-        <main className="min-w-0 flex-1 p-3 pb-28 md:p-6">
+        <main className={`min-w-0 flex-1 p-3 md:p-6 ${hideTabBar ? 'pb-6' : 'pb-28'}`}>
           <Outlet />
         </main>
       </div>
 
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-white md:hidden">
-        {NAV.map(n => (
-          <NavLink key={n.to} to={n.to} end={n.end}
-            aria-label={n.to === '/seller/orders' ? ordersNavLabel(toShip, pending) : undefined}
-            className={({ isActive }) => `relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 py-2 text-center text-[11px] leading-tight ${isOn(n.to, isActive) ? 'text-brand' : 'text-muted'}`}>
-            <n.icon size={22} />
-            {n.label}
-            {n.to === '/seller/orders' && pending > 0 && (
-              <span aria-hidden="true" className="absolute left-[calc(50%-20px)] top-1.5 h-3 w-3 rounded-full border-2 border-warning-text bg-warning" />
-            )}
-            {n.to === '/seller/orders' && toShip > 0 && (
-              <span className="absolute right-[calc(50%-20px)] top-1 rounded-full bg-brand px-1 text-[10px] leading-4 text-white">{toShip}</span>
-            )}
-          </NavLink>
-        ))}
-      </nav>
+      {!hideTabBar && (
+        <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-white md:hidden">
+          {NAV.slice(0, TAB_COUNT).map(n => (
+            <NavLink key={n.to} to={n.to} end={n.end}
+              aria-label={n.to === '/seller/orders' ? ordersNavLabel(toShip, pending) : undefined}
+              className={({ isActive }) => `relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 py-2 text-center text-[11px] leading-tight ${isOn(n.to, isActive, true) ? 'text-brand' : 'text-muted'}`}>
+              <n.icon size={22} />
+              {n.label}
+              {n.to === '/seller/orders' && pending > 0 && (
+                <span aria-hidden="true" className="absolute left-[calc(50%-20px)] top-1.5 h-3 w-3 rounded-full border-2 border-warning-text bg-warning" />
+              )}
+              {n.to === '/seller/orders' && toShip > 0 && (
+                <span className="absolute right-[calc(50%-20px)] top-1 rounded-full bg-brand px-1 text-[10px] leading-4 text-white">{toShip}</span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+      )}
     </div>
   );
 }
