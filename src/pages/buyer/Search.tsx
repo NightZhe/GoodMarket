@@ -7,18 +7,13 @@ import { CategoryIcon } from '../../data/categoryIcons';
 import { orderCategories } from '../../lib/home/categoryOrder';
 import ProductCard from '../../components/ProductCard';
 import EmptyState from '../../components/EmptyState';
+import { pillButton } from '../../components/pillButton';
 import { cheapestVariant, discountOf } from '../../lib/format';
 import type { Product } from '../../types';
 
 type Sort = 'relevance' | 'newest' | 'sales' | 'price_asc' | 'price_desc' | 'discount';
 
 const minPrice = (p: Product) => Math.min(...p.variants.map(v => v.price));
-
-/** 灰膠囊鈕：按下縮 .97＋底色換 press（§3.7）；hover 只換色，且只給滑鼠 */
-const PILL_BUTTON =
-  'inline-flex h-11 items-center rounded-full bg-canvas px-5 text-headline font-semibold text-brand ' +
-  'transition-[scale,background-color] duration-150 active:scale-[0.97] active:bg-press active:duration-100 ' +
-  'motion-reduce:transition-none motion-reduce:active:scale-100';
 
 /** 手機排序列與「免運」共用的小膠囊。外層 h-11 是 44pt 熱區，裡面的膠囊 32 高 */
 const pillCls = (on: boolean) =>
@@ -122,7 +117,7 @@ export default function Search() {
 
       <section className="min-w-0 flex-1">
         {/* 手機分類膠囊（§4.2）：36 高、熱區 44；選中＝brand 實心＋白字 */}
-        <div ref={chipsRef} role="group" aria-label="分類" className="no-scrollbar flex gap-2 overflow-x-auto scroll-px-5 px-5 pt-2 md:hidden">
+        <div ref={chipsRef} role="group" aria-label="分類" className="no-scrollbar flex gap-2 -mb-1 overflow-x-auto scroll-px-5 px-5 pb-1 pt-2 md:hidden">
           {[{ id: '' as const, name: '全部' }, ...chipCategories].map(c => {
             const on = cat === c.id;
             return (
@@ -173,7 +168,7 @@ export default function Search() {
         {results.length === 0 ? (
           <EmptyState
             title={empty}
-            action={hasCondition ? <Link to="/search" className={PILL_BUTTON}>看全部商品</Link> : undefined}
+            action={hasCondition ? <Link to="/search" className={pillButton}>看全部商品</Link> : undefined}
           />
         ) : (
           <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 md:grid-cols-4 md:px-0 lg:grid-cols-5">

@@ -36,13 +36,14 @@ export default function ProductCard({ product, variant = 'grid' }: { product: Pr
             </div>
           )}
         </Photo>
-        <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-1.5">
-          <span className="flex min-w-0 items-baseline gap-1.5">
-            <span className={`text-headline font-bold ${soldOut ? 'text-muted' : 'text-ink'}`}>{money(price)}</span>
-            {originalPrice && <s className="text-footnote text-muted">{money(originalPrice)}</s>}
+        {/* 價格列不折行（R5：已售留在右側）。價格與已售不動；擠不下時原價整個換到第二行再被裁掉（只留半截「$」比不顯示更糟） */}
+        <div className="mt-2 flex items-baseline justify-between gap-x-1.5 overflow-hidden">
+          <span className="flex h-[1lh] min-w-0 flex-wrap items-baseline gap-x-1.5 overflow-y-clip text-headline">
+            <span className={`shrink-0 whitespace-nowrap font-bold ${soldOut ? 'text-muted' : 'text-ink'}`}>{money(price)}</span>
+            {originalPrice && <s className="min-w-0 truncate text-footnote text-muted">{money(originalPrice)}</s>}
           </span>
           {product.sold > 0 && (
-            <span className="ml-auto whitespace-nowrap text-footnote text-muted">已售 {soldText(product.sold)}</span>
+            <span className="shrink-0 whitespace-nowrap text-footnote text-muted">已售 {soldText(product.sold)}</span>
           )}
         </div>
         <p className="mt-0.5 line-clamp-2 text-subhead text-ink">{product.title}</p>

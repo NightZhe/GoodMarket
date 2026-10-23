@@ -11,6 +11,7 @@ import Photo from '../../components/Photo';
 import PricePill from '../../components/PricePill';
 import SectionHeader from '../../components/SectionHeader';
 import Shelf from '../../components/Shelf';
+import { pillButton, pillPress } from '../../components/pillButton';
 import EmptyState from '../../components/EmptyState';
 import { useProductView } from '../../components/useProductView';
 import type { Category, Product } from '../../types';
@@ -23,11 +24,6 @@ const SHELF_MAX = 10;
 const ROW_CATEGORIES = 2;
 const ROWS_PER_CATEGORY = 3;
 
-/** 灰膠囊鈕按下：縮 .97＋底色換 press，按下 100ms、放開 160ms（§3.7）；減少動態時不縮放。
- * Tailwind v4 的 scale-* 寫的是 CSS `scale` 屬性，transition 要列 scale 而不是 transform */
-const PILL_PRESS =
-  'transition-[scale,background-color] duration-160 ease-[cubic-bezier(.23,1,.32,1)] ' +
-  'active:scale-[0.97] active:bg-press active:duration-100 motion-reduce:transition-none motion-reduce:active:scale-100';
 
 const newestFirst = (a: Product, b: Product) => b.createdAt.localeCompare(a.createdAt);
 
@@ -59,7 +55,7 @@ export default function Home() {
         <EmptyState
           title="目前還沒有商品"
           action={
-            <Link to="/seller" className={`inline-flex h-11 items-center rounded-full bg-canvas px-5 text-headline font-semibold text-brand ${PILL_PRESS}`}>
+            <Link to="/seller" className={pillButton}>
               免費開店
             </Link>
           }
@@ -97,7 +93,7 @@ export default function Home() {
           <button
             type="button"
             onClick={() => setShown(s => s + PAGE)}
-            className={`flex h-12.5 w-full items-center justify-center rounded-full bg-canvas text-headline font-semibold text-brand md:mx-auto md:w-80 ${PILL_PRESS}`}
+            className={`flex h-12.5 w-full items-center justify-center rounded-full bg-canvas text-headline font-semibold text-brand active:bg-press md:mx-auto md:w-80 ${pillPress}`}
           >
             顯示更多商品
           </button>
@@ -112,7 +108,7 @@ function CategoryChips({ categories }: { categories: Category[] }) {
   return (
     <nav
       aria-label="分類"
-      className="no-scrollbar flex snap-x snap-mandatory scroll-px-5 gap-2 overflow-x-auto px-5 pt-2 md:flex-wrap md:overflow-visible"
+      className="no-scrollbar flex snap-x snap-mandatory scroll-px-5 -mb-1 gap-2 overflow-x-auto px-5 pb-1 pt-2 md:flex-wrap md:overflow-visible"
     >
       {categories.map(c => (
         <Link key={c.id} to={`/search?cat=${c.id}`} className="group flex h-11 shrink-0 snap-start items-center">

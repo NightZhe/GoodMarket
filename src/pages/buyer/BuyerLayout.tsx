@@ -7,6 +7,7 @@ import { useToast } from '../../components/Toast';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useOnline } from '../../lib/useOnline';
 import { headerFor } from '../../lib/layout/headerKind';
+import { pillButtonPrimary } from '../../components/pillButton';
 
 export default function BuyerLayout() {
   const { cartCount, loading, loadError, reload } = useStore();
@@ -44,6 +45,10 @@ export default function BuyerLayout() {
     || pathname === '/account/payment-methods/new' || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/');
 
   const header = headerFor(pathname);
+  // 「我的」不需要商品資料（登入狀態它自己處理），商品還在載入時也直接顯示，不擋
+  const needsProducts = pathname !== '/account' && !pathname.startsWith('/account/');
+  // 載入骨架依路由：商品頁（導覽列帶分享鈕的那一種）＝主圖＋標題＋停用的購買列，其餘＝首頁形狀
+  const skeleton = header.kind === 'nav' && header.shareProductId ? 'product' : 'home';
   // 「我的」頁是灰底分組列表：頁首安全區條、tab bar 與整頁底色都跟著換
   const grouped = pathname === '/account';
   const material = grouped ? 'material-grouped' : 'material';
@@ -99,20 +104,20 @@ export default function BuyerLayout() {
       </div>
 
       <main className={`flex-1 ${hideTabBar ? '' : 'pb-[calc(49px+env(safe-area-inset-bottom))] md:pb-0'}`}>
-        {loadError ? (
+        {loadError && needsProducts ? (
           <div role="alert" className="mx-auto max-w-md px-5 py-24 text-center">
             <p className="text-title3 font-bold">載入商品失敗</p>
             <p className="mt-1 break-words text-subhead text-muted">{loadError}</p>
             <button
               type="button"
               onClick={() => void reload()}
-              className="mt-6 inline-flex h-11 items-center rounded-full bg-brand px-6 text-headline font-semibold text-white transition-[scale,background-color] duration-150 active:scale-[0.97] active:bg-brand-dark active:duration-100 motion-reduce:transition-none motion-reduce:active:scale-100"
+              className={`${pillButtonPrimary} mt-6`}
             >
               重新載入
             </button>
           </div>
-        ) : loading && !loadedOnce.current ? (
-          <LoadingSkeleton />
+        ) : loading && !loadedOnce.current && needsProducts ? (
+          <LoadingSkeleton kind={skeleton} />
         ) : (
           <Outlet />
         )}
@@ -281,8 +286,12 @@ function SearchForm({ q, setQ, onSubmit }: { q: string; setQ: (v: string) => voi
   );
 }
 
-/** 首次載入：靜態灰塊（不閃爍），形狀照首頁。搜尋框已經在頁首，所以這裡不重複 */
-function LoadingSkeleton() {
+/** 首次載入：靜態灰塊（不閃爍）。搜尋框已經在頁首，所以首頁形狀不重複 */
+function LoadingSkeleton({ kind }: { kind: 'home' | 'product' }) {
+  return kind === 'product' ? <ProductSkeleton /> : <HomeSkeleton />;
+}
+
+function HomeSkeleton() {
   return (
     <div role="status" className="mx-auto max-w-6xl px-5 pt-3">
       <span className="sr-only">載入中</span>
@@ -293,6 +302,33 @@ function LoadingSkeleton() {
         <div className="mt-4 aspect-[4/3] rounded-story bg-canvas md:aspect-[16/5]" />
         <div className="mt-4 h-4 w-2/3 rounded-md bg-canvas" />
         <div className="mt-2 h-4 w-1/3 rounded-md bg-canvas" />
+      </div>
+    </div>
+  );
+}
+
+/** 商品頁骨架（§3.4）：主圖灰塊＋標題 2 條灰條，購買列先出現但停用。尺寸同 ProductDetail 的第一張照片與購買列，載入完不跳版 */
+function ProductSkeleton() {
+  return (
+    // 高度＝視窗扣掉安全區條與 44 的導覽列，購買列才會貼在底部（手機沒有 tab bar）
+    <div className="mx-auto flex min-h-[calc(100dvh-env(safe-area-inset-top)-44px)] max-w-6xl flex-col md:block md:min-h-0 md:px-4 md:pt-4">
+      <div role="status" className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[450px_1fr] md:gap-8">
+        <span className="sr-only">載入中</span>
+        <div aria-hidden="true" className="px-5 pt-1 md:px-0 md:pt-0">
+          <div className="aspect-square w-75 max-w-full rounded-story bg-canvas md:w-full" />
+        </div>
+        <div aria-hidden="true" className="px-5 pt-4 md:px-0 md:pt-0">
+          <div className="h-5 w-4/5 rounded-md bg-canvas" />
+          <div className="mt-2 h-5 w-1/2 rounded-md bg-canvas" />
+        </div>
+      </div>
+      {/* 與 ProductDetail 的手機購買列同一組 class；按鈕停用，點了沒有反應 */}
+      <div className="material sticky bottom-0 z-40 mt-auto grid grid-cols-[repeat(auto-fit,minmax(--spacing(32),1fr))] gap-3 border-t-[0.5px] border-separator pt-2 pr-[max(--spacing(5),env(safe-area-inset-right))] pb-[calc(--spacing(2)+env(safe-area-inset-bottom))] pl-[max(--spacing(5),env(safe-area-inset-left))] md:hidden">
+        {['加入購物車', '直接購買'].map(label => (
+          <button key={label} type="button" aria-disabled="true" className="inline-flex h-12.5 items-center justify-center rounded-full bg-canvas px-4 text-headline font-semibold text-muted-2">
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );

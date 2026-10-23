@@ -231,8 +231,8 @@ function ProductDetailView({ id }: { id: string }) {
         <div className="min-w-0 px-5 pt-4 md:px-0 md:pt-0">
           <h1 className="text-title3 font-bold text-ink">{product.title}</h1>
           <p className="mt-1 text-subhead text-muted">
-            {/* py-3：行內連結的熱區撐到 44 高，不影響行高 */}
-            {shop && <><Link to={`/shop/${shop.id}`} className="-mx-2 px-2 py-3 text-brand">{shop.name}</Link>・</>}
+            {/* 行內連結的熱區撐到 44 高；負 margin 抵銷，不影響行高與版面 */}
+            {shop && <><Link to={`/shop/${shop.id}`} className="-mx-2 -my-3 inline-flex min-h-11 items-center px-2 text-brand">{shop.name}</Link>・</>}
             {product.location}出貨
           </p>
 
@@ -285,7 +285,7 @@ function ProductDetailView({ id }: { id: string }) {
               onClick={() => { if (!blocked()) act('cart'); }}
               disabled={stock === 0}
               aria-disabled={dimmed || undefined}
-              className={`${PILL} h-12 min-w-44 px-6 ${dimmed ? 'bg-canvas text-disabled' : `bg-canvas text-brand ${PRESS} active:bg-press`} ${SOLD_OUT}`}
+              className={`${PILL} h-12 min-w-44 px-6 ${dimmed ? 'bg-canvas text-muted-2' : `bg-canvas text-brand ${PRESS} active:bg-press`} ${SOLD_OUT}`}
             >
               加入購物車
             </button>
@@ -294,7 +294,7 @@ function ProductDetailView({ id }: { id: string }) {
               onClick={() => { if (!blocked()) act('buy'); }}
               disabled={stock === 0}
               aria-disabled={dimmed || undefined}
-              className={`${PILL} h-12 min-w-44 px-6 ${dimmed ? 'bg-canvas text-disabled' : `bg-brand text-white ${PRESS} hover:bg-brand-dark active:bg-brand-dark`} ${SOLD_OUT}`}
+              className={`${PILL} h-12 min-w-44 px-6 ${dimmed ? 'bg-canvas text-muted-2' : `bg-brand text-white ${PRESS} hover:bg-brand-dark active:bg-brand-dark`} ${SOLD_OUT}`}
             >
               {stock === 0 ? '已售完' : '直接購買'}
             </button>
@@ -354,7 +354,7 @@ function ProductDetailView({ id }: { id: string }) {
           onClick={() => { if (!blocked()) setSheet('cart'); }}
           disabled={stock === 0}
           aria-disabled={dimmed || undefined}
-          className={`${PILL} h-12.5 px-4 ${dimmed ? 'bg-canvas text-disabled' : `bg-canvas text-brand ${PRESS} active:bg-press`} ${SOLD_OUT}`}
+          className={`${PILL} h-12.5 px-4 ${dimmed ? 'bg-canvas text-muted-2' : `bg-canvas text-brand ${PRESS} active:bg-press`} ${SOLD_OUT}`}
         >
           加入購物車
         </button>
@@ -363,7 +363,7 @@ function ProductDetailView({ id }: { id: string }) {
           onClick={() => { if (!blocked()) setSheet('buy'); }}
           disabled={stock === 0}
           aria-disabled={dimmed || undefined}
-          className={`${PILL} h-12.5 px-4 ${dimmed ? 'bg-canvas text-disabled' : `bg-brand text-white ${PRESS} active:bg-brand-dark`} ${SOLD_OUT}`}
+          className={`${PILL} h-12.5 px-4 ${dimmed ? 'bg-canvas text-muted-2' : `bg-brand text-white ${PRESS} active:bg-brand-dark`} ${SOLD_OUT}`}
         >
           {stock === 0 ? '已售完' : '直接購買'}
         </button>
@@ -413,7 +413,7 @@ const SECTION = 'mx-5 mt-8 mb-3 md:mx-0';
 const PILL = 'inline-flex items-center justify-center rounded-full text-headline font-semibold transition-[scale,background-color] duration-150 active:duration-100 motion-reduce:transition-none';
 const PRESS = 'motion-safe:active:scale-[0.97]';
 /** 庫存 0：原生 disabled，不縮放、不換色 */
-const SOLD_OUT = 'disabled:scale-100 disabled:bg-canvas disabled:text-disabled';
+const SOLD_OUT = 'disabled:scale-100 disabled:bg-canvas disabled:text-muted-2';
 
 function VariantPicker(props: {
   product: Product; variantId: string | null; onPick: (id: string) => void;
@@ -432,7 +432,7 @@ function VariantPicker(props: {
               disabled={v.stock === 0}
               aria-pressed={v.id === variantId}
               onClick={() => onPick(v.id)}
-              className={`min-h-11 max-w-full break-words rounded-full border px-4 py-2 text-left text-subhead transition-colors duration-200 active:duration-0 disabled:cursor-not-allowed disabled:border-dashed disabled:border-line disabled:bg-white disabled:text-disabled ${
+              className={`min-h-11 max-w-full break-words rounded-full border px-4 py-2 text-left text-subhead transition-colors duration-200 active:duration-0 disabled:cursor-not-allowed disabled:border-dashed disabled:border-line disabled:bg-white disabled:text-muted-2 ${
                 v.id === variantId ? 'border-brand bg-white text-brand' : 'border-transparent bg-canvas text-ink active:bg-press'
               }`}
             >

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, CircleUserRound } from 'lucide-react';
 
 // iOS 設定風分組列表（mock .a-group）：白底圓角 12、左右各 16、列高 44；髮絲線從文字左緣起；
-// 按下換 press（按下 0ms、放開 200ms 淡回）。› 先用 muted，等 chevron token 加進 index.css 再換
+// 按下換 press（按下 0ms、放開 200ms 淡回）；列尾 › 用 chevron 色
 export const ROW = 'flex min-h-11 w-full items-center gap-3 pl-4 text-left text-body transition-colors duration-200 active:bg-press active:duration-0';
 export const ROW_IN = 'flex min-h-11 min-w-0 flex-1 items-center gap-2 border-separator py-2 pr-3';
 const GROUP_UL = 'mx-4 overflow-hidden rounded-card bg-white [&>li+li_[data-row]]:border-t-[0.5px]';

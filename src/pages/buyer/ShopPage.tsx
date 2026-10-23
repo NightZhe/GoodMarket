@@ -2,16 +2,11 @@ import { Link, useParams } from 'react-router-dom';
 import { useStore } from '../../store/StoreContext';
 import ProductCard from '../../components/ProductCard';
 import EmptyState from '../../components/EmptyState';
+import { pillButton } from '../../components/pillButton';
 import LetterAvatar from '../../components/LetterAvatar';
 import SectionHeader from '../../components/SectionHeader';
 import { ratingText } from '../../lib/reviews/format';
 import { useReviews } from '../../store/ReviewsContext';
-
-/** 灰膠囊鈕：按下縮 .97＋底色換 press（§3.7） */
-const PILL_BUTTON =
-  'inline-flex h-11 items-center rounded-full bg-canvas px-5 text-headline font-semibold text-brand ' +
-  'transition-[scale,background-color] duration-150 active:scale-[0.97] active:bg-press active:duration-100 ' +
-  'motion-reduce:transition-none motion-reduce:active:scale-100';
 
 export default function ShopPage() {
   const { id = '' } = useParams();
@@ -21,7 +16,7 @@ export default function ShopPage() {
   if (!shop) {
     return (
       <div className="mx-auto max-w-6xl">
-        <EmptyState title="找不到這家商店" action={<Link to="/" className={PILL_BUTTON}>回首頁</Link>} />
+        <EmptyState title="找不到這家商店" action={<Link to="/" className={pillButton}>回首頁</Link>} />
       </div>
     );
   }

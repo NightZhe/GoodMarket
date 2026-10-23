@@ -14,6 +14,7 @@
   --color-ink: #000000;
   --color-muted: #6c6c70; /* 白底 5.23 */
   --color-disabled: #d1d5db;
+  --color-muted-2: #a1a1a6; /* 停用按鈕字（HIG tertiary 等級） */
   --color-line: #e5e5ea; /* 1px 實線 */
   --color-separator: rgb(60 60 67 / 0.29); /* 0.5px 髮絲線 */
   --color-canvas: #f2f2f7; /* 分組列表底、膠囊底、照片佔位 */

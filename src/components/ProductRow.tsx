@@ -16,18 +16,19 @@ export default function ProductRow({ product }: { product: Product }) {
         aria-label={label}
         className="flex items-center gap-3 transition-colors duration-200 active:bg-press active:duration-0"
       >
-        <div aria-hidden="true" className="contents">
-          <Photo src={product.images[0]} alt="" className="size-15 shrink-0">
+        {/* 整列只由 Link 的 aria-label 唸一次；aria-hidden 分別掛在有實際盒子的元素上（WebKit 對無盒子的包裝層處理不可靠） */}
+        <div aria-hidden="true" className="shrink-0">
+          <Photo src={product.images[0]} alt="" className="size-15">
             {soldOut && <div className="absolute inset-0 bg-white/60" />}
           </Photo>
-          {/* 第二列起的分隔線從文字左緣開始；字放大到擠不下時價格膠囊換到標題下方 */}
-          <div className="flex min-h-21 min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 py-3 pr-5 [li+li_&]:border-t-[.5px] [li+li_&]:border-separator">
-            <div className="min-w-0 flex-1 basis-32">
-              <p className="line-clamp-2 text-subhead text-ink">{product.title}</p>
-              <p className="mt-0.5 truncate text-footnote text-muted">{shopLine}</p>
-            </div>
-            <PricePill price={price} muted={soldOut} />
+        </div>
+        {/* 第二列起的分隔線從文字左緣開始；字放大到擠不下時價格膠囊換到標題下方 */}
+        <div aria-hidden="true" className="flex min-h-21 min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 py-3 pr-5 [li+li_&]:border-t-[.5px] [li+li_&]:border-separator">
+          <div className="min-w-0 flex-1 basis-32">
+            <p className="line-clamp-2 text-subhead text-ink">{product.title}</p>
+            <p className="mt-0.5 truncate text-footnote text-muted">{shopLine}</p>
           </div>
+          <PricePill price={price} muted={soldOut} />
         </div>
       </Link>
     </li>
