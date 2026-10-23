@@ -46,4 +46,6 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- WebView 的 navigator.onLine 要有這個權限才會反映真實連線狀態（離線時登入鈕才會說「目前沒有網路連線」） -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 </manifest>

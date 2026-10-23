@@ -2,7 +2,7 @@ import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { supabase } from '../supabase';
 import type { OAuthProvider, OAuthStart } from '../auth/oauth';
-import { NATIVE_AUTH_EVENT, NATIVE_AUTH_REDIRECT, parseNativeCallback, type NativeAuthOutcome } from './callback';
+import { NATIVE_AUTH_REDIRECT, parseNativeCallback, postNativeAuthOutcome, type NativeAuthOutcome } from './callback';
 
 // App 內的 Google／Apple 登入（decisions.md D-4）。
 // Google 擋嵌入式 WebView，所以不能在 App 的 WebView 裡整頁跳轉；改成：
@@ -14,15 +14,20 @@ import { NATIVE_AUTH_EVENT, NATIVE_AUTH_REDIRECT, parseNativeCallback, type Nati
 let inFlight = false;
 let handled = false;
 let listening = false;
+/** 冷啟動時 appUrlOpen 與 getLaunchUrl 會給同一個網址：同一個回跳只處理一次（一個 code 換兩次第二次必失敗） */
+let lastUrl: string | null = null;
 
+/** 結果先進 callback.ts 的信箱再發事件：冷啟動時 AuthContext 可能還沒掛載，掛載後會到信箱補收 */
 function emit(outcome: NativeAuthOutcome) {
   inFlight = false;
-  window.dispatchEvent(new CustomEvent<NativeAuthOutcome>(NATIVE_AUTH_EVENT, { detail: outcome }));
+  postNativeAuthOutcome(outcome);
 }
 
 async function onUrlOpen(url: string) {
   const cb = parseNativeCallback(url);
   if (!cb) return;
+  if (url === lastUrl) return;
+  lastUrl = url;
   handled = true;
   await Browser.close().catch(() => { /* Android 的 Custom Tab 可能已經自己關了 */ });
   if (cb.failure) { emit(cb.failure); return; }
@@ -45,7 +50,7 @@ export async function initNativeAuth(): Promise<void> {
     if (!inFlight) return;
     setTimeout(() => { if (inFlight && !handled) emit('cancelled'); }, 600);
   });
-  // 冷啟動是由回跳網址喚起時，appUrlOpen 也會送，但保險起見再查一次
+  // 冷啟動是由回跳網址喚起時，appUrlOpen 可能在監聽註冊前就送過了，所以再查一次啟動網址（同一個網址靠 lastUrl 去重）
   const launch = await App.getLaunchUrl().catch(() => null);
   if (launch?.url) void onUrlOpen(launch.url);
 }

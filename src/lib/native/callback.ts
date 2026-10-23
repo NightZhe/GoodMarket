@@ -11,6 +11,23 @@ export const NATIVE_AUTH_REDIRECT = `${NATIVE_AUTH_SCHEME}://auth`;
 /** App 內登入的結果；由 auth.ts 用 window 事件（NATIVE_AUTH_EVENT）通知 AuthContext */
 export type NativeAuthOutcome = 'signed_in' | 'cancelled' | 'failed';
 export const NATIVE_AUTH_EVENT = 'goodmarket:native-auth';
+/** Android 實體返回鍵：shell.ts 先發這個可取消的事件，AuthContext 有登入面板開著就關面板並 preventDefault，否則才回上一頁 */
+export const NATIVE_BACK_EVENT = 'goodmarket:native-back';
+
+// 結果信箱：冷啟動（App 被殺掉後由回跳網址叫醒）時，換 session 可能在 AuthContext 掛載前就結束，事件沒人聽；
+// 所以先放進信箱再發事件，AuthContext 掛載時用 takeNativeAuthOutcome 補收。取走就清空，不會處理兩次。
+let boxed: NativeAuthOutcome | null = null;
+
+export function postNativeAuthOutcome(outcome: NativeAuthOutcome): void {
+  boxed = outcome;
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent<NativeAuthOutcome>(NATIVE_AUTH_EVENT, { detail: outcome }));
+}
+
+export function takeNativeAuthOutcome(): NativeAuthOutcome | null {
+  const o = boxed;
+  boxed = null;
+  return o;
+}
 
 export interface NativeCallback {
   code: string | null;

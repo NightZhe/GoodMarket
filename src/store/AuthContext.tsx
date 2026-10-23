@@ -9,7 +9,7 @@ import { ALL_PROVIDERS, fetchProviderSettings, type EnabledProviders } from '../
 import { supabaseAnonKey, supabaseUrl } from '../lib/supabase';
 import { detectInApp, type InAppKind } from '../lib/auth/inapp';
 import { isNative } from '../lib/native/platform';
-import { NATIVE_AUTH_EVENT, type NativeAuthOutcome } from '../lib/native/callback';
+import { NATIVE_AUTH_EVENT, NATIVE_BACK_EVENT, takeNativeAuthOutcome, type NativeAuthOutcome } from '../lib/native/callback';
 import { browserStores, clearPending, peekPending, type PendingAction, type PendingInput } from '../lib/auth/pending';
 import { clearVia } from '../lib/auth/loginVia';
 import { flowStore, isGateRoute, loadFlow } from '../lib/auth/phoneFlow';
@@ -160,28 +160,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [toast]);
 
   // App 內的 Google／Apple 登入在同一頁完成（lib/native/auth.ts）：成功走手機登入同一條路執行待辦動作；
-  // 取消與失敗的處理對齊整頁跳轉回來的版本（上面的 boot.outcome），並重新掛載面板讓按鈕狀態重設
+  // 取消與失敗的處理對齊整頁跳轉回來的版本（上面的 boot.outcome），並重新掛載面板讓按鈕狀態重設。
+  // 冷啟動（App 被殺掉後由回跳網址叫醒）時結果可能在這裡掛載前就送出：掛載時先到信箱補收一次
+  const handleNativeOutcome = useCallback((outcome: NativeAuthOutcome) => {
+    const rec = peekPending(browserStores(), Date.now());
+    const trigger = rec && !rec.expired ? toInput(rec.action) : null;
+    if (outcome === 'signed_in') {
+      completePhoneLogin(trigger);
+    } else if (outcome === 'cancelled') {
+      clearPending(browserStores());
+      setPanel(p => (p ? { ...p, remount: Date.now() } : p));
+      toast('登入已取消', 'info');
+    } else {
+      setLoginError('failed');
+      const seller = routeOfHash(window.location.hash).startsWith('/seller');
+      if (!seller) setPanel({ trigger, expired: false, remount: Date.now() });
+    }
+  }, [completePhoneLogin, toast]);
   useEffect(() => {
     if (!isNative()) return;
     const onNative = (e: Event) => {
-      const outcome = (e as CustomEvent<NativeAuthOutcome>).detail;
-      const rec = peekPending(browserStores(), Date.now());
-      const trigger = rec && !rec.expired ? toInput(rec.action) : null;
-      if (outcome === 'signed_in') {
-        completePhoneLogin(trigger);
-      } else if (outcome === 'cancelled') {
-        clearPending(browserStores());
-        setPanel(p => (p ? { ...p, remount: Date.now() } : p));
-        toast('登入已取消', 'info');
-      } else {
-        setLoginError('failed');
-        const seller = routeOfHash(window.location.hash).startsWith('/seller');
-        if (!seller) setPanel({ trigger, expired: false, remount: Date.now() });
-      }
+      takeNativeAuthOutcome();
+      handleNativeOutcome((e as CustomEvent<NativeAuthOutcome>).detail);
     };
     window.addEventListener(NATIVE_AUTH_EVENT, onNative);
+    const boxed = takeNativeAuthOutcome();
+    if (boxed) handleNativeOutcome(boxed);
     return () => window.removeEventListener(NATIVE_AUTH_EVENT, onNative);
-  }, [completePhoneLogin, toast]);
+  }, [handleNativeOutcome]);
+
+  // Android 實體返回鍵：登入面板開著就只關面板（等同按 X），不回上一頁
+  useEffect(() => {
+    if (!isNative() || !panel) return;
+    const onBack = (e: Event) => { e.preventDefault(); closeLogin(); };
+    window.addEventListener(NATIVE_BACK_EVENT, onBack);
+    return () => window.removeEventListener(NATIVE_BACK_EVENT, onBack);
+  }, [panel, closeLogin]);
 
   const runPendingOnLoad = mayRunPending(boot.outcome);
 
