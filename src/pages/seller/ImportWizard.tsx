@@ -108,7 +108,10 @@ export default function ImportWizard() {
   const handleStart = (payload: StartPayload) => {
     if (!lib) return;
     const r = new ImportRunner(
-      { meta: payload.meta, drafts: payload.drafts, previewFailures: payload.previewFailures, knownImages: payload.knownImages },
+      {
+        meta: payload.meta, drafts: payload.drafts, previewFailures: payload.previewFailures, knownImages: payload.knownImages,
+        resume: payload.resume,
+      },
       {
         api: importApi,
         transfer: (url, signal) => transferImage(url, {
@@ -155,6 +158,7 @@ export default function ImportWizard() {
           <StepResult
             lib={lib} analysis={analysis} outcome={run.runner.getOutcome()}
             skipped={run.payload.meta.skipped} localFailed={run.runner.getSnapshot().failed}
+            priorDone={run.runner.getSnapshot().priorDone}
             titles={run.payload.titles} onAgain={reset}
           />
         )}
@@ -167,7 +171,7 @@ export default function ImportWizard() {
       {blocker.state === 'blocked' && (
         <LeaveDialog
           title="要離開嗎？匯入還沒完成"
-          description={`現在離開會中斷匯入。已經寫入的 ${((snap?.created ?? 0) + (snap?.updated ?? 0)).toLocaleString('en-US')} 件商品會保留；沒做完的部分，之後再匯入同一批檔案就會接著完成。`}
+          description={`現在離開會中斷匯入。已經寫入的 ${((snap?.priorDone ?? 0) + (snap?.created ?? 0) + (snap?.updated ?? 0)).toLocaleString('en-US')} 件商品會保留；之後把同一批檔案再放進來，就會從沒做完的地方接著做。`}
           stayLabel="留在這裡"
           leaveLabel="離開並中斷"
           onStay={() => blocker.reset()}

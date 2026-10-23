@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_FILE_BYTES } from './constants';
 import { analyzeFileSet } from './fileset';
 import { readShopeeFile } from './sheet';
 import { fakeGrids, sampleBytes, SAMPLE, toXlsx } from './test-fixtures';
@@ -52,11 +53,18 @@ describe('readShopeeFile', () => {
     expect(readShopeeFile('x.xlsx', toXlsx(g.basic))).toMatchObject({ ok: false, reason: 'NOT_SHOPEE_FILE' });
   });
 
-  it('dts_info → DTS_FILE；超過 10 MB → FILE_TOO_LARGE', () => {
+  it('dts_info → DTS_FILE；超過 50 MB → FILE_TOO_LARGE，訊息寫「上限 50 MB」', () => {
     const g = fakeGrids(SAMPLE);
     g.sales[1][0] = 'dts_info';
     expect(readShopeeFile('d.xlsx', toXlsx(g.sales))).toMatchObject({ ok: false, reason: 'DTS_FILE' });
-    expect(readShopeeFile('big.xlsx', new Uint8Array(10 * 1024 * 1024 + 1))).toMatchObject({ ok: false, reason: 'FILE_TOO_LARGE' });
+    expect(MAX_FILE_BYTES).toBe(50 * 1024 * 1024);
+    // 10 MB 以上不再被擋（這裡不是合法 xlsx，所以是「不是蝦皮檔」而不是「太大」）
+    expect(readShopeeFile('mid.xlsx', new Uint8Array(10 * 1024 * 1024 + 1))).toMatchObject({ ok: false, reason: 'NOT_SHOPEE_FILE' });
+    const big = readShopeeFile('big.xlsx', new Uint8Array(MAX_FILE_BYTES + 1));
+    expect(big).toMatchObject({ ok: false, reason: 'FILE_TOO_LARGE' });
+    const a = analyzeFileSet([big]);
+    expect(a.issues[0]).toMatchObject({ code: 'FILE_TOO_LARGE', fileName: 'big.xlsx' });
+    expect(a.issues[0].message).toContain('上限 50 MB');
   });
 
   it('全空白列略過；有內容但沒有商品 ID 的列記在 rowsWithoutProductId', () => {
@@ -109,7 +117,7 @@ describe('analyzeFileSet', () => {
     g.sales[1][0] = 'dts_info';
     const dts = readShopeeFile('dts.xlsx', toXlsx(g.sales));
     const junk = readShopeeFile('junk.xlsx', new TextEncoder().encode('hello'));
-    const big = readShopeeFile('big.xlsx', new Uint8Array(11 * 1024 * 1024));
+    const big = readShopeeFile('big.xlsx', new Uint8Array(MAX_FILE_BYTES + 1));
     const a = analyzeFileSet([f.basic, f.sales, f.media, dts, junk, big]);
     expect(a.issues.map((i) => i.code).sort()).toEqual(['DTS_FILE', 'FILE_TOO_LARGE', 'NOT_SHOPEE_FILE']);
     expect(a.sheets).not.toBeNull();
@@ -138,7 +146,7 @@ describe('analyzeFileSet', () => {
     expect(a.canProceed).toBe(false);
   });
 
-  it('E-1.7 超過 500 件（三檔商品 ID 聯集）；500 件可以', () => {
+  it('E-1.7 超過 5,000 件（三檔商品 ID 聯集）；5,000 件可以', () => {
     const many = (n: number) => Array.from({ length: n }, (_, i) => ({
       id: String(2000 + i), name: `假商品 ${i} 號`, variants: [{ id: String(9000 + i), name: '', price: 10, stock: 1 }],
     }));
@@ -148,10 +156,11 @@ describe('analyzeFileSet', () => {
         readShopeeFile('a.xlsx', toXlsx(g.basic)), readShopeeFile('b.xlsx', toXlsx(g.sales)), readShopeeFile('c.xlsx', toXlsx(g.media)),
       ]);
     };
-    const over = run(501);
+    const over = run(5001);
     expect(over.canProceed).toBe(false);
-    expect(over.issues[0]).toMatchObject({ code: 'TOO_MANY_PRODUCTS', total: 501, limit: 500 });
-    expect(over.issues[0].message).toContain('501');
-    expect(run(500).canProceed).toBe(true);
+    expect(over.issues[0]).toMatchObject({ code: 'TOO_MANY_PRODUCTS', total: 5001, limit: 5000 });
+    expect(over.issues[0].message).toContain('5,001');
+    expect(over.issues[0].message).toContain('5,000');
+    expect(run(5000).canProceed).toBe(true);
   });
 });

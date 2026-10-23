@@ -59,11 +59,15 @@
 上線前置（使用者）：以公司申請綠界平台商與綁卡白名單、拿 HashKey／IV、確認綁卡用特店與最低金額；之後照 `prod-runbook-pb.md`：套 migration → 設 Edge Function secrets → 部署函式 → 後台啟用 pg_cron／pg_net 排程 → 開開關 → 實刷。待補規格：退款、刪帳號同步向綠界刪卡、撥款對帳。
 → 這三份已由另一 session 做成 **PR #2**（分支 `feat/payment-go-live-prereqs`，2026-10-21，待使用者確認文案後合併；merge 只部署前端、開關仍關）。
 個人中心／金流線的完整交接在 `.work/account-payment-methods/handoff-2026-10-23.md`。
-**手機號碼簡訊登入**（`phone-otp-auth/`，前端 2026-10-19 推上線 fba774c，**後台尚未設定**）：買家與賣家改用 Apple／Google／台灣手機號碼＋簡訊驗證碼，
-Email＋密碼登入已從畫面移除（規格 `.work/email-password-auth/` 作廢）；帳號頁可綁手機（`#/account/phone`）；傳送驗證碼前走 Cloudflare Turnstile（sitekey 由 GitHub secret `VITE_TURNSTILE_SITEKEY` 注入）。
-**簡訊供應商 2026-10-20 改為三竹（Mitake）**：Supabase 沒有原生整合，走 Auth Send SMS hook → Edge Function `supabase/functions/send-sms/`（簽章驗證、只寄 +886、3 秒逾時不重試、失敗回 200＋`{"error":{"http_code":502}}`、log 遮罩）→ 三竹 `SmSend`（主機 `smsb2c.mitake.com.tw`）。規格附錄 `spec-mitake.md`。Twilio 作廢。函式已部署正式站（35da05a，冒煙 401 正常）。
-**上線進度**：runbook `.work/phone-otp-auth/prod-runbook.md`「步驟 1（三竹版）」1b 部署已完成；**待使用者做 1a（`MITAKE_HOST`／`MITAKE_USERNAME`／`MITAKE_PASSWORD` secrets）、1d（後台 Hooks → Send SMS hook 開啟、產生 secret 並設成函式 secret `SEND_SMS_HOOK_SECRET`）、1e（Phone provider 開、Confirm phone 開、OTP 6／300、Rate Limits 20）、Turnstile widget 與 GitHub secret**；
-在那之前正式站 `external.phone=false`，前端自動隱藏手機欄位，買家仍只有 Apple／Google。之後依序：步驟 4 開 Captcha（前有硬性檢查）→ 步驟 5 刪「只有 Email 身分的開店帳號」（P10，不可逆，預覽→使用者確認→刪除→驗證→Storage）→ 步驟 6 關 Email provider。
+**手機號碼簡訊登入**（`phone-otp-auth/`，**2026-10-23 上線完成**；前端 2026-10-19 fba774c）：買家與賣家改用 Apple／Google／台灣手機號碼＋簡訊驗證碼，
+Email＋密碼登入已從畫面移除（規格 `.work/email-password-auth/` 作廢）；帳號頁可綁手機（`#/account/phone`）。正式站 Phone provider 開、Confirm phone 開、OTP 6 碼／300 秒、Rate Limits SMS 每小時 20、
+Cloudflare Turnstile Captcha 開（sitekey 由 GitHub secret `VITE_TURNSTILE_SITEKEY` 注入，前端已重建帶入；不帶 token 的 `/auth/v1/otp` 回 `captcha_failed` 已驗）。
+**簡訊供應商：MAAC Go（漸強實驗室，自有帳號，NT$0.78／則；決策 P18）**，三竹（Mitake，借用帳號）為備援：Supabase 沒有原生整合，走 Auth Send SMS hook → Edge Function `supabase/functions/send-sms/`
+（雙供應商，secret `SMS_PROVIDER`＝`maacgo`｜`mitake`，切換只改 secret 不重部署；簽章驗證、只寄 +886、3 秒逾時不重試、失敗回 200＋`{"error":{"http_code":502}}`、log 遮罩）→ 供應商 API。
+規格附錄 `spec-mitake.md`、`t8-maacgo-tests.md`；上線紀錄 `prod-apply-log.md`。正式站 secrets：`SMS_PROVIDER`、`MAACGO_API_KEY`、`SEND_SMS_HOOK_SECRET`（三竹 `MITAKE_*` **未設**，要用備援前得先設）。
+**上線後未收尾**：(1) 步驟 5「刪只有 Email 身分的開店帳號」10/23 預覽只有 1 個，且是當天新建的店，**使用者決定保留、不刪**；工具外鍵白名單因 10/19 的 `checkout_rejection_log` 回 FAIL，另一 session 正在更新工具並重新演練。
+(2) 步驟 6 **Email provider 仍開著**：因上述帳號只有 Email 身分，關了會進不來；等它綁手機或 Google、預覽為 0 後再關（runbook 步驟 6）。(3) **MAAC Go 送達率問題**：10/21～10/23 使用者兩支門號共 5 封 API 發送，MAAC Go 後台皆 delivered，手機只收到 1 封（另一封是 MAAC Go 後台直發有到）；
+函式與 GoTrue 端正常。待使用者拿 message_id 問 MAAC Go 客服；持續掉信就設 `MITAKE_*` 後切 `SMS_PROVIDER=mitake`。
 已知問題（不擋上線，P15）：驗證請求逾時後才成功時待辦動作不執行（L-1）；Safari 桌機外接鍵盤 Tab 第一下落到背景（S-3）。
 多 session 並行同一 repo 的做法（2026-10-18 起）：各自用 git worktree 分支與隔離的本機 Supabase 實例（複製 `supabase/` 到暫存區換 project_id／port），不改 repo `config.toml`；合併前互相知會。
 
@@ -81,10 +85,10 @@ Email＋密碼登入已從畫面移除（規格 `.work/email-password-auth/` 作
 
 維運提醒：
 - **Apple 登入 client secret 2027-04-15 到期**，2027-04-01 前用 Supabase 文件頁工具＋原 `.p8` 重做並更新後台。
-- 刪帳號走人工流程：`.work/buyer-auth/prod-runbook.md` 第 6 節的工具；有開店的帳號工具會擋，另外處理。
+- 刪帳號走人工流程：工具改為 `.work/phone-otp-auth/tools/account-tool-phone.mjs`（用法 `runbook-account-tool-notes.md`；取代 `buyer-auth` 舊工具，原因是外鍵集合變了）；有開店的帳號工具會擋，另外處理。
 - 寄信用 Gmail SMTP（寄件人「好物集」），目前沒有任何流程會寄信；Confirm email 使用者決定**不開**（理由與風險評估在 `.work/buyer-auth/decisions.md`，本檔進公開 repo，不展開）。
 - 正式站 Storage 刪檔需要 service role key：由使用者在自己終端機以 `read -rs` 輸入後跑 `tools/delete-review-paths.mjs`，不經過 agent。
-- 手機登入上線後：Supabase **Confirm phone 不得關閉**（關了簡訊額度不生效、門號可被改綁到他人帳號）；緊急止血要同時關 Phone provider **並**把 Rate Limits 的 SMS 每小時調低（只關 provider 止不住綁手機那條路）。Twilio 餘額與用量每週看（`.work/phone-otp-auth/spec.md` 第 15 節）。
+- 手機登入上線後：Supabase **Confirm phone 不得關閉**（關了簡訊額度不生效、門號可被改綁到他人帳號）；緊急止血要同時關 Phone provider **並**把 Rate Limits 的 SMS 每小時調低（只關 provider 止不住綁手機那條路）。MAAC Go 餘額（函式 log 的 `balance_cents`，低於 `SMS_LOW_BALANCE_CENTS` 預設 NT$10 會記 `maacgo_low_balance`）與 Cloudflare Turnstile 統計每週看；Turnstile Secret 與 MAAC Go key 只在後台，不進 repo。刪帳號改用 `.work/phone-otp-auth/tools/account-tool-phone.mjs`（認得 phone 身分），`buyer-auth` 舊工具作廢。
 - 正式站 runbook 的指令用函式 `Q()` 包 `npx supabase db query --linked`；舊 `buyer-auth/prod-runbook.md` 的字串變數寫法在 zsh 會 command not found。
 
 已知小問題（不急）：下單成功路徑小計仍是 integer，單張訂單超過 21 億元會 `integer out of range`（舊函式也一樣，不會建錯單）；失敗畫面 VoiceOver 實聽未驗（無障礙樹已對）；登入方式設定讀取超過 5 秒會先顯示兩顆按鈕；平板寬度賣家首頁與商品頁有橫向捲軸；

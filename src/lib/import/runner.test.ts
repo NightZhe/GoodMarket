@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type {
-  ImportBatchResult, ImportClientFailure, ImportItem, ImportRecord, ImportSkippedImage,
+  ImportBatchReport, ImportBatchResult, ImportClientFailure, ImportItem, ImportRecord, ImportSkippedImage,
 } from '../../types';
 import type { ImportItemDraft } from '../shopee-import/types';
 import { ImportCallError } from './errors';
@@ -25,7 +25,9 @@ const draft = (id: string, opts: {
 
 const record = (over: Partial<ImportRecord> = {}): ImportRecord => ({
   importId: 'imp1', status: 'completed', startedAt: 't0', finishedAt: 't1',
-  totalProducts: 0, created: 0, updated: 0, failed: 0, skipped: 0, skippedImages: 0, ...over,
+  totalProducts: 0, created: 0, updated: 0, failed: 0, skipped: 0, skippedImages: 0,
+  externalShopId: '1', files: [], options: { skipSoldOut: false, allHidden: false }, categoryOverrides: {},
+  progress: null, ...over,
 });
 
 function setup(drafts: ImportItemDraft[], opts: {
@@ -37,9 +39,11 @@ function setup(drafts: ImportItemDraft[], opts: {
   offline?: () => boolean | Promise<boolean>;
   previewFailures?: ImportClientFailure[];
   batchSize?: number;
+  resume?: RunnerInput['resume'];
 } = {}) {
   const log = {
     transfers: [] as string[], batchCalls: [] as ImportItem[][], starts: 0,
+    batchImportIds: [] as string[], batchReports: [] as ImportBatchReport[],
     finish: null as null | { failures: ImportClientFailure[]; skipped: ImportSkippedImage[] },
     finishCalls: 0,
   };
@@ -47,10 +51,12 @@ function setup(drafts: ImportItemDraft[], opts: {
   const api: ImportApi = {
     async reachable() { return true; },
     async start() { log.starts++; return { importId: 'imp1', startedAt: 't0' }; },
-    async batch(_id, items) {
+    async batch(id, items, report) {
       const err = opts.batchErrors?.(++batchCall);
       if (err) throw err;
       log.batchCalls.push(items);
+      log.batchImportIds.push(id);
+      log.batchReports.push(report);
       return opts.results ? opts.results(items) : items.map((i): ImportBatchResult => ({
         sourceProductId: i.sourceProductId, outcome: 'created', productId: `p-${i.sourceProductId}`,
         status: i.status, errors: [],
@@ -84,6 +90,7 @@ function setup(drafts: ImportItemDraft[], opts: {
       options: { skipSoldOut: false, allHidden: false },
     },
     drafts, previewFailures: opts.previewFailures ?? [], knownImages: opts.known ?? [],
+    ...(opts.resume ? { resume: opts.resume } : {}),
   };
   return { runner: new ImportRunner(input, deps), log };
 }
@@ -265,6 +272,99 @@ describe('ImportRunner', () => {
     await runner.run();
     expect(runner.getSnapshot().phase).toBe('aborted');
     expect(log.starts).toBe(0);
+  });
+
+  describe('斷點續傳與批次回報', () => {
+    it('resume：跳過 start，直接用給定的 importId 寫入；finish 也用同一個 id', async () => {
+      const { runner, log } = setup([draft('1'), draft('2'), draft('3')], { resume: { importId: 'imp-old', priorDone: 7 } });
+      await runner.run();
+      expect(log.starts).toBe(0);
+      expect(log.batchImportIds).toEqual(['imp-old', 'imp-old']);
+      expect(runner.getSnapshot()).toMatchObject({ phase: 'done', created: 3 });
+    });
+
+    it('沒有 resume：呼叫 start，且 priorDone 為 0', async () => {
+      const { runner, log } = setup([draft('1')]);
+      expect(runner.getSnapshot().priorDone).toBe(0);
+      await runner.run();
+      expect(log.starts).toBe(1);
+      expect(log.batchImportIds).toEqual(['imp1']);
+    });
+
+    it('priorDone 帶上次已完成件數，不計入 products.total，也不隨進度改變', async () => {
+      const { runner } = setup([draft('1'), draft('2'), draft('3')], { resume: { importId: 'imp-old', priorDone: 7 } });
+      expect(runner.getSnapshot().priorDone).toBe(7);
+      expect(runner.getSnapshot().products).toEqual({ done: 0, total: 3 });
+      await runner.run();
+      expect(runner.getSnapshot().priorDone).toBe(7);
+      expect(runner.getSnapshot().products).toEqual({ done: 3, total: 3 });
+    });
+
+    it('resume 沒給 priorDone：視為 0', () => {
+      const { runner } = setup([draft('1')], { resume: { importId: 'imp-old' } });
+      expect(runner.getSnapshot().priorDone).toBe(0);
+    });
+
+    it('每批 batch 都帶 report：只含這一批新產生的主圖失敗與略過圖片', async () => {
+      const { runner, log } = setup(
+        [draft('1', { extra: ['src://1/a'] }), draft('2'), draft('3'), draft('4', { extra: ['src://4/a'] })],
+        { fail: { 'src://1/a': 'IMAGE_DOWNLOAD_FAILED', 'src://3/cover': 'IMAGE_UPLOAD_FAILED', 'src://4/a': 'IMAGE_UPLOAD_FAILED' } },
+      );
+      await runner.run();
+      expect(log.batchReports).toEqual([
+        { // 第 1 批：商品 1、2；商品 1 的副圖被略過
+          clientFailures: [],
+          skippedImages: [{ sourceProductId: '1', slot: 'image:1', sourceUrl: 'src://1/a', code: 'IMAGE_DOWNLOAD_FAILED' }],
+        },
+        { // 第 2 批：商品 3 主圖失敗（不送出）、商品 4 的副圖被略過；不會重複帶第 1 批的內容
+          clientFailures: [{ sourceProductId: '3', code: 'IMAGE_UPLOAD_FAILED', message: '主圖失敗:IMAGE_UPLOAD_FAILED' }],
+          skippedImages: [{ sourceProductId: '4', slot: 'image:1', sourceUrl: 'src://4/a', code: 'IMAGE_UPLOAD_FAILED' }],
+        },
+      ]);
+    });
+
+    it('預覽就有錯的商品在第一批一起送，之後不再重複', async () => {
+      const pf = [{ sourceProductId: '9', code: 'TITLE_LENGTH', message: '太短' }];
+      const { runner, log } = setup([draft('1'), draft('2'), draft('3')], { previewFailures: pf });
+      await runner.run();
+      expect(log.batchReports.map((r) => r.clientFailures)).toEqual([pf, []]);
+    });
+
+    it('第一批全是主圖失敗而沒有呼叫寫入：預覽錯誤與該批失敗順延到下一次呼叫，不遺失', async () => {
+      const pf = [{ sourceProductId: '9', code: 'TITLE_LENGTH', message: '太短' }];
+      const { runner, log } = setup([draft('1'), draft('2'), draft('3')], {
+        previewFailures: pf, fail: { 'src://1/cover': 'IMAGE_DOWNLOAD_FAILED', 'src://2/cover': 'IMAGE_DOWNLOAD_FAILED' },
+      });
+      await runner.run();
+      expect(log.batchCalls).toHaveLength(1);
+      expect(log.batchReports[0].clientFailures.map((f) => f.sourceProductId)).toEqual(['9', '1', '2']);
+    });
+
+    it('批次寫入失敗後重新嘗試：同一批重送時 report 內容相同（後端去重，所以安全）', async () => {
+      let allow = false;
+      const pf = [{ sourceProductId: '9', code: 'X', message: 'm' }];
+      const { runner, log } = setup([draft('1', { extra: ['src://1/a'] })], {
+        previewFailures: pf, fail: { 'src://1/a': 'IMAGE_DOWNLOAD_FAILED' },
+        batchErrors: () => (allow ? null : new ImportCallError('Failed to fetch', null)),
+      });
+      await runner.run();
+      expect(runner.getSnapshot().phase).toBe('interrupted');
+      allow = true;
+      await runner.run();
+      expect(log.batchReports).toHaveLength(1);
+      expect(log.batchReports[0].clientFailures).toEqual(pf);
+      expect(log.batchReports[0].skippedImages).toHaveLength(1);
+    });
+
+    it('finish 仍送這個分頁累積的失敗與略過圖片（後端合併）', async () => {
+      const { runner, log } = setup([draft('1'), draft('2', { extra: ['src://2/a'] })], {
+        fail: { 'src://1/cover': 'IMAGE_DOWNLOAD_FAILED', 'src://2/a': 'IMAGE_DOWNLOAD_FAILED' },
+        resume: { importId: 'imp-old', priorDone: 1 },
+      });
+      await runner.run();
+      expect(log.finish?.failures.map((f) => f.sourceProductId)).toEqual(['1']);
+      expect(log.finish?.skipped.map((s) => s.sourceProductId)).toEqual(['2']);
+    });
   });
 
   it('訂閱者會在每次進展時被通知', async () => {

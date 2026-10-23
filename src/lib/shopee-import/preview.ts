@@ -23,6 +23,7 @@ export function effectiveCategory(
 
 /**
  * 預覽分類（F-2）。輸入：轉換結果、get_import_index 回傳值（乾淨店可傳 null）、兩個開關、分類修改。
+ * - 在 doneIds 內（續傳時上次已寫入的商品）→ done：不再處理，狀態沿用線上現況
  * - 有任何商品層錯誤 → error（不匯入）
  * - 已存在本店 → update；**開關不影響已存在的商品**（Q-2）
  * - 新商品：「略過已售完」開且全規格庫存 0 → skip；否則 create
@@ -35,6 +36,7 @@ export function buildPreview(
   index: ImportIndex | null,
   options: PreviewOptions,
   categoryOverrides: Readonly<Record<string, CategoryId>> = {},
+  doneIds?: ReadonlySet<string>,
 ): PreviewResult {
   const existing = new Map(index?.products.map((p) => [p.sourceProductId, p.status]) ?? []);
 
@@ -44,7 +46,8 @@ export function buildPreview(
     const isExisting = existingStatus !== undefined;
 
     let action: PreviewAction;
-    if (p.errors.length > 0) action = 'error';
+    if (doneIds?.has(p.sourceProductId)) action = 'done';
+    else if (p.errors.length > 0) action = 'error';
     else if (isExisting) action = 'update';
     else if (options.skipSoldOut && p.soldOut) action = 'skip';
     else action = 'create';
@@ -54,10 +57,12 @@ export function buildPreview(
       afterStatus = options.allHidden || p.soldOut ? 'hidden' : 'active';
     } else if (action === 'update') {
       afterStatus = p.soldOut ? 'hidden' : (existingStatus ?? null);
+    } else if (action === 'done') {
+      afterStatus = existingStatus ?? null;
     }
 
     const prices = p.variants.flatMap((v) => (v.price === null ? [] : [v.price]));
-    const warnings: ProductIssue<ProductWarningCode>[] = [
+    const warnings: ProductIssue<ProductWarningCode>[] = action === 'done' ? [] : [
       ...(categoryId === 'other' ? [CATEGORY_OTHER_ISSUE] : []),
       ...p.warnings,
     ];
@@ -75,20 +80,21 @@ export function buildPreview(
       action,
       existing: isExisting,
       afterStatus,
-      errors: p.errors,
+      errors: action === 'done' ? [] : p.errors,
       warnings,
     };
   });
 
   const warningsByCode = Object.fromEntries(WARNING_CODES.map((c) => [c, 0])) as Record<ProductWarningCode, number>;
   const counts: PreviewCounts = {
-    total: rows.length, created: 0, updated: 0, errors: 0, skipped: 0,
+    total: rows.length, created: 0, updated: 0, errors: 0, skipped: 0, done: 0,
     warnings: 0, problems: 0, warningsByCode,
   };
   for (const r of rows) {
     if (r.action === 'create') counts.created++;
     else if (r.action === 'update') counts.updated++;
     else if (r.action === 'error') counts.errors++;
+    else if (r.action === 'done') counts.done++;
     else counts.skipped++;
     // 「需要注意」只算會被匯入的商品
     if ((r.action === 'create' || r.action === 'update') && r.warnings.length > 0) {

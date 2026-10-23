@@ -17,10 +17,11 @@ export function PreviewHeader() {
   );
 }
 
-const ACTION_TEXT: Record<Row['action'], string> = { create: '新增', update: '更新', error: '錯誤', skip: '略過' };
+const ACTION_TEXT: Record<Row['action'], string> = { create: '新增', update: '更新', error: '錯誤', skip: '略過', done: '已完成' };
 
 function afterText(row: Row, existingStatus: 'active' | 'hidden' | undefined): string {
   if (row.action === 'error' || row.action === 'skip' || row.afterStatus === null) return '—';
+  if (row.action === 'done') return row.afterStatus === 'active' ? '上架中' : '下架中';
   if (row.action === 'create') return row.afterStatus === 'active' ? '上架' : '下架';
   if (row.afterStatus === 'hidden') return existingStatus === 'active' ? '改為下架' : '維持下架';
   return '維持上架';
@@ -49,6 +50,11 @@ function Issues({ row }: { row: Row }) {
           <Tag kind="info" /><span>已售完，已依你的設定略過</span>
         </p>
       )}
+      {row.action === 'done' && (
+        <p className="flex items-start gap-1.5 text-sm">
+          <Tag kind="info" label="已完成" /><span>上次已經匯入完成，這次不會再處理</span>
+        </p>
+      )}
       {importable && row.warnings.map((w) => (
         <p key={w.code} className="flex items-start gap-1.5 text-sm">
           <Tag kind="warn" />
@@ -67,17 +73,17 @@ interface Props {
 
 /**
  * 預覽的一列。桌機是八欄的表格列，手機是卡片（同一份 DOM，用 grid／contents 重排）。
- * 只有「將新增」的列可以改分類；將更新的列顯示「維持原設定」（R-1）。
+ * 只有「將新增」的列可以改分類；將更新與上次已完成的列顯示「維持原設定」（R-1）。
  */
 export default function PreviewRow({ row, existingStatus, onCategory }: Props) {
   const category = CATEGORIES.find((c) => c.id === row.categoryId);
   const prices = row.priceMin === null || row.priceMax === null ? '—'
     : row.priceMin === row.priceMax ? money(row.priceMin) : `${money(row.priceMin)}–${money(row.priceMax)}`;
-  const bar = row.action === 'error' ? 'border-l-error-border' : row.action === 'skip' ? 'border-l-disabled'
+  const bar = row.action === 'error' ? 'border-l-error-border' : row.action === 'skip' || row.action === 'done' ? 'border-l-disabled'
     : row.warnings.length > 0 ? 'border-l-warning' : 'border-l-transparent';
 
   return (
-    <li className={`grid grid-cols-[56px_minmax(0,1fr)] items-start gap-x-3 gap-y-2 border-l-4 px-3 py-3 md:items-center md:px-3 ${GRID} ${bar} ${row.action === 'skip' ? 'bg-subtle' : 'bg-white'}`}>
+    <li className={`grid grid-cols-[56px_minmax(0,1fr)] items-start gap-x-3 gap-y-2 border-l-4 px-3 py-3 md:items-center md:px-3 ${GRID} ${bar} ${row.action === 'skip' || row.action === 'done' ? 'bg-subtle' : 'bg-white'}`}>
       <Cover src={row.coverUrl} />
       <div className="min-w-0">
         <p className="break-words text-sm font-medium">{row.title === '' ? '（沒有名稱）' : row.title}</p>
@@ -95,7 +101,7 @@ export default function PreviewRow({ row, existingStatus, onCategory }: Props) {
             >
               {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
             </select>
-          ) : row.action === 'update' ? (
+          ) : row.action === 'update' || row.action === 'done' ? (
             <span className="text-muted"><span className="md:hidden">分類：</span>維持原設定</span>
           ) : (
             <span className="text-muted"><span className="md:hidden">分類：</span>{category ? `${category.icon} ${category.name}` : '—'}</span>

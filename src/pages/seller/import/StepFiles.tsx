@@ -6,6 +6,7 @@ import FileRow from '../../../components/import/FileRow';
 import { btnPrimary } from '../../../components/import/ui';
 import { ALL_KINDS, KIND_LABEL, MAX_FILE_BYTES } from '../../../lib/shopee-import/constants';
 import type { ShopeeImportLib } from '../../../lib/import/loader';
+import { matchResume } from '../../../lib/import/resume';
 import type { FileIntake, FileSetIssue, ParsedSheet } from '../../../lib/shopee-import/types';
 import type { ImportFileKind, ImportRecord } from '../../../types';
 import { fmtDateTime, n, useFocusOnMount, type Entry, type ReadyAnalysis } from './shared';
@@ -38,7 +39,10 @@ function LastImportInfo({ info }: { info: LastImport }) {
   if (r.status === 'running') {
     return (
       <Banner kind="warning" title="上次匯入沒有做完">
-        {fmtDateTime(r.startedAt)} 開始，已新增 {n(r.created)}、更新 {n(r.updated)}、失敗 {n(r.failed)}。把同一批檔案再匯入一次，會接著完成沒做完的部分。
+        <span className="break-words">
+          {`${fmtDateTime(r.startedAt)} 開始，共 ${n(r.totalProducts)} 件，已完成 ${n(r.created + r.updated)} 件。`}
+          {`把同一批檔案（${r.files.map((f) => f.fileName).join('、')}）再放進來，就會從沒做完的地方接著做。`}
+        </span>
       </Banner>
     );
   }
@@ -119,9 +123,18 @@ export default function StepFiles({ lib, ensureLib, entries, setEntries, lastImp
   const hasProblemRows = issues.some((i) => i.code !== 'MISSING_KIND');
 
   const ready = analysis !== null && analysis.canProceed && analysis.sheets !== null && analysis.externalShopId !== null;
+  // 上次沒做完、而且這次放的是同一批檔案 → 接續（預覽頁會用最新的紀錄再判定一次）
+  const lastRecord = lastImport.state === 'ready' ? lastImport.record : null;
+  const resume = ready && analysis.sheets && analysis.externalShopId
+    ? matchResume(lastRecord, { externalShopId: analysis.externalShopId, sheets: analysis.sheets })
+    : null;
   const hint = (() => {
     if (entries.length === 0) return '三個檔案都放進來，才能繼續。';
     if (parsing) return '辨識完成後才能繼續。';
+    if (ready && resume) return `三個檔案都放好了，會接續上次匯入，還剩 ${n(resume.remaining)} 件。`;
+    if (ready && lastRecord?.status === 'running') {
+      return `三個檔案都放好了（共 ${n(analysis.totalProducts ?? 0)} 件商品）。這批檔案和上次沒做完的匯入不同，會當作新的匯入。`;
+    }
     if (ready) return `三個檔案都放好了（共 ${n(analysis.totalProducts ?? 0)} 件商品。）`;
     if (hasDuplicate) return '請先移除重複的檔案。';
     if (hasProblemRows) return '請先移除有問題的檔案。';
@@ -191,7 +204,7 @@ export default function StepFiles({ lib, ensureLib, entries, setEntries, lastImp
         return [<FileRow key={e.id} state="notice" title={e.fileName} message={`「${e.fileName}」是配送設定檔，好物集用不到，移除後就能繼續`} {...rm} />];
       }
       return [<FileRow key={e.id} state="error" title={e.fileName} {...rm}
-        message={reason === 'FILE_TOO_LARGE' ? `「${e.fileName}」檔案太大（上限 10 MB）` : `「${e.fileName}」不是蝦皮匯出的商品檔`} />];
+        message={reason === 'FILE_TOO_LARGE' ? `「${e.fileName}」檔案太大（上限 50 MB）` : `「${e.fileName}」不是蝦皮匯出的商品檔`} />];
     }
     const same = byKind(e.intake.sheet.kind);
     if (same.length > 1) {
@@ -237,7 +250,7 @@ export default function StepFiles({ lib, ensureLib, entries, setEntries, lastImp
           type="button" aria-disabled={!ready} aria-describedby="step1-hint" className={btnPrimary}
           onClick={() => { if (ready) onNext({ ...analysis, sheets: analysis.sheets!, externalShopId: analysis.externalShopId! }); }}
         >
-          下一步：確認預覽
+          {resume ? '下一步：接續匯入' : '下一步：確認預覽'}
         </button>
       </div>
     </section>
