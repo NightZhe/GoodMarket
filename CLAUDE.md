@@ -57,6 +57,8 @@
 **刪帳號工具已更新**（會一併刪地址與個人檔案；舊版備份在 `account-payment-methods/tools/pre-A-T4-account-tool/`）。
 **線上付款（綠界特約合作平台商，`account-payment-methods/`）**：前後端程式已合併並推上線（2026-10-20），但**功能開關預設關**、正式站**尚未套** `20261019200000_ecpay_payments.sql`、**尚未部署** `supabase/functions/payment-*`，買家看不到任何付款入口（前端對缺少 `get_payment_config` 的資料庫一律視為關）。設計：買家平台層綁卡（卡號只在綠界 SDK，本站存 BindCardID 於 service-role 專用表）、多店一次付款＝每店各授權一筆、全部成功才請款、任一失敗放棄已授權；賣家在綠界成為本站底下的特約商店，本站只存編號與狀態；LINE Pay 本版不做；本站不經手錢（D3＝B）。
 上線前置（使用者）：以公司申請綠界平台商與綁卡白名單、拿 HashKey／IV、確認綁卡用特店與最低金額；之後照 `prod-runbook-pb.md`：套 migration → 設 Edge Function secrets → 部署函式 → 後台啟用 pg_cron／pg_net 排程 → 開開關 → 實刷。待補規格：退款、刪帳號同步向綠界刪卡、撥款對帳。
+→ 這三份已由另一 session 做成 **PR #2**（分支 `feat/payment-go-live-prereqs`，2026-10-21，待使用者確認文案後合併；merge 只部署前端、開關仍關）。
+個人中心／金流線的完整交接在 `.work/account-payment-methods/handoff-2026-10-23.md`。
 **手機號碼簡訊登入**（`phone-otp-auth/`，前端 2026-10-19 推上線 fba774c，**後台尚未設定**）：買家與賣家改用 Apple／Google／台灣手機號碼＋簡訊驗證碼，
 Email＋密碼登入已從畫面移除（規格 `.work/email-password-auth/` 作廢）；帳號頁可綁手機（`#/account/phone`）；傳送驗證碼前走 Cloudflare Turnstile（sitekey 由 GitHub secret `VITE_TURNSTILE_SITEKEY` 注入）。
 **簡訊供應商 2026-10-20 改為三竹（Mitake）**：Supabase 沒有原生整合，走 Auth Send SMS hook → Edge Function `supabase/functions/send-sms/`（簽章驗證、只寄 +886、3 秒逾時不重試、失敗回 200＋`{"error":{"http_code":502}}`、log 遮罩）→ 三竹 `SmSend`（主機 `smsb2c.mitake.com.tw`）。規格附錄 `spec-mitake.md`。Twilio 作廢。函式已部署正式站（35da05a，冒煙 401 正常）。
