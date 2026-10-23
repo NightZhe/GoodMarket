@@ -85,8 +85,11 @@ export default function Home() {
       ))}
 
       <SectionHeader title="全部商品" />
-      <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-5 md:grid-cols-4 lg:grid-cols-6">
-        {recommended.slice(0, shown).map(p => <ProductCard key={p.id} product={p} />)}
+      {/* 容器查詢要掛在父層：格子本身窄於 15rem（200% 縮放）時改單欄，價格才放得下 */}
+      <div className="@container">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-5 @max-[15rem]:grid-cols-1 md:grid-cols-4 lg:grid-cols-6">
+          {recommended.slice(0, shown).map(p => <ProductCard key={p.id} product={p} />)}
+        </div>
       </div>
       {shown < recommended.length && (
         <div className="px-5 pt-6">

@@ -26,7 +26,7 @@ export default function ProductCard({ product, variant = 'grid' }: { product: Pr
   const stat = useReviews().productStat(product.id);
 
   return (
-    <Link to={`/product/${product.id}`} aria-label={label} className={`group @container block min-w-0 ${widthOf[variant]}`}>
+    <Link to={`/product/${product.id}`} aria-label={label} className={`group block min-w-0 ${widthOf[variant]}`}>
       {/* 照片 alt=""、內文 aria-hidden：整張卡只由 Link 的 aria-label 唸一次 */}
       <div aria-hidden="true">
         <Photo src={product.images[0]} alt="" className={`aspect-square ${photoPress}`}>
@@ -36,13 +36,18 @@ export default function ProductCard({ product, variant = 'grid' }: { product: Pr
             </div>
           )}
         </Photo>
-        {/* 價格列（R5）：價格與「已售 N」同列，原價接在價格後。卡片寬度不夠放三者（容器查詢 < 11rem，iPhone 兩欄卡與貨架卡都在此內、
-            與 200% 縮放）時先藏原價；只剩價格＋已售還放不下（200% 縮放）才讓已售換到價格下一行，任何情況都不重疊、不裁字 */}
-        <div className="mt-2 flex flex-wrap items-baseline gap-x-1.5">
+        {/* 價格列（R5）：價格與「已售 N」同列，原價接在價格後。優先序 價格 > 已售 > 原價：
+            原價放在自己的容器格（basis-0 flex-1，吃剩下的空間），剩餘寬度 ≥ 4.5rem（放得下「$499,999」＋左距）才顯示；間距用 margin 不用 gap，空格子才不佔位，
+            所以永遠不會裁到一半；只有價格＋已售本身放不下時（200% 縮放）已售才換到下一行。任何情況不重疊 */}
+        <div className="mt-2 flex flex-wrap items-baseline">
           <span className={`shrink-0 whitespace-nowrap text-headline font-bold ${soldOut ? 'text-muted' : 'text-ink'}`}>{money(price)}</span>
-          {originalPrice && <s className="hidden shrink-0 whitespace-nowrap text-footnote text-muted @min-[11rem]:inline">{money(originalPrice)}</s>}
+          {originalPrice && (
+            <span className="@container min-w-0 flex-1 basis-0">
+              <s className="ml-1.5 hidden whitespace-nowrap text-footnote text-muted @min-[4.5rem]:inline">{money(originalPrice)}</s>
+            </span>
+          )}
           {product.sold > 0 && (
-            <span className="ml-auto shrink-0 whitespace-nowrap text-footnote text-muted">已售 {soldText(product.sold)}</span>
+            <span className="ml-auto shrink-0 whitespace-nowrap pl-1.5 text-footnote text-muted">已售 {soldText(product.sold)}</span>
           )}
         </div>
         <p className="mt-0.5 line-clamp-2 text-subhead text-ink">{product.title}</p>

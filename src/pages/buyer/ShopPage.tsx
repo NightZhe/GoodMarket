@@ -46,8 +46,10 @@ export default function ShopPage() {
       {list.length === 0 ? (
         <EmptyState title="這家店還沒有上架商品" />
       ) : (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 md:grid-cols-4 md:px-0 lg:grid-cols-5">
-          {list.map(p => <ProductCard key={p.id} product={p} />)}
+        <div className="@container">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 @max-[15rem]:grid-cols-1 md:grid-cols-4 md:px-0 lg:grid-cols-5">
+            {list.map(p => <ProductCard key={p.id} product={p} />)}
+          </div>
         </div>
       )}
     </div>

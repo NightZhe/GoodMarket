@@ -171,8 +171,10 @@ export default function Search() {
             action={hasCondition ? <Link to="/search" className={pillButton}>看全部商品</Link> : undefined}
           />
         ) : (
-          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 md:grid-cols-4 md:px-0 lg:grid-cols-5">
-            {results.map(p => <ProductCard key={p.id} product={p} />)}
+          <div className="@container">
+            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 @max-[15rem]:grid-cols-1 md:grid-cols-4 md:px-0 lg:grid-cols-5">
+              {results.map(p => <ProductCard key={p.id} product={p} />)}
+            </div>
           </div>
         )}
       </section>
