@@ -20,6 +20,10 @@ const photoPress =
   'group-active:[&>:first-child]:opacity-70 group-active:[&>:first-child]:duration-0 ' +
   '[@media(hover:hover)_and_(pointer:fine)]:group-hover:[&>:first-child]:opacity-85';
 
+/** 原價格的顯示門檻（容器查詢）：依字數估 13px 字寬＋6px 左距，留約 8px 餘裕。class 字串要寫死 Tailwind 才掃得到 */
+const origShowAt = (text: string) =>
+  text.length <= 6 ? '@min-[3.5rem]:inline' : text.length === 7 ? '@min-[3.75rem]:inline' : '@min-[4.25rem]:inline';
+
 export default function ProductCard({ product, variant = 'grid' }: { product: Product; variant?: Variant }) {
   const { price, originalPrice, soldOut, label, shopLine } = useProductView(product);
   // 評分來自真實評價；沒有評價（或還沒載入）就不顯示星星，不會閃一個假的分數
@@ -37,13 +41,13 @@ export default function ProductCard({ product, variant = 'grid' }: { product: Pr
           )}
         </Photo>
         {/* 價格列（R5）：價格與「已售 N」同列，原價接在價格後。優先序 價格 > 已售 > 原價：
-            原價放在自己的容器格（basis-0 flex-1，吃剩下的空間），剩餘寬度 ≥ 4.5rem（放得下「$499,999」＋左距）才顯示；間距用 margin 不用 gap，空格子才不佔位，
+            原價放在自己的容器格（basis-0 flex-1，吃剩下的空間），剩餘寬度放得下它（門檻依字數：見 origShowAt）才顯示；間距用 margin 不用 gap，空格子才不佔位，
             所以永遠不會裁到一半；只有價格＋已售本身放不下時（200% 縮放）已售才換到下一行。任何情況不重疊 */}
         <div className="mt-2 flex flex-wrap items-baseline">
           <span className={`shrink-0 whitespace-nowrap text-headline font-bold ${soldOut ? 'text-muted' : 'text-ink'}`}>{money(price)}</span>
           {originalPrice && (
             <span className="@container min-w-0 flex-1 basis-0">
-              <s className="ml-1.5 hidden whitespace-nowrap text-footnote text-muted @min-[4.5rem]:inline">{money(originalPrice)}</s>
+              <s className={`ml-1.5 hidden whitespace-nowrap text-footnote text-muted ${origShowAt(money(originalPrice))}`}>{money(originalPrice)}</s>
             </span>
           )}
           {product.sold > 0 && (
