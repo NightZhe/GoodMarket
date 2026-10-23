@@ -3,18 +3,24 @@
 /* Design tokens — 與 Figma 設計檔（GoodShop）的 Variables 一一對應。
    改色請兩邊一起改：https://www.figma.com/design/mZQGGpGnwijMNRP2rkYr2S/GoodShop */
 @theme {
-  /* brand */
-  --color-brand: #f2582a;
-  --color-brand-dark: #d8431a;
+  /* brand（App Store 風改版，D2）：文字、連結、主按鈕、focus ring 都用 brand，白底對比 5.18 */
+  --color-brand: #bf4419;
+  --color-brand-dark: #a33a15; /* 按下態，白字對比 6.62 */
   --color-brand-soft: #fff2ec;
+  --color-brand-logo: #f2582a; /* 只給 logo 圖形（白底 3.38，過非文字 3:1）。不得用於文字或按鈕底 */
+  --color-badge: #d70015; /* 購物車數字徽章，白字對比 5.38 */
 
   /* text / surface */
-  --color-ink: #1f2328;
-  --color-muted: #6b7280;
+  --color-ink: #000000;
+  --color-muted: #6c6c70; /* 白底 5.23 */
   --color-disabled: #d1d5db;
-  --color-line: #ececec;
-  --color-canvas: #f5f5f5;
+  --color-line: #e5e5ea; /* 1px 實線 */
+  --color-separator: rgb(60 60 67 / 0.29); /* 0.5px 髮絲線 */
+  --color-canvas: #f2f2f7; /* 分組列表底、膠囊底、照片佔位 */
   --color-subtle: #fafafa;
+  --color-search: #efeff0; /* 搜尋框底 */
+  --color-press: #e5e5ea; /* 列表列、灰膠囊按下 */
+  --color-chevron: #c4c4c7; /* 列表 ›（裝飾，整列可點） */
 
   /* 語意色：成功（免運、已完成）、警告（庫存、折扣）、錯誤、資訊（運送中） */
   --color-success: #0d9488;
@@ -38,14 +44,51 @@
   --shadow-sheet: 0 -2px 8px rgb(0 0 0 / 0.06);
   --shadow-popover: 0 8px 24px -4px rgb(0 0 0 / 0.12);
   --shadow-bar-top: 0 -4px 12px rgb(0 0 0 / 0.05);
+  --shadow-story: 0 4px 14px -4px rgb(0 0 0 / 0.18), 0 0 0 0.5px rgb(0 0 0 / 0.06); /* 只給故事卡 */
+
+  --radius-card: 12px;
+  --radius-story: 16px;
+
+  /* 字級（HIG Large 預設表）；body 行高 25 刻意偏離 HIG 的 22（中文字面比拉丁字高） */
+  --text-large-title: 34px;
+  --text-large-title--line-height: 41px;
+  --text-title1: 28px;
+  --text-title1--line-height: 34px;
+  --text-title2: 22px;
+  --text-title2--line-height: 28px;
+  --text-title3: 20px;
+  --text-title3--line-height: 25px;
+  --text-headline: 17px;
+  --text-headline--line-height: 22px;
+  --text-body: 17px;
+  --text-body--line-height: 25px;
+  --text-subhead: 15px;
+  --text-subhead--line-height: 20px;
+  --text-footnote: 13px;
+  --text-footnote--line-height: 18px;
+  --text-caption2: 11px;
+  --text-caption2--line-height: 13px;
 
   --font-sans: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
 }
 
-html, body { background: var(--color-canvas); color: var(--color-ink); -webkit-tap-highlight-color: transparent; }
+html, body { background: #fff; color: var(--color-ink); -webkit-tap-highlight-color: transparent; }
 body { font-feature-settings: "tnum"; }
+/* 鍵盤焦點：2px brand 外框，立即出現、不做 transition。放在 base 層，元件自己寫的 outline-none／focus-visible:outline-* 仍然優先 */
+@layer base { :focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; } }
 button { cursor: pointer; }
+/* 連結與按鈕像原生控制項：長按不選字、不跳出放大鏡與連結預覽（iOS Safari） */
+a, button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 button:disabled { cursor: not-allowed; }
+
+/* 材質：只用在控制層（頁首、tab bar、購買列）。-webkit- 前綴必留（Tailwind v4 最低支援 Safari 16.4，無前綴版要 iOS 18）。
+   86% 白本身就是不透明 fallback；Safari 不支援 prefers-reduced-transparency，所以「減少動態」時改實心並拿掉模糊 */
+.material { background: rgb(255 255 255 / 0.86); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); }
+.material-grouped { background: rgb(242 242 247 / 0.86); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); }
+@media (prefers-reduced-motion: reduce) {
+  .material { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .material-grouped { background: #f2f2f7; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
@@ -55,15 +98,17 @@ button:disabled { cursor: not-allowed; }
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes toast { 0% { opacity: 0; transform: translateY(8px) scale(.96); } 12%, 85% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; } }
-.animate-sheet { animation: sheet-up .28s cubic-bezier(.2,.8,.2,1); }
+/* 底部面板曲線照設計定稿 §3.7（iOS sheet）；減少動態時改 150ms 淡入 */
+.animate-sheet { animation: sheet-up .28s cubic-bezier(.32,.72,0,1); }
 .animate-fade { animation: fade-in .2s ease-out; }
 .animate-toast { animation: toast var(--toast-ms, 1.8s) ease-out forwards; }
 /* 登入面板：手機從底部滑上來；桌機是置中對話框，只淡入（跟遮罩一樣） */
 .animate-auth-panel { animation: fade-in .2s ease-out; }
-@media (max-width: 767px) { .animate-auth-panel { animation: sheet-up .28s cubic-bezier(.2,.8,.2,1); } }
+@media (max-width: 767px) { .animate-auth-panel { animation: sheet-up .28s cubic-bezier(.32,.72,0,1); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-sheet, .animate-fade, .animate-toast, .animate-auth-panel { animation: none; }
+  .animate-fade, .animate-toast { animation: none; }
+  .animate-sheet, .animate-auth-panel { animation: fade-in .15s ease-out; }
 }
 
 /* 綠界綁卡欄位是站內付 SDK 畫進頁面的同頁 DOM（不是 iframe）。它預設字級 15px：輸入框小於 16px 時，iOS Safari 聚焦會自動放大頁面；預設高 41px，觸控目標要 ≥44 */

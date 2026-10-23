@@ -38,7 +38,7 @@ function NewView() {
 
   return (
     <SubPage noTabBar>
-      <SubHeader to={back} backLabel="回到付款方式" title="新增信用卡" />
+      <SubHeader to={back} backLabel="回到付款方式" backText="付款方式" title="新增信用卡" />
 
       {disabled && (
         <Notice>
@@ -58,7 +58,7 @@ function NewView() {
 
       {!disabled && blocked === null && (
         <>
-          <section className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+          <section className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
             <h2 className="text-sm font-bold">綁定前先知道</h2>
             <ul className="mt-2 space-y-2 text-sm">
               <li><span className="font-medium">先授權一小筆金額，再立刻退刷</span>　用來驗證卡片，不會真的收費。帳單上可能短暫看到這筆授權。</li>
@@ -68,14 +68,14 @@ function NewView() {
           </section>
 
           {inApp && (
-            <div className="mt-2 px-2 md:mt-3 md:px-0">
+            <div className="mt-2 md:mt-3">
               <Banner kind="info" role="status" title={`你正在 ${inAppName(inApp)} 裡開啟好物集`}>
                 如果驗證完成後沒有自動回到這一頁，請回到好物集，到「付款方式」查看結果。
               </Banner>
             </div>
           )}
 
-          <section className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+          <section className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
             <h2 className="mb-3 text-sm font-bold">卡片資料</h2>
             <BindCardPanel
               variant="page" returnPath={BIND_RETURN_PATH} from="page"
@@ -93,5 +93,5 @@ function NewView() {
 }
 
 function Notice({ children }: { children: React.ReactNode }) {
-  return <div className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">{children}</div>;
+  return <div className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">{children}</div>;
 }

@@ -1,180 +1,165 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Truck, ShieldCheck, Store } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { CATEGORIES } from '../../data/seed';
+import { CategoryIcon } from '../../data/categoryIcons';
+import { orderCategories } from '../../lib/home/categoryOrder';
+import { pickStory, type StoryPick } from '../../lib/home/pickStory';
 import ProductCard from '../../components/ProductCard';
-import ProductImage from '../../components/ProductImage';
-import { cheapestVariant, discountOf, money } from '../../lib/format';
+import ProductRow, { ProductRowList } from '../../components/ProductRow';
+import Photo from '../../components/Photo';
+import PricePill from '../../components/PricePill';
+import SectionHeader from '../../components/SectionHeader';
+import Shelf from '../../components/Shelf';
+import EmptyState from '../../components/EmptyState';
+import { useProductView } from '../../components/useProductView';
+import type { Category, Product } from '../../types';
 
+/** 「顯示更多商品」一次多幾件 */
 const PAGE = 12;
+/** 「最新上架」橫滑貨架最多幾件，其餘到 › 目的地 */
+const SHELF_MAX = 10;
+/** 列表列：放在架商品最多的前幾個分類、每個分類幾列（§4.6） */
+const ROW_CATEGORIES = 2;
+const ROWS_PER_CATEGORY = 3;
 
-// 限時特賣先不對外顯示（示範資料用的檔期機制還沒真的做）。改 true 就會回來。
-const SHOW_FLASH_SALE = false;
+/** 灰膠囊鈕按下：縮 .97＋底色換 press，按下 100ms、放開 160ms（§3.7）；減少動態時不縮放。
+ * Tailwind v4 的 scale-* 寫的是 CSS `scale` 屬性，transition 要列 scale 而不是 transform */
+const PILL_PRESS =
+  'transition-[scale,background-color] duration-160 ease-[cubic-bezier(.23,1,.32,1)] ' +
+  'active:scale-[0.97] active:bg-press active:duration-100 motion-reduce:transition-none motion-reduce:active:scale-100';
+
+const newestFirst = (a: Product, b: Product) => b.createdAt.localeCompare(a.createdAt);
 
 export default function Home() {
   const { products } = useStore();
   const [shown, setShown] = useState(PAGE);
-  const active = useMemo(() => products.filter(p => p.status === 'active'), [products]);
 
-  const flash = useMemo(
-    () => active.filter(p => discountOf(cheapestVariant(p.variants)) > 0)
-      .sort((a, b) => discountOf(cheapestVariant(b.variants)) - discountOf(cheapestVariant(a.variants)))
-      .slice(0, 6),
-    [active],
+  const active = useMemo(() => products.filter(p => p.status === 'active'), [products]);
+  const categories = useMemo(() => orderCategories(CATEGORIES, products), [products]);
+  // 故事卡的「現在」只在商品資料變動時取一次（含靜默重讀），不在每次 render 讀時鐘
+  const now = useMemo(() => Date.now(), [products]);
+  const story = useMemo(() => pickStory(products, CATEGORIES, now), [products, now]);
+
+  const newest = useMemo(() => [...active].sort(newestFirst), [active]);
+  // categories 已依在架數由多到少排；在架 0 件的分類整段不出現
+  const rowSections = useMemo(
+    () => categories
+      .map(category => ({ category, items: newest.filter(p => p.categoryId === category.id).slice(0, ROWS_PER_CATEGORY) }))
+      .filter(s => s.items.length > 0)
+      .slice(0, ROW_CATEGORIES),
+    [categories, newest],
   );
-  // 每日新發現照銷量排；新上架的另外開一區，才不會被銷量 0 壓到最後面
+  // 全部商品照銷量排；新上架的有「最新上架」貨架，不會被銷量 0 壓到看不見
   const recommended = useMemo(() => [...active].sort((a, b) => b.sold - a.sold), [active]);
-  const newest = useMemo(
-    () => [...active].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6),
-    [active],
-  );
+
+  if (active.length === 0) {
+    return (
+      <div className="mx-auto max-w-6xl">
+        <EmptyState
+          title="目前還沒有商品"
+          action={
+            <Link to="/seller" className={`inline-flex h-11 items-center rounded-full bg-canvas px-5 text-headline font-semibold text-brand ${PILL_PRESS}`}>
+              免費開店
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-3 px-0 pt-3 md:space-y-5 md:px-4 md:pt-6">
-      {/* 主視覺 */}
-      <section className="grid gap-3 px-3 md:grid-cols-3 md:px-0">
-        <div className="relative overflow-hidden rounded-md bg-gradient-to-br from-[#ff7a45] via-brand to-[#e2361b] p-6 text-white md:col-span-2 md:p-10">
-          <p className="text-xs font-medium tracking-[0.2em] opacity-90">GOODMARKET · 9.9 購物節</p>
-          <h1 className="mt-2 text-3xl font-bold leading-tight md:text-5xl">全站滿 $499<br />免運費</h1>
-          <p className="relative mt-3 max-w-[13rem] text-sm opacity-90 md:max-w-xs">上千家小店直送，買家安心、賣家好上手。</p>
-          <Link to="/search" className="relative mt-5 inline-flex items-center gap-1 rounded-full bg-white px-5 py-2 text-sm font-semibold text-brand transition hover:bg-brand-soft">
-            開始逛逛 <ChevronRight size={16} />
-          </Link>
-          <span aria-hidden className="pointer-events-none absolute -bottom-4 -right-3 select-none text-[6.5rem] md:-bottom-6 md:text-[12rem]">🎁</span>
+    <div className="mx-auto max-w-6xl pb-8">
+      <CategoryChips categories={categories} />
+
+      {story && <StoryCard story={story} />}
+
+      <SectionHeader eyebrow="過去 7 天" title="最新上架" to="/search?sort=newest" />
+      <Shelf>
+        {newest.slice(0, SHELF_MAX).map(p => <ProductCard key={p.id} product={p} variant="shelf" />)}
+      </Shelf>
+
+      {rowSections.map(({ category, items }) => (
+        <section key={category.id}>
+          <SectionHeader title={category.name} to={`/search?cat=${category.id}`} />
+          <ProductRowList>
+            {items.map(p => <ProductRow key={p.id} product={p} />)}
+          </ProductRowList>
+        </section>
+      ))}
+
+      <SectionHeader title="全部商品" />
+      <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-5 md:grid-cols-4 lg:grid-cols-6">
+        {recommended.slice(0, shown).map(p => <ProductCard key={p.id} product={p} />)}
+      </div>
+      {shown < recommended.length && (
+        <div className="px-5 pt-6">
+          <button
+            type="button"
+            onClick={() => setShown(s => s + PAGE)}
+            className={`flex h-12.5 w-full items-center justify-center rounded-full bg-canvas text-headline font-semibold text-brand md:mx-auto md:w-80 ${PILL_PRESS}`}
+          >
+            顯示更多商品
+          </button>
         </div>
-        <Link to="/seller" className="group flex items-center gap-4 rounded-md bg-white p-4 transition hover:shadow-md md:flex-col md:items-stretch md:justify-between md:p-6">
-          <Store className="shrink-0 text-brand md:hidden" size={30} strokeWidth={1.6} />
-          <div className="min-w-0 flex-1">
-            <Store className="hidden text-brand md:block" size={30} strokeWidth={1.6} />
-            <h2 className="text-base font-bold md:mt-3 md:text-xl">你也可以開店</h2>
-            <p className="mt-0.5 text-xs text-muted md:mt-1 md:text-sm">3 分鐘建立商店，拍照就能上架。0 元開店、不抽上架費。</p>
-          </div>
-          <span className="inline-flex shrink-0 items-center text-sm font-semibold text-brand md:mt-4">
-            <span className="hidden md:inline">前往賣家中心</span><span className="md:hidden">開店</span> <ChevronRight size={16} className="transition group-hover:translate-x-1" />
+      )}
+    </div>
+  );
+}
+
+/** 分類膠囊列（§4.2）：橫滑、11 個全列、順序依在架數。膠囊 36 高，外層 44 是熱區 */
+function CategoryChips({ categories }: { categories: Category[] }) {
+  return (
+    <nav
+      aria-label="分類"
+      className="no-scrollbar flex snap-x snap-mandatory scroll-px-5 gap-2 overflow-x-auto px-5 pt-2 md:flex-wrap md:overflow-visible"
+    >
+      {categories.map(c => (
+        <Link key={c.id} to={`/search?cat=${c.id}`} className="group flex h-11 shrink-0 snap-start items-center">
+          <span className="flex h-9 items-center gap-1.5 rounded-full bg-canvas pl-2.5 pr-3.5 text-subhead font-medium text-ink transition-colors duration-200 group-active:bg-press group-active:duration-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:bg-press">
+            <CategoryIcon id={c.id} size={18} />
+            {c.name}
           </span>
         </Link>
-      </section>
-
-      <section className="grid grid-cols-3 gap-px overflow-hidden bg-line text-xs text-muted md:rounded-md">
-        <Perk icon={<Truck size={16} />} text="滿 $499 免運" />
-        <Perk icon={<ShieldCheck size={16} />} text="7 天鑑賞期" />
-        <Perk icon={<Store size={16} />} text="在地小店直送" />
-      </section>
-
-      {/* 分類 */}
-      <section className="bg-white md:rounded-md">
-        <h2 className="border-b border-line px-4 py-3 text-sm font-medium text-muted">分類</h2>
-        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-11">
-          {CATEGORIES.map(c => (
-            <Link key={c.id} to={`/search?cat=${c.id}`} className="flex flex-col items-center gap-1.5 px-1 py-3 transition hover:bg-brand-soft/60 md:gap-2 md:py-4">
-              <span aria-hidden="true" className="flex h-12 w-12 items-center justify-center rounded-full bg-canvas text-2xl md:h-14 md:w-14 md:text-3xl">{c.icon}</span>
-              <span className="px-1 text-center text-xs">{c.name}</span>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* 限時特賣 */}
-      {SHOW_FLASH_SALE && (
-      <section className="bg-white md:rounded-md">
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold italic text-brand">⚡ 限時特賣</h2>
-            <Countdown />
-          </div>
-          <Link to="/search?sort=discount" className="flex items-center text-sm text-brand">
-            看更多 <ChevronRight size={16} />
-          </Link>
-        </div>
-        <div className="no-scrollbar flex gap-2 overflow-x-auto p-3 md:grid md:grid-cols-6 md:overflow-visible">
-          {flash.map(p => {
-            const price = cheapestVariant(p.variants).price;
-            const stock = p.variants.reduce((s, v) => s + v.stock, 0);
-            const ratio = Math.min(0.95, p.sold / (p.sold + stock * 20));
-            return (
-              <Link key={p.id} to={`/product/${p.id}`} className="w-32 shrink-0 text-center md:w-auto">
-                <div className="relative overflow-hidden rounded-sm">
-                  <ProductImage src={p.images[0]} alt={p.title} className="w-full" />
-                  <span className="absolute right-0 top-0 bg-warning px-1 text-[11px] font-semibold text-brand-dark">
-                    -{discountOf(cheapestVariant(p.variants))}%
-                  </span>
-                </div>
-                <p className="mt-2 text-lg font-medium text-brand">{money(price)}</p>
-                <div className="relative mx-2 mt-1 h-4 overflow-hidden rounded-full bg-[#ffbda6]">
-                  <div className="h-full bg-gradient-to-r from-brand to-[#ff8a4c]" style={{ width: `${ratio * 100}%` }} />
-                  <span className="absolute inset-0 text-[10px] font-semibold uppercase leading-4 text-white">
-                    {ratio > 0.8 ? '即將售完' : '熱賣中'}
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-      )}
-
-      {/* 最新上架 */}
-      {newest.length > 0 && (
-        <section className="bg-white md:rounded-md">
-          <div className="flex items-center justify-between border-b border-line px-4 py-3">
-            <h2 className="text-lg font-bold">🆕 最新上架</h2>
-            <Link to="/search?sort=newest" className="flex items-center text-sm text-brand">
-              看更多 <ChevronRight size={16} />
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 md:grid-cols-6 md:gap-2.5">
-            {newest.map(p => <ProductCard key={p.id} product={p} />)}
-          </div>
-        </section>
-      )}
-
-      {/* 每日推薦 */}
-      <section>
-        <h2 className="sticky top-[52px] z-10 border-b-4 border-brand bg-white py-3 text-center font-medium text-brand md:top-[108px] md:rounded-t-md">
-          每日新發現
-        </h2>
-        <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 md:grid-cols-6 md:gap-2.5 md:px-0">
-          {recommended.slice(0, shown).map(p => <ProductCard key={p.id} product={p} />)}
-        </div>
-        {shown < recommended.length && (
-          <div className="flex justify-center py-4">
-            <button
-              onClick={() => setShown(s => s + PAGE)}
-              className="w-72 rounded-sm border border-line bg-white py-2.5 text-sm text-muted transition hover:bg-canvas"
-            >
-              查看更多
-            </button>
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function Perk({ icon, text }: { icon: React.ReactNode; text: string }) {
-  return (
-    <div className="flex items-center justify-center gap-1.5 bg-white py-2.5">
-      <span className="text-brand">{icon}</span>
-      {text}
-    </div>
-  );
-}
-
-function Countdown() {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  // 每 2 小時一檔特賣
-  const left = 7200 - Math.floor(now / 1000) % 7200;
-  const parts = [Math.floor(left / 3600), Math.floor(left / 60) % 60, left % 60].map(n => String(n).padStart(2, '0'));
-  return (
-    <span className="flex gap-1" aria-label="特賣剩餘時間">
-      {parts.map((p, i) => (
-        <span key={i} className="rounded-sm bg-ink px-1 text-sm font-semibold leading-5 text-white">{p}</span>
       ))}
-    </span>
+    </nav>
+  );
+}
+
+/**
+ * 故事卡（§4.3）：整張一個連結，VoiceOver 只停一次。不輪播、不自動切換；重讀後換了分類就直接換。
+ * 副標（前三個品牌／關鍵字）萃取規則未定，本版不顯示。
+ */
+function StoryCard({ story }: { story: StoryPick }) {
+  const { price, soldOut, shopLine } = useProductView(story.latest);
+
+  return (
+    <Link
+      to={`/search?cat=${story.categoryId}&sort=newest`}
+      aria-label={`${story.eyebrow}：${story.title}`}
+      className="mx-5 mt-5 block overflow-hidden rounded-story shadow-story transition-transform duration-160 ease-[cubic-bezier(.23,1,.32,1)] active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
+    >
+      <div aria-hidden="true">
+        <Photo src={story.image} alt="" size="lg" className="aspect-[4/3] rounded-none md:aspect-[16/5]">
+          {/* 壓暗層：底 62%→40% 處 55%→頂 0，白字最差對比 4.74 */}
+          <div className="absolute inset-x-0 bottom-0 h-[70%] bg-[linear-gradient(to_top,rgb(0_0_0/.62)_0%,rgb(0_0_0/.55)_40%,rgb(0_0_0/0)_100%)]" />
+          <div className="absolute inset-x-4 bottom-3.5 text-white">
+            <p className="text-footnote font-semibold">{story.eyebrow}</p>
+            <p className="mt-0.5 line-clamp-2 text-title1 font-bold">{story.title}</p>
+          </div>
+        </Photo>
+        <div className="flex items-center gap-3 bg-white px-4 py-3">
+          <Photo src={story.image} alt="" size="sm" className="size-11 shrink-0 rounded-[10px]" />
+          {/* 字放大到擠不下時價格膠囊換到標題下方（§3.5，同列表列） */}
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="min-w-0 flex-1 basis-32">
+              <p className="truncate text-subhead font-semibold text-ink">{story.latest.title}</p>
+              <p className="truncate text-footnote text-muted">{shopLine}</p>
+            </div>
+            <PricePill price={price} muted={soldOut} />
+          </div>
+        </div>
+      </div>
+    </Link>
   );
 }
