@@ -64,10 +64,10 @@ Email＋密碼登入已從畫面移除（規格 `.work/email-password-auth/` 作
 Cloudflare Turnstile Captcha 開（sitekey 由 GitHub secret `VITE_TURNSTILE_SITEKEY` 注入，前端已重建帶入；不帶 token 的 `/auth/v1/otp` 回 `captcha_failed` 已驗）。
 **簡訊供應商：MAAC Go（漸強實驗室，自有帳號，NT$0.78／則；決策 P18）**，三竹（Mitake，借用帳號）為備援：Supabase 沒有原生整合，走 Auth Send SMS hook → Edge Function `supabase/functions/send-sms/`
 （雙供應商，secret `SMS_PROVIDER`＝`maacgo`｜`mitake`，切換只改 secret 不重部署；簽章驗證、只寄 +886、3 秒逾時不重試、失敗回 200＋`{"error":{"http_code":502}}`、log 遮罩）→ 供應商 API。
-規格附錄 `spec-mitake.md`、`t8-maacgo-tests.md`；上線紀錄 `prod-apply-log.md`。正式站 secrets：`SMS_PROVIDER`、`MAACGO_API_KEY`、`SEND_SMS_HOOK_SECRET`（三竹 `MITAKE_*` **未設**，要用備援前得先設）。
+規格附錄 `spec-mitake.md`、`t8-maacgo-tests.md`；上線紀錄 `prod-apply-log.md`。正式站 secrets：`SMS_PROVIDER`、`MAACGO_API_KEY`、**`MAACGO_FROM`（寄件長碼，必設：不設時 MAAC Go 走共用短碼 1990，電信端收不到，10/23 六封實測全掉）**、`SEND_SMS_HOOK_SECRET`（三竹 `MITAKE_*` **未設**，要用備援前得先設）。
 **上線後未收尾**：(1) 步驟 5「刪只有 Email 身分的開店帳號」10/23 預覽只有 1 個，且是當天新建的店，**使用者決定保留、不刪**；工具外鍵白名單因 10/19 的 `checkout_rejection_log` 回 FAIL，另一 session 正在更新工具並重新演練。
-(2) 步驟 6 **Email provider 仍開著**：因上述帳號只有 Email 身分，關了會進不來；等它綁手機或 Google、預覽為 0 後再關（runbook 步驟 6）。(3) **MAAC Go 送達率問題**：10/21～10/23 使用者兩支門號共 5 封 API 發送，MAAC Go 後台皆 delivered，手機只收到 1 封（另一封是 MAAC Go 後台直發有到）；
-函式與 GoTrue 端正常。待使用者拿 message_id 問 MAAC Go 客服；持續掉信就設 `MITAKE_*` 後切 `SMS_PROVIDER=mitake`。
+(2) 步驟 6 **Email provider 仍開著**：因上述帳號只有 Email 身分，關了會進不來；等它綁手機或 Google、預覽為 0 後再關（runbook 步驟 6）。
+（掉信問題 10/23 已解：函式 8835d40 加選填 secret `MAACGO_FROM`，設長碼後兩支門號皆收到。）
 已知問題（不擋上線，P15）：驗證請求逾時後才成功時待辦動作不執行（L-1）；Safari 桌機外接鍵盤 Tab 第一下落到背景（S-3）。
 多 session 並行同一 repo 的做法（2026-10-18 起）：各自用 git worktree 分支與隔離的本機 Supabase 實例（複製 `supabase/` 到暫存區換 project_id／port），不改 repo `config.toml`；合併前互相知會。
 
