@@ -11,6 +11,7 @@
 //  ── MAAC Go（SMS_PROVIDER=maacgo）──
 //   MAACGO_API_KEY        sk_live_…（只放 secret，不進程式、不進日誌）
 //   MAACGO_API_BASE       選填，預設 https://sms.cresclab.com；http 只准 localhost／127.0.0.1／host.docker.internal（本機假伺服器）
+//   MAACGO_FROM           選填，寄件號碼（E.164 長碼如 +886911518322，或純數字短碼；4～15 碼）。沒設＝MAAC Go 用共用短碼 1990；格式錯 → bad_config、不發送。log 只記 from_set，不記值
 //   MAACGO_TIMEOUT_MS     選填，預設 3000
 //   SMS_LOW_BALANCE_CENTS 選填，餘額（NT 分，78＝NT$0.78）低於此值多記一行 warn，預設 1000
 // 邏輯在 handler.ts（可在 Node 下以 vitest 測試）；這裡只負責接上 Deno。

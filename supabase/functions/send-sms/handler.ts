@@ -13,7 +13,7 @@
 import {
   buildSmSendRequest, classifyStatus, maskPhone, parseMitakeReply, renderSmsBody, resolveMitakeBase, toMitakeNumber, type Severity,
 } from './mitake.ts';
-import { buildMaacgoRequest, parseMaacgoReply, resolveMaacgoBase, toMaacgoNumber } from './maacgo.ts';
+import { buildMaacgoRequest, parseMaacgoReply, resolveMaacgoBase, resolveMaacgoFrom, toMaacgoNumber } from './maacgo.ts';
 import { verifyWebhook } from './webhook.ts';
 
 export interface Deps {
@@ -190,18 +190,21 @@ async function sendViaMitake(d: Deps, uuid: () => string, send: SendLog, emit: E
   return notSent();
 }
 
-async function sendViaMaacgo(d: Deps, send: SendLog, emit: Emit, t: Target): Promise<Response> {
+async function sendViaMaacgo(d: Deps, rawSend: SendLog, emit: Emit, t: Target): Promise<Response> {
   const { to, masked, otp } = t;
   // ── 設定 ──（MAACGO_API_BASE 選填，只給本機假伺服器或將來的代理用；缺 key 不會退回三竹，避免默默改用借來的帳號）
   const base = resolveMaacgoBase(d.env('MAACGO_API_BASE'));
   const apiKey = d.env('MAACGO_API_KEY');
-  if (!base || !apiKey) {
-    send('failed', 'critical', { reason: 'bad_config', missing: [!apiKey && 'MAACGO_API_KEY', !base && 'MAACGO_API_BASE'].filter(Boolean), phone: masked });
+  // MAACGO_FROM 選填（寄件號碼）：沒設＝不帶 from（MAAC Go 用共用短碼）；格式錯＝bad_config，不退回不帶 from 發送（設定錯就不猜）。log 只記 from_set，不記值
+  const from = resolveMaacgoFrom(d.env('MAACGO_FROM'));
+  const send: SendLog = (outcome, level, fields) => rawSend(outcome, level, { ...fields, from_set: typeof from === 'string' });
+  if (!base || !apiKey || from === null) {
+    send('failed', 'critical', { reason: 'bad_config', missing: [!apiKey && 'MAACGO_API_KEY', !base && 'MAACGO_API_BASE', from === null && 'MAACGO_FROM'].filter(Boolean), phone: masked });
     return notSent();
   }
 
   // ── 呼叫 MAAC Go（不重試）──
-  const call = buildMaacgoRequest({ base, apiKey }, { to, body: renderSmsBody(otp) });
+  const call = buildMaacgoRequest({ base, apiKey }, { to, body: renderSmsBody(otp), from });
   const limit = intEnv(d.env('MAACGO_TIMEOUT_MS'), 100, 30_000, DEFAULT_MITAKE_TIMEOUT_MS);
   const ac = new AbortController();
   let timedOut = false;

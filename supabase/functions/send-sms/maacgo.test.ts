@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHandler, type Deps } from './handler.ts';
 import {
-  buildMaacgoRequest, MAACGO_DEFAULT_BASE, parseMaacgoReply, resolveMaacgoBase, toMaacgoNumber,
+  buildMaacgoRequest, MAACGO_DEFAULT_BASE, parseMaacgoReply, resolveMaacgoBase, resolveMaacgoFrom, toMaacgoNumber,
 } from './maacgo.ts';
 
 // 回覆格式依據 https://sms.cresclab.com/openapi.yaml（SmsSendResponse、ErrorResponse）與 developers.html 的錯誤碼表（2026-10-21 抓取）。
@@ -53,6 +53,31 @@ describe('請求組裝', () => {
   it('金鑰只在 Authorization 標頭，不在網址、不在 body', () => {
     expect(req.url).not.toContain('TESTKEY');
     expect(req.init.body).not.toContain('TESTKEY');
+  });
+});
+
+describe('MAACGO_FROM 解析（寄件號碼，選填）', () => {
+  it.each([undefined, '', '   ', '\t\n'])('沒設或空白 %j → undefined（不帶 from）', (raw) => { expect(resolveMaacgoFrom(raw)).toBeUndefined(); });
+  it.each([
+    ['+886911518322', '+886911518322'],
+    ['  +886911518322 \n', '+886911518322'], // 前後空白先 trim
+    ['1990', '1990'],
+    ['0911518322', '0911518322'],
+    ['+1234', '+1234'],
+    ['+123456789012345', '+123456789012345'], // 15 碼是上限
+  ])('接受 %j → %j', (raw, want) => { expect(resolveMaacgoFrom(raw)).toBe(want); });
+  it.each(['+88691151832a', 'abcd', '+886 911518322', '8869 11518322', '123', '+123', '+1234567890123456', '12345678901234567', '++886911518322', '886+911518322', '+886-911-518322', '+886911518322;x'])(
+    '拒絕 %j → null（設定錯就不猜）', (raw) => { expect(resolveMaacgoFrom(raw)).toBeNull(); });
+});
+
+describe('請求組裝：from', () => {
+  const key = { base: 'https://sms.cresclab.com', apiKey: 'sk_live_TESTKEY' };
+  const p = { to: '+886912345678', body: 'hi' };
+  it('沒給 from → body 沒有 from 欄位（與舊行為相同）', () => {
+    expect(Object.keys(JSON.parse(buildMaacgoRequest(key, p).init.body))).toEqual(['to', 'body', 'type']);
+  });
+  it.each(['+886911518322', '1990'])('給 from=%s → 與 to／body／type 並列，其餘欄位不變', (from) => {
+    expect(JSON.parse(buildMaacgoRequest(key, { ...p, from }).init.body)).toEqual({ to: '+886912345678', body: 'hi', type: 'otp', from });
   });
 });
 
@@ -152,6 +177,7 @@ const HOOK_SECRET = `v1,whsec_${KEY.toString('base64')}`;
 const NOW_MS = 1_800_000_000_000;
 const OTP = '734915';
 const API_KEY = 'sk_live_FAKE_not_a_real_key';
+const FROM_VALUE = '+886911518322';
 const FAILED = { error: { http_code: 502, message: 'SMS not sent' } };
 const sign = (id: string, ts: number, body: string) => 'v1,' + createHmac('sha256', KEY).update(`${id}.${ts}.${body}`).digest('base64');
 const payload = (over: { phone?: unknown; otp?: unknown } = {}) =>
@@ -246,6 +272,33 @@ describe('handler：SMS_PROVIDER=maacgo 成功路徑', () => {
     await make()(signedReq(payload()));
     expect(logObjs().find((o) => o.evt === 'maacgo_low_balance')).toMatchObject({ threshold_cents: 1000 });
   });
+  it('沒設 MAACGO_FROM → 請求 body 無 from、log from_set:false', async () => {
+    await make()(signedReq(payload()));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).not.toHaveProperty('from');
+    expect(sendSmsLogs()[0]).toMatchObject({ outcome: 'sent', from_set: false });
+  });
+  it.each(['   ', ''])('MAACGO_FROM=%j（空白）→ 視同沒設', async (v) => {
+    env.MAACGO_FROM = v;
+    await make()(signedReq(payload()));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).not.toHaveProperty('from');
+    expect(sendSmsLogs()[0]).toMatchObject({ outcome: 'sent', from_set: false });
+  });
+  it.each([[' +886911518322 ', '+886911518322'], ['1990', '1990']])('MAACGO_FROM=%j → body 含 from=%s、log from_set:true 且不記值', async (raw, want) => {
+    env.MAACGO_FROM = raw;
+    expect((await make()(signedReq(payload()))).status).toBe(200);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+      to: '+886912345678', body: `【好物集】你的驗證碼是 ${OTP}，5 分鐘內有效。請勿提供給任何人。`, type: 'otp', from: want,
+    });
+    expect(sendSmsLogs()[0]).toMatchObject({ outcome: 'sent', from_set: true });
+    for (const l of logs()) expect(l).not.toContain(want);
+  });
+  it('MAAC Go 回失敗時（例 402）log 也有 from_set', async () => {
+    env.MAACGO_FROM = '+886911518322';
+    fetchMock.mockResolvedValueOnce(json(402, { error: 'insufficient_balance', balance_cents: 3 }));
+    await expectFailed(await make()(signedReq(payload())));
+    expect(sendSmsLogs()[0]).toMatchObject({ outcome: 'failed', reason: 'maacgo_billing', from_set: true });
+    for (const l of logs()) expect(l).not.toContain('911518322');
+  });
   it('MAACGO_API_BASE 可覆蓋（本機假伺服器）', async () => {
     env.MAACGO_API_BASE = 'http://host.docker.internal:9978';
     await make()(signedReq(payload()));
@@ -339,6 +392,10 @@ describe('handler：MAAC Go 設定與輸入檢查', () => {
     ['MAACGO_API_KEY 空字串', { MAACGO_API_KEY: '' }, ['MAACGO_API_KEY']],
     ['MAACGO_API_BASE 是 http://（非本機）', { MAACGO_API_BASE: 'http://sms.example.com' }, ['MAACGO_API_BASE']],
     ['MAACGO_API_BASE 帶路徑', { MAACGO_API_BASE: 'https://sms.cresclab.com/api' }, ['MAACGO_API_BASE']],
+    ['MAACGO_FROM 含字母', { MAACGO_FROM: 'abcd1234' }, ['MAACGO_FROM']],
+    ['MAACGO_FROM 中間有空白', { MAACGO_FROM: '+886 911518322' }, ['MAACGO_FROM']],
+    ['MAACGO_FROM 超長', { MAACGO_FROM: '+1234567890123456' }, ['MAACGO_FROM']],
+    ['MAACGO_API_BASE 與 MAACGO_FROM 同時壞', { MAACGO_API_BASE: 'http://sms.example.com', MAACGO_FROM: 'zz' }, ['MAACGO_API_BASE', 'MAACGO_FROM']],
   ])('%s → 200＋502、critical bad_config、不呼叫 MAAC Go', async (_n, over, missing) => {
     Object.assign(env, over);
     await expectFailed(await make()(signedReq(payload())));
@@ -376,8 +433,11 @@ describe('handler：MAAC Go 的 log 規則（永不記 OTP、金鑰、完整門�
     await send(signedReq(payload({ phone: '+14155550123' })));
     await send(signedReq(payload({ otp: 'abc' })));
     env.MAACGO_API_KEY = ''; await send(signedReq(payload()));
+    env.MAACGO_API_KEY = API_KEY; env.MAACGO_FROM = FROM_VALUE;
+    await send(signedReq(payload()));
+    env.MAACGO_FROM = 'bad' + FROM_VALUE; await send(signedReq(payload())); // 非法值也不該進 log
     const text = logs().join('\n') + '\n' + all.join('\n');
-    for (const s of [OTP, API_KEY, 'not_a_real_key', 'sk_live', '912345678', '886912345678', '0912345678', '4155550123', '你的驗證碼', '請勿提供給任何人', 'whsec_', KEY.toString('base64'), 'topup', 'Bearer']) {
+    for (const s of [OTP, API_KEY, 'not_a_real_key', 'sk_live', '912345678', '886912345678', '0912345678', '4155550123', '你的驗證碼', '請勿提供給任何人', 'whsec_', KEY.toString('base64'), 'topup', 'Bearer', FROM_VALUE, '911518322']) {
       expect(text, `不該出現：${s}`).not.toContain(s);
     }
     expect(logs().length).toBeGreaterThan(10);

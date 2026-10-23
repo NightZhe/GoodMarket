@@ -1,4 +1,5 @@
 // MAAC Go（漸強實驗室 https://sms.cresclab.com）POST /api/sms/send：門號轉換、請求組裝、回覆解析。純函式，不碰網路與 Deno。
+// 寄件號碼 `from` 是選填（MAACGO_FROM secret）：不帶＝MAAC Go 用共用短碼 1990（正式站實測收不到）；要指定長碼就設 MAACGO_FROM，見 resolveMaacgoFrom。
 // 依據 https://sms.cresclab.com/openapi.yaml（SmsSendRequest／SmsSendResponse／ErrorResponse）、developers.html 的錯誤碼表與 llms-full.txt（2026-10-21 查證，整理在 .work/phone-otp-auth/t8-maacgo-tests.md）。
 import type { Severity } from './mitake.ts';
 
@@ -30,8 +31,19 @@ export function resolveMaacgoBase(raw: string | undefined): string | null {
   return `${scheme}://${rest}`;
 }
 
+/**
+ * MAACGO_FROM（選填，寄件號碼）→ undefined＝沒設或空白（請求不帶 from）；string＝合法值（已 trim）；null＝格式錯（呼叫端回 bad_config，不退回不帶 from 發送）。
+ * 合法格式：E.164 長碼（`+886911518322`）或純數字短碼，4～15 碼，可有一個開頭的 +。實際該填什麼以 MAAC Go 後台直發時顯示的寄件號碼為準。
+ */
+export function resolveMaacgoFrom(raw: string | undefined): string | null | undefined {
+  if (raw === undefined || raw.trim() === '') return undefined;
+  const v = raw.trim();
+  return /^\+?\d{4,15}$/.test(v) ? v : null;
+}
+
 export interface MaacgoCreds { base: string; apiKey: string }
-export interface MaacgoSendParams { to: string; body: string }
+/** from：寄件號碼（resolveMaacgoFrom 驗過的值）；不給就不帶，MAAC Go 用預設共用短碼。 */
+export interface MaacgoSendParams { to: string; body: string; from?: string }
 
 export function buildMaacgoRequest(c: MaacgoCreds, p: MaacgoSendParams): { url: string; init: { method: 'POST'; headers: Record<string, string>; body: string } } {
   return {
@@ -40,7 +52,7 @@ export function buildMaacgoRequest(c: MaacgoCreds, p: MaacgoSendParams): { url: 
       method: 'POST',
       // 金鑰只放 Authorization 標頭：網址與 body 都不帶（網址會進各種 log）
       headers: { Authorization: `Bearer ${c.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: p.to, body: p.body, type: 'otp' }),
+      body: JSON.stringify({ to: p.to, body: p.body, type: 'otp', ...(p.from ? { from: p.from } : {}) }),
     },
   };
 }
