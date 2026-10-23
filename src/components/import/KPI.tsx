@@ -1,6 +1,6 @@
 import { focusRing } from './ui';
 
-export type KpiKind = 'new' | 'update' | 'error' | 'warn' | 'skip';
+export type KpiKind = 'new' | 'update' | 'error' | 'warn' | 'skip' | 'done';
 
 const COLOR: Record<KpiKind, string> = {
   new: 'text-success-text',
@@ -8,6 +8,7 @@ const COLOR: Record<KpiKind, string> = {
   error: 'text-error-text',
   warn: 'text-warning-text',
   skip: 'text-muted',
+  done: 'text-success-text',
 };
 
 interface Props {

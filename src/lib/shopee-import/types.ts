@@ -129,7 +129,8 @@ export interface PreviewOptions {
   allHidden: boolean;
 }
 
-export type PreviewAction = 'create' | 'update' | 'error' | 'skip';
+/** done＝續傳時上次已寫入完成的商品（不再處理） */
+export type PreviewAction = 'create' | 'update' | 'error' | 'skip' | 'done';
 
 export interface PreviewRow {
   sourceProductId: string;
@@ -144,19 +145,21 @@ export interface PreviewRow {
   action: PreviewAction;
   /** 此商品已存在本店（get_import_index 有它） */
   existing: boolean;
-  /** 匯入後狀態；error／skip 為 null。更新商品是依 F-5.6 推算（不知道手動規格） */
+  /** 匯入後狀態；error／skip 為 null；done 為目前線上狀態。更新商品是依 F-5.6 推算（不知道手動規格） */
   afterStatus: 'active' | 'hidden' | null;
   errors: ProductIssue<ProductErrorCode>[];
   warnings: ProductIssue<ProductWarningCode>[];
 }
 
 export interface PreviewCounts {
-  /** 檔案商品數；恆等於 created + updated + errors + skipped */
+  /** 檔案商品數；恆等於 created + updated + errors + skipped + done */
   total: number;
   created: number;
   updated: number;
   errors: number;
   skipped: number;
+  /** 續傳時上次已完成的件數；非續傳恆為 0 */
+  done: number;
   /** 需要注意：有提醒、且會被匯入（新增或更新）的件數 */
   warnings: number;
   /** 報告的「有問題」＝ errors + warnings（同一件只算一次） */

@@ -22,6 +22,8 @@ interface Props {
   skipped: number;
   /** 沒有 record（紀錄沒存成功、直接看結果）時用本地統計的失敗件數 */
   localFailed: number;
+  /** 接續上次匯入時，上次已完成的件數（已包含在 record 的數字裡）；一般匯入為 0 */
+  priorDone: number;
   titles: Record<string, string>;
   onAgain: () => void;
 }
@@ -32,7 +34,7 @@ const KIND_LABEL_SHORT: Record<ImportFileKind, string> = {
   basic_info: '商品標題及描述', sales_info: '價格及庫存', media_info: '媒體資訊',
 };
 
-export default function StepResult({ lib, analysis, outcome, skipped, localFailed, titles, onAgain }: Props) {
+export default function StepResult({ lib, analysis, outcome, skipped, localFailed, priorDone, titles, onAgain }: Props) {
   const headingRef = useFocusOnMount<HTMLHeadingElement>();
   const { record } = outcome;
   // 四個數字以資料庫的匯入紀錄為準（與下次進精靈看到的「上次匯入」一致）；紀錄沒存成功時用本地統計
@@ -105,6 +107,12 @@ export default function StepResult({ lib, analysis, outcome, skipped, localFaile
         <KPI kind="error" label="失敗（件）" value={failed} />
         <KPI kind="skip" label="略過（件）" value={skip} />
       </div>
+      {priorDone > 0 && (
+        <p className="text-sm">
+          其中 {n(priorDone)} 件是上次完成的。
+          <span className="text-muted">上方數字含上次完成的部分；下方的失敗與略過圖片清單、上架與下架件數只計這次接續處理的。</span>
+        </p>
+      )}
       <p className="text-sm text-muted tabular-nums">上架 {n(outcome.active)} 件・下架 {n(outcome.hidden)} 件</p>
 
       {!record && (

@@ -4,18 +4,20 @@ import { focusRing } from './ui';
 interface Props {
   title: string;
   description: string;
+  /** 補充說明（例如鎖定的原因），接在 description 後面一起被朗讀 */
+  note?: string;
   checked: boolean;
   disabled?: boolean;
   onChange: (next: boolean) => void;
 }
 
 /** 整列都可點；role="switch" 以 Space／Enter 切換。關態軌道用 muted，維持對白底 ≥ 3:1 */
-export default function Switch({ title, description, checked, disabled = false, onChange }: Props) {
+export default function Switch({ title, description, note, checked, disabled = false, onChange }: Props) {
   const id = useId();
   return (
     <button
       type="button" role="switch" aria-checked={checked} disabled={disabled}
-      aria-labelledby={`${id}-t`} aria-describedby={`${id}-d`}
+      aria-labelledby={`${id}-t`} aria-describedby={note ? `${id}-d ${id}-n` : `${id}-d`}
       onClick={() => onChange(!checked)}
       className={`flex w-full items-start gap-3 rounded-md border border-line bg-white p-3 text-left disabled:opacity-60 ${focusRing}`}
     >
@@ -28,6 +30,7 @@ export default function Switch({ title, description, checked, disabled = false, 
       <span className="min-w-0">
         <span id={`${id}-t`} className="block text-sm font-medium">{title}</span>
         <span id={`${id}-d`} className="mt-0.5 block text-xs text-muted">{description}</span>
+        {note && <span id={`${id}-n`} className="mt-0.5 block text-xs text-ink">{note}</span>}
       </span>
     </button>
   );

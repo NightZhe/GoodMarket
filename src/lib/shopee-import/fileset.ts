@@ -2,6 +2,7 @@ import type { ImportFileKind } from '../../types';
 import { ALL_KINDS, KIND_LABEL, MAX_PRODUCTS_PER_IMPORT } from './constants';
 import type { FileIntake, FileSetAnalysis, FileSetIssue, ParsedSheet } from './types';
 
+const fmt = (v: number) => v.toLocaleString('en-US');
 const kindName = (k: ImportFileKind) => `${KIND_LABEL[k]}（${k}）`;
 
 /**
@@ -16,7 +17,7 @@ export function analyzeFileSet(intakes: FileIntake[]): FileSetAnalysis {
     if (it.ok) {
       sheets.push(it.sheet);
     } else if (it.reason === 'FILE_TOO_LARGE') {
-      issues.push({ code: 'FILE_TOO_LARGE', fileName: it.fileName, message: `${it.fileName}太大（上限 10 MB）` });
+      issues.push({ code: 'FILE_TOO_LARGE', fileName: it.fileName, message: `${it.fileName}太大（上限 50 MB）` });
     } else if (it.reason === 'DTS_FILE') {
       issues.push({
         code: 'DTS_FILE', fileName: it.fileName,
@@ -78,7 +79,7 @@ export function analyzeFileSet(intakes: FileIntake[]): FileSetAnalysis {
     if (totalProducts > MAX_PRODUCTS_PER_IMPORT) {
       issues.push({
         code: 'TOO_MANY_PRODUCTS', total: totalProducts, limit: MAX_PRODUCTS_PER_IMPORT,
-        message: `這批共 ${totalProducts} 件，一次最多 ${MAX_PRODUCTS_PER_IMPORT} 件，請在蝦皮分批匯出`,
+        message: `這批共 ${fmt(totalProducts)} 件，一次最多 ${fmt(MAX_PRODUCTS_PER_IMPORT)} 件，請在蝦皮分批匯出`,
       });
     }
   }

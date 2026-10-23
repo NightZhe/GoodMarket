@@ -115,6 +115,44 @@ describe('buildPreview 提醒與分類修改', () => {
   });
 });
 
+describe('buildPreview 續傳：上次已完成（done）', () => {
+  const ps = parse([prod('1', 5), prod('2', 0), prod('3', 5, { name: 'abc' }), prod('4', 5), prod('5', 5, { category: '999999 - Unknown' })]);
+  const idx = index([['1', 'active'], ['2', 'hidden'], ['5', 'active']]);
+  const done = new Set(['1', '2', '5']);
+
+  it('doneIds 內的商品是 done，不論新增或更新；沿用 index 的上下架狀態', () => {
+    const pv = buildPreview(ps, idx, OFF, {}, done);
+    expect(Object.fromEntries(pv.rows.map((r) => [r.sourceProductId, r.action]))).toEqual({
+      1: 'done', 2: 'done', 3: 'error', 4: 'create', 5: 'done',
+    });
+    expect(pv.rows.filter((r) => r.action === 'done').map((r) => r.afterStatus)).toEqual(['active', 'hidden', 'active']);
+  });
+
+  it('counts.done 計入 total：created + updated + errors + skipped + done', () => {
+    const c = buildPreview(ps, idx, OFF, {}, done).counts;
+    expect(c).toMatchObject({ total: 5, created: 1, updated: 0, errors: 1, skipped: 0, done: 3 });
+    expect(c.created + c.updated + c.errors + c.skipped + c.done).toBe(c.total);
+  });
+
+  it('done 不算「需要注意」，也不能單靠 done 開始匯入', () => {
+    const c = buildPreview(ps, idx, OFF, {}, done).counts;
+    expect(c.warnings).toBe(0); // 商品 5 分類對不上，但已完成
+    const onlyDone = buildPreview(parse([prod('1', 5)]), idx, OFF, {}, new Set(['1']));
+    expect(onlyDone.canStart).toBe(false);
+  });
+
+  it('沒傳 doneIds：與一般預覽完全相同，done 為 0', () => {
+    const c = buildPreview(ps, idx, OFF).counts;
+    expect(c.done).toBe(0);
+    expect(buildPreview(ps, idx, OFF).rows.some((r) => r.action === 'done')).toBe(false);
+  });
+
+  it('草稿不含 done 的商品', () => {
+    const pv = buildPreview(ps, idx, OFF, {}, done);
+    expect(buildImportItemDrafts(ps, pv).map((d) => d.sourceProductId)).toEqual(['4']);
+  });
+});
+
 describe('buildImportItemDrafts', () => {
   it('只含 create／update、依檔案順序；圖片只有 sourceUrl 與 slot', () => {
     const ps = parse([

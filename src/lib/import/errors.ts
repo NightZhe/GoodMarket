@@ -47,7 +47,7 @@ export function toCallError(err: RpcErrorLike): ImportCallError {
 /** 呼叫層錯誤碼 → 白話說明（design-t1 2.3「呼叫層錯誤碼」） */
 export function callErrorExplanation(code: ImportCallErrorCode): string {
   switch (code) {
-    case 'NOT_AUTHENTICATED': return '登入已過期，請重新登入後，再匯入同一批檔案';
+    case 'NOT_AUTHENTICATED': return '登入已過期，請重新登入後，把同一批檔案再放進來，就會從沒做完的地方接著做';
     case 'NO_SHOP': return '找不到你的商店，請先開店';
     case 'IMPORT_NOT_FOUND':
     case 'IMPORT_CLOSED': return '這次匯入已經結束或找不到，請回到步驟 1 重新開始';

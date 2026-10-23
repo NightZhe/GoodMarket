@@ -534,9 +534,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     },
     start: (meta, signal) => callImportRpc('start_product_import', { p_source: 'shopee', p_meta: meta }, signal),
-    batch: async (importId, items, signal) => {
+    batch: async (importId, items, report, signal) => {
       const data = await callImportRpc<{ results: ImportBatchResult[] }>(
-        'import_products_batch', { p_import_id: importId, p_items: items }, signal);
+        'import_products_batch', { p_import_id: importId, p_items: items, p_report: report }, signal);
       return data.results;
     },
     finish: (importId, failures, skippedImages, signal) => callImportRpc('finish_product_import', {
