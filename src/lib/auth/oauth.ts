@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { redirectUrl } from './callback';
+import { isNative } from '../native/platform';
 
 export type OAuthProvider = 'google' | 'apple';
 export type OAuthStart = { ok: true } | { ok: false; reason: 'offline' | 'unavailable' };
@@ -10,6 +11,8 @@ export type OAuthStart = { ok: true } | { ok: false; reason: 'offline' | 'unavai
  */
 export async function startOAuth(provider: OAuthProvider): Promise<OAuthStart> {
   if (navigator.onLine === false) return { ok: false, reason: 'offline' };
+  // App 內不能整頁跳轉（Google 擋 WebView），改走系統瀏覽器視圖＋自訂 scheme 回跳；原生模組只在 App 內載入
+  if (isNative()) return (await import('../native/auth')).startNativeOAuth(provider);
   const { error } = await supabase.auth.signInWithOAuth({
     provider,
     options: { redirectTo: redirectUrl(window.location) },
