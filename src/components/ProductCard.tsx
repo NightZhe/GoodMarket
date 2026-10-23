@@ -20,7 +20,7 @@ const photoPress =
   'group-active:[&>:first-child]:opacity-70 group-active:[&>:first-child]:duration-0 ' +
   '[@media(hover:hover)_and_(pointer:fine)]:group-hover:[&>:first-child]:opacity-85';
 
-/** 原價格的顯示門檻（容器查詢）：依字數估 13px 字寬＋6px 左距，留約 8px 餘裕。class 字串要寫死 Tailwind 才掃得到 */
+/** 原價格的顯示門檻（容器查詢）：依字數估 13px 字寬＋6px 左距；小q 實測 7／8 字只剩 1.4px 餘裕，換字型或字級要重量。class 字串要寫死 Tailwind 才掃得到 */
 const origShowAt = (text: string) =>
   text.length <= 6 ? '@min-[3.5rem]:inline' : text.length === 7 ? '@min-[3.75rem]:inline' : '@min-[4.25rem]:inline';
 
