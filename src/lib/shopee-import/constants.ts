@@ -1,7 +1,7 @@
 import type { ImportFileKind } from '../../types';
 
-export const MAX_FILE_BYTES = 10 * 1024 * 1024;       // E-1.8
-export const MAX_PRODUCTS_PER_IMPORT = 500;            // E-1.7
+export const MAX_FILE_BYTES = 50 * 1024 * 1024;       // E-1.8（5,000 件的商品描述檔可能超過 10 MB）
+export const MAX_PRODUCTS_PER_IMPORT = 5000;           // E-1.7
 export const MAX_IMAGES_PER_PRODUCT = 9;               // F-5
 export const TITLE_MIN = 5;
 export const TITLE_MAX = 60;

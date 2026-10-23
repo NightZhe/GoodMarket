@@ -131,9 +131,11 @@ export interface ImportItem {
 export interface ImportStartMeta {
   externalShopId: string;
   files: { kind: ImportFileKind; fileName: string }[];
-  totalProducts: number;    // X + Y，1–500
+  totalProducts: number;    // X + Y，1–5,000
   skipped: number;          // 因「略過已售完」不送的件數
   options: { skipSoldOut: boolean; allHidden: boolean };
+  /** 賣家在預覽改過的分類（只含會送出的商品）；續傳時用來還原。缺省＝沒改過 */
+  categoryOverrides?: Record<string, CategoryId>;
 }
 
 /** 呼叫層錯誤碼（error.hint） */
@@ -169,6 +171,19 @@ export interface ImportSkippedImage {
   code: 'IMAGE_DOWNLOAD_FAILED' | 'IMAGE_UPLOAD_FAILED';
 }
 
+/** 每批寫入隨附的客戶端回報；後端依 sourceProductId／(sourceProductId, slot) 去重，重送同一批安全 */
+export interface ImportBatchReport {
+  clientFailures: ImportClientFailure[];
+  skippedImages: ImportSkippedImage[];
+}
+
+/** 未完成（running）的匯入已寫入的進度，續傳判定與預覽用；completed 時為 null */
+export interface ImportProgress {
+  items: { sourceProductId: string; outcome: 'created' | 'updated' | 'failed' }[];
+  clientFailures: ImportClientFailure[];
+  skippedImages: ImportSkippedImage[];
+}
+
 export interface ImportRecord {
   importId: string;
   status: 'running' | 'completed';
@@ -180,6 +195,13 @@ export interface ImportRecord {
   failed: number;
   skipped: number;
   skippedImages: number;
+  externalShopId: string;
+  files: { kind: ImportFileKind; fileName: string }[];
+  options: { skipSoldOut: boolean; allHidden: boolean };
+  /** 賣家在預覽改過的分類 */
+  categoryOverrides: Record<string, CategoryId>;
+  /** 只有 status === 'running' 時非 null */
+  progress: ImportProgress | null;
 }
 
 export interface ImportIndex {

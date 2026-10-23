@@ -54,12 +54,15 @@ export default function StepRun({ runner, announce, onRestart, onDone }: Props) 
     <section aria-labelledby="step3-title" className="space-y-4">
       <div>
         <h2 id="step3-title" ref={headingRef} tabIndex={-1} className="text-lg font-bold outline-none">匯入中</h2>
-        <p className="mt-1 text-sm text-muted">正在把 {n(snap.products.total)} 件商品搬進好物集。</p>
+        <p className="mt-1 text-sm text-muted">
+          正在把 {n(snap.products.total)} 件商品搬進好物集。
+          {snap.priorDone > 0 && `這是接續上次的匯入，上次已完成 ${n(snap.priorDone)} 件。`}
+        </p>
       </div>
 
       {active && (
-        <Banner kind="warning" title="請不要關閉或離開這個頁面" role="none">
-          圖片是在這個瀏覽器分頁裡轉存的。關掉分頁、重新整理或切到其他頁面，匯入會中斷。中斷時已寫入的商品會保留，再匯入一次同一批檔案就會接著做。
+        <Banner kind="warning" title="可以的話請不要關閉這個頁面" role="none">
+          圖片是在這個瀏覽器分頁裡轉存的，關掉分頁或重新整理，匯入就會停住。萬一中斷了，已寫入的商品會保留；之後把同一批檔案再放進來，就會從沒做完的地方接著做。
         </Banner>
       )}
 
@@ -75,7 +78,7 @@ export default function StepRun({ runner, announce, onRestart, onDone }: Props) 
         >
           <p>{snap.message && snap.message !== OFFLINE_MESSAGE ? '匯入停住了' : OFFLINE_MESSAGE}。已寫入 {n(written)} 件商品、轉存 {n(snap.images.done)} 張圖片，都會保留。按「重新嘗試」會從沒做完的地方接著做。</p>
           {snap.message && snap.message !== OFFLINE_MESSAGE && <p className="mt-1 text-xs text-muted">{snap.message}</p>}
-          <p className="mt-1 text-xs text-muted">先離開也可以：之後再匯入同一批檔案，會接著完成沒做完的部分。</p>
+          <p className="mt-1 text-xs text-muted">中斷了也沒關係：先離開的話，之後把同一批檔案再放進來，就會從沒做完的地方接著做。</p>
         </Banner>
       )}
 
@@ -103,7 +106,7 @@ export default function StepRun({ runner, announce, onRestart, onDone }: Props) 
           )}
         >
           <p>商品都已寫入，但匯入紀錄沒有存成功。這不影響已匯入的商品。</p>
-          <p className="mt-1 text-xs text-muted">按「重新儲存紀錄」再試一次；沒存成功的話，下次進精靈會看到這次顯示為「未完成」。</p>
+          <p className="mt-1 text-xs text-muted">按「重新儲存紀錄」再試一次；沒存成功的話，下次進精靈會看到這次顯示為「未完成」，把同一批檔案再放進來就能收尾。</p>
         </Banner>
       )}
 

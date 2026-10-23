@@ -17,6 +17,8 @@ export interface StartPayload {
   /** 結果頁用：商品 ID → 名稱（失敗清單要顯示名稱） */
   titles: Record<string, string>;
   preview: PreviewResult;
+  /** 接續上次沒做完的匯入：沿用同一筆紀錄，不再呼叫 start。priorDone＝上次已完成的件數 */
+  resume?: { importId: string; priorDone: number };
 }
 
 /** 目前步驟 1 的分析結果（三檔齊全且沒有阻擋錯誤才可前往） */

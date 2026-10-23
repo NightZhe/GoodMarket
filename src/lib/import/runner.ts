@@ -1,5 +1,5 @@
 import type {
-  ImageRef, ImportBatchResult, ImportClientFailure, ImportItem, ImportRecord,
+  ImageRef, ImportBatchReport, ImportBatchResult, ImportClientFailure, ImportItem, ImportRecord,
   ImportSkippedImage, ImportStartMeta,
 } from '../../types';
 import type { ImportItemDraft } from '../shopee-import/types';
@@ -8,8 +8,9 @@ import { runPool, type ImageFailureCode, type TransferOutcome } from './images';
 
 // 匯入執行器：分批「先轉存這批的圖片 → 再呼叫一次批次寫入」（F-3.1）。
 // 全部狀態都在這個物件裡，中斷（網路、逾時）後呼叫 run() 會從沒做完的那一批接著做；
-// 已轉存的圖片留在快取，不會重傳。關掉分頁的中斷則是靠「再匯一次同一批檔案」，
-// 由後端的 get_import_index 讓已寫入的商品變成「更新」、已轉存的圖片直接沿用（F-3.9）。
+// 已轉存的圖片留在快取，不會重傳。關掉分頁的中斷則是靠斷點續傳：再放入同一批檔案，
+// 預覽頁會用 `resume` 帶著同一個 importId 建立新的執行器，只處理沒做完的商品（見 resume.ts）。
+// 每批寫入同時帶上這一批的回報（主圖失敗、略過的圖片），所以關掉分頁也不會丟掉失敗清單。
 
 export const BATCH_SIZE = 20;
 export const IMAGE_CONCURRENCY = 6;
@@ -19,7 +20,8 @@ export const UPLOAD_FAILURE_STREAK_LIMIT = 10;
 
 export interface ImportApi {
   start(meta: ImportStartMeta, signal: AbortSignal): Promise<{ importId: string; startedAt: string }>;
-  batch(importId: string, items: ImportItem[], signal: AbortSignal): Promise<ImportBatchResult[]>;
+  /** report 由後端以 sourceProductId／(sourceProductId, slot) 去重合併，所以重送同一批是安全的 */
+  batch(importId: string, items: ImportItem[], report: ImportBatchReport, signal: AbortSignal): Promise<ImportBatchResult[]>;
   /** 連得到好物集的後端嗎（任何 HTTP 回應都算連得到） */
   reachable(): Promise<boolean>;
   finish(
@@ -51,6 +53,8 @@ export interface RunnerInput {
   previewFailures: ImportClientFailure[];
   /** get_import_index.images：本店已轉存過的圖片，直接沿用 */
   knownImages: readonly { sourceUrl: string; url: string }[];
+  /** 接續上次沒做完的匯入：跳過 start，直接寫進這筆紀錄。priorDone＝上次已完成的件數（只給畫面顯示） */
+  resume?: { importId: string; priorDone?: number };
 }
 
 export type RunnerPhase =
@@ -59,6 +63,8 @@ export type RunnerPhase =
 
 export interface RunnerSnapshot {
   phase: RunnerPhase;
+  /** 續傳時上次已完成的件數（不含在 products 內）；非續傳為 0 */
+  priorDone: number;
   images: { done: number; total: number };
   products: { done: number; total: number };
   batch: { current: number; total: number };
@@ -114,6 +120,9 @@ export class ImportRunner {
   private readonly failures: FailedProduct[] = [];
   private readonly clientFailures: ImportClientFailure[];
   private readonly skippedImages: ImportSkippedImage[] = [];
+  /** 還沒成功送到後端的回報（預覽錯誤、沒有呼叫寫入的批次留下的失敗）；下一次批次寫入成功後清空 */
+  private unsentFailures: ImportClientFailure[];
+  private unsentSkipped: ImportSkippedImage[] = [];
   private record: ImportRecord | null = null;
 
   private snap: RunnerSnapshot;
@@ -126,11 +135,14 @@ export class ImportRunner {
     for (let i = 0; i < input.drafts.length; i += size) this.batches.push(input.drafts.slice(i, i + size));
 
     this.clientFailures = [...input.previewFailures];
+    this.unsentFailures = [...input.previewFailures];
+    this.importId = input.resume?.importId ?? null;
     for (const f of input.previewFailures) this.failures.push({ sourceProductId: f.sourceProductId, reason: f.message });
     for (const k of input.knownImages) this.resolved.set(k.sourceUrl, { ok: true, url: k.url });
 
     this.snap = {
       phase: 'preparing',
+      priorDone: input.resume?.priorDone ?? 0,
       images: { done: 0, total: 0 },
       products: { done: 0, total: input.drafts.length },
       batch: { current: 0, total: this.batches.length },
@@ -326,14 +338,28 @@ export class ImportRunner {
       });
     }
 
+    // 這一批新產生的回報（冪等：同一批重做會得到同樣的內容）
+    const batchFailures = coverFailures.map((c) => c.failure);
+    const batchSkipped = [...skippedByItem.values()].flat();
+
     let results: ImportBatchResult[] = [];
     if (sendable.length > 0) {
       const importId = this.importId;
       if (importId === null) throw new Error('尚未開始匯入就要寫入');
-      results = await this.callWithRetry(() => this.deps.api.batch(importId, sendable, signal));
+      const report: ImportBatchReport = {
+        clientFailures: [...this.unsentFailures, ...batchFailures],
+        skippedImages: [...this.unsentSkipped, ...batchSkipped],
+      };
+      results = await this.callWithRetry(() => this.deps.api.batch(importId, sendable, report, signal));
       if (results.length !== sendable.length) {
         throw new Error(`批次寫入回傳 ${results.length} 筆，預期 ${sendable.length} 筆`);
       }
+      this.unsentFailures = [];
+      this.unsentSkipped = [];
+    } else {
+      // 整批都是主圖失敗、沒有東西可寫：回報順延到下一次寫入（最晚由 finish 補上）
+      this.unsentFailures.push(...batchFailures);
+      this.unsentSkipped.push(...batchSkipped);
     }
 
     // 這批寫入成功（或沒有可寫的）才統計，重送不會重複計數

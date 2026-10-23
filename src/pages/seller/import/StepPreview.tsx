@@ -7,12 +7,14 @@ import Switch from '../../../components/import/Switch';
 import { btnOutline, btnPrimaryLg } from '../../../components/import/ui';
 import { ALL_KINDS } from '../../../lib/shopee-import/constants';
 import type { ShopeeImportLib } from '../../../lib/import/loader';
+import { matchResume } from '../../../lib/import/resume';
 import type { ParsedProduct, PreviewOptions, PreviewRow as Row } from '../../../lib/shopee-import/types';
 import type { CategoryId, ImportIndex } from '../../../types';
 import { useStore } from '../../../store/StoreContext';
-import { n, useFocusOnMount, type ReadyAnalysis, type StartPayload } from './shared';
+import { fmtDateTime, n, useFocusOnMount, type ReadyAnalysis, type StartPayload } from './shared';
 
 const PAGE_SIZE = 50;
+const RESUME_LOCK_NOTE = '接續上次匯入時沿用上次的設定';
 
 type Load =
   | { state: 'loading' }
@@ -33,6 +35,7 @@ const FILTER_MATCH: Record<KpiKind, (r: Row) => boolean> = {
   error: (r) => r.action === 'error',
   warn: (r) => (r.action === 'create' || r.action === 'update') && r.warnings.length > 0,
   skip: (r) => r.action === 'skip',
+  done: (r) => r.action === 'done',
 };
 
 /** 錯誤排最前、提醒其次，其餘照檔案順序（Array.sort 是穩定排序） */
@@ -43,7 +46,8 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
   const { getImportIndex } = useStore();
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [options, setOptions] = useState<PreviewOptions>({ skipSoldOut: false, allHidden: false });
-  const [overrides, setOverrides] = useState<Record<string, CategoryId>>({});
+  const [edited, setEdited] = useState<Record<string, CategoryId>>({});
+  const [leftResume, setLeftResume] = useState(false);
   const [filter, setFilter] = useState<KpiKind | null>(null);
   const [page, setPage] = useState(0);
 
@@ -67,9 +71,18 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
   }, [fetchIndex]);
 
   const loaded = load.state === 'ready' ? load : null;
+  // 接續上次沒做完的匯入：用剛讀到的最新紀錄再判定一次（步驟 1 看到的可能已經過時）
+  const match = useMemo(
+    () => (loaded ? matchResume(loaded.index.lastImport, analysis) : null),
+    [loaded, analysis],
+  );
+  const resume = leftResume ? null : match;
+  // 上次改過的分類預填（仍可再改）；退出接續模式後也保留，因為那是賣家自己選的
+  const overrides = useMemo(() => ({ ...match?.record.categoryOverrides, ...edited }), [match, edited]);
+  const effectiveOptions = resume ? resume.record.options : options;
   const preview = useMemo(
-    () => (loaded ? lib.buildPreview(loaded.products, loaded.index, options, overrides) : null),
-    [lib, loaded, options, overrides],
+    () => (loaded ? lib.buildPreview(loaded.products, loaded.index, effectiveOptions, overrides, resume?.doneIds) : null),
+    [lib, loaded, effectiveOptions, overrides, resume],
   );
   const existingStatus = useMemo(
     () => new Map(loaded?.index.products.map((p) => [p.sourceProductId, p.status]) ?? []),
@@ -88,17 +101,28 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
 
   const counts = preview?.counts ?? null;
   const importable = counts ? counts.created + counts.updated : 0;
+  // 接續時，上次其實已經全部寫完（只差結束紀錄）也要能按下去，把這筆紀錄收尾
+  const canRun = importable > 0 || (resume !== null && counts !== null && counts.done > 0);
 
   // 開關與分類變動後，計數即時重算並朗讀
   useEffect(() => {
     if (!counts) return;
-    announce(`新增 ${counts.created}、更新 ${counts.updated}、錯誤 ${counts.errors}、略過 ${counts.skipped}、需要注意 ${counts.warnings}`);
+    announce(`${counts.done > 0 ? `上次已完成 ${counts.done}、` : ''}新增 ${counts.created}、更新 ${counts.updated}、錯誤 ${counts.errors}、略過 ${counts.skipped}、需要注意 ${counts.warnings}`);
   }, [counts, announce]);
 
   const toggleFilter = (k: KpiKind) => { setFilter((f) => (f === k ? null : k)); setPage(0); };
 
+  const leaveResume = () => {
+    if (!match) return;
+    setOptions(match.record.options); // 解鎖後開關停在上次的設定，不要突然跳掉
+    setLeftResume(true);
+    setFilter(null);
+    setPage(0);
+    announce('已改為新的匯入，上次完成的商品會當作更新');
+  };
+
   const start = () => {
-    if (!loaded || !preview || !preview.canStart) return;
+    if (!loaded || !preview || !canRun) return;
     const drafts = lib.buildImportItemDrafts(loaded.products, preview);
     const previewFailures = preview.rows.filter((r) => r.action === 'error').map((r) => ({
       sourceProductId: r.sourceProductId,
@@ -107,17 +131,24 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
     }));
     const sheets = analysis.sheets;
     const fileName = { basic_info: sheets.basic.fileName, sales_info: sheets.sales.fileName, media_info: sheets.media.fileName };
+    // 只帶會送出的商品的分類修改（create／update），續傳時由紀錄還原
+    const categoryOverrides = Object.fromEntries(
+      preview.rows.filter((r) => (r.action === 'create' || r.action === 'update') && r.sourceProductId in overrides)
+        .map((r) => [r.sourceProductId, overrides[r.sourceProductId]]),
+    );
     onStart({
       meta: {
         externalShopId: analysis.externalShopId,
         files: ALL_KINDS.map((kind) => ({ kind, fileName: fileName[kind] })),
         totalProducts: preview.counts.created + preview.counts.updated,
         skipped: preview.counts.skipped,
-        options,
+        options: effectiveOptions,
+        ...(resume ? {} : { categoryOverrides }),
       },
       drafts, previewFailures, knownImages: loaded.index.images,
       titles: Object.fromEntries(loaded.products.map((p) => [p.sourceProductId, p.title])),
       preview,
+      ...(resume ? { resume: { importId: resume.record.importId, priorDone: resume.doneIds.size } } : {}),
     });
   };
 
@@ -153,8 +184,10 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
     );
   }
 
-  const noneToImport = importable === 0;
+  const noneToImport = !canRun;
+  const onlyFinishRecord = resume !== null && importable === 0 && canRun;
   const kpis: { kind: KpiKind; label: string; sub?: string; value: number }[] = [
+    ...(resume ? [{ kind: 'done' as const, label: '上次已完成', sub: '不會再處理', value: counts.done }] : []),
     { kind: 'new', label: '將新增', value: counts.created },
     { kind: 'update', label: '將更新', value: counts.updated },
     { kind: 'error', label: '錯誤', value: counts.errors },
@@ -167,27 +200,37 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
     <section aria-labelledby="step2-title" className="space-y-4 pb-24 md:pb-20">
       <div>
         {heading}
-        <p className="mt-1 text-sm text-muted">檔案共 {n(counts.total)} 件商品。確認沒問題再按「開始匯入」。</p>
+        <p className="mt-1 text-sm text-muted">
+          檔案共 {n(counts.total)} 件商品。確認沒問題再按「{resume ? '接續匯入' : '開始匯入'}」。
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+      {resume && (
+        <Banner kind="info" title="接續上次的匯入" role="none">
+          {fmtDateTime(resume.record.startedAt)} 開始的匯入已完成 {n(counts.done)} 件，這次只處理剩下的商品，寫進同一筆匯入紀錄。開關沿用上次的設定。
+        </Banner>
+      )}
+
+      <div className={`grid grid-cols-2 gap-2 ${resume ? 'md:grid-cols-6' : 'md:grid-cols-5'}`}>
         {kpis.map((k) => (
           <KPI key={k.kind} kind={k.kind} label={k.label} sub={k.sub} value={k.value} selected={filter === k.kind} onClick={() => toggleFilter(k.kind)} />
         ))}
       </div>
       <p className="text-xs text-muted">
-        新增 {n(counts.created)}＋更新 {n(counts.updated)}＋錯誤 {n(counts.errors)}＋略過 {n(counts.skipped)}＝檔案共 {n(counts.total)} 件商品
+        {resume && `上次已完成 ${n(counts.done)}＋`}新增 {n(counts.created)}＋更新 {n(counts.updated)}＋錯誤 {n(counts.errors)}＋略過 {n(counts.skipped)}＝檔案共 {n(counts.total)} 件商品
       </p>
 
       <div className="grid gap-2 md:grid-cols-2">
         <Switch
-          title="略過已售完的商品" checked={options.skipSoldOut}
+          title="略過已售完的商品" checked={effectiveOptions.skipSoldOut} disabled={resume !== null}
           description="所有規格庫存都是 0 的新商品不匯入。已經在好物集的商品不受影響，照常更新。"
+          note={resume ? RESUME_LOCK_NOTE : undefined}
           onChange={(v) => setOptions((o) => ({ ...o, skipSoldOut: v }))}
         />
         <Switch
-          title="全部先下架" checked={options.allHidden}
+          title="全部先下架" checked={effectiveOptions.allHidden} disabled={resume !== null}
           description="新匯入的商品先下架，確認好再自己上架。已經在好物集的商品維持原本的上下架設定。"
+          note={resume ? RESUME_LOCK_NOTE : undefined}
           onChange={(v) => setOptions((o) => ({ ...o, allHidden: v }))}
         />
       </div>
@@ -200,6 +243,11 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
       {counts.errors > 0 && (
         <Banner kind="error" title={`${n(counts.errors)} 件有錯誤，不會匯入`} role="none">
           {importable > 0 ? `其他 ${n(importable)} 件照常匯入。` : ''}錯誤原因寫在每件商品下方；匯入完成後可以下載失敗原因檔，修正後再匯入。
+        </Banner>
+      )}
+      {onlyFinishRecord && (
+        <Banner kind="info" title="剩下的商品都不需要再處理" role="none">
+          上次的商品都已經寫入，只差把這筆匯入紀錄收尾。按「完成這筆匯入」就會結束它。
         </Banner>
       )}
       {noneToImport && (
@@ -230,7 +278,7 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
             {pageRows.map((r) => (
               <PreviewRow
                 key={r.sourceProductId} row={r} existingStatus={existingStatus.get(r.sourceProductId)}
-                onCategory={(id, cat) => setOverrides((o) => ({ ...o, [id]: cat }))}
+                onCategory={(id, cat) => setEdited((o) => ({ ...o, [id]: cat }))}
               />
             ))}
           </ul>
@@ -258,14 +306,23 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
           <div className="text-sm">
             {noneToImport ? (
               <p className="font-medium">沒有可以匯入的商品</p>
+            ) : onlyFinishRecord ? (
+              <p className="font-medium">上次的商品都已寫入，只差收尾</p>
             ) : (
               <>
-                <p className="font-medium">將匯入 {n(importable)} 件</p>
-                <p className="text-xs text-muted">新增 {n(counts.created)}、更新 {n(counts.updated)}</p>
+                <p className="font-medium">{resume ? '將接續匯入' : '將匯入'} {n(importable)} 件</p>
+                <p className="text-xs text-muted">
+                  {resume && `上次已完成 ${n(counts.done)} 件・`}新增 {n(counts.created)}、更新 {n(counts.updated)}
+                </p>
               </>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {resume && (
+              <button type="button" className="min-h-11 px-2 text-sm text-brand underline" onClick={leaveResume}>
+                不接續，當作新的匯入
+              </button>
+            )}
             <button type="button" className={btnOutline} onClick={onBack}>
               <ArrowLeft size={16} aria-hidden="true" />上一步
             </button>
@@ -273,7 +330,7 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
               type="button" aria-disabled={noneToImport} className={btnPrimaryLg}
               onClick={() => { if (!noneToImport) start(); }}
             >
-              開始匯入 {n(importable)} 件
+              {onlyFinishRecord ? '完成這筆匯入' : resume ? `接續匯入 ${n(importable)} 件` : `開始匯入 ${n(importable)} 件`}
             </button>
           </div>
         </div>
