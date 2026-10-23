@@ -40,8 +40,8 @@ function LastImportInfo({ info }: { info: LastImport }) {
     return (
       <Banner kind="warning" title="上次匯入沒有做完">
         <span className="break-words">
-          {fmtDateTime(r.startedAt)} 開始，共 {n(r.totalProducts)} 件，已完成 {n(r.created + r.updated)} 件。
-          把同一批檔案（{r.files.map((f) => f.fileName).join('、')}）再放進來，就會從沒做完的地方接著做。
+          {`${fmtDateTime(r.startedAt)} 開始，共 ${n(r.totalProducts)} 件，已完成 ${n(r.created + r.updated)} 件。`}
+          {`把同一批檔案（${r.files.map((f) => f.fileName).join('、')}）再放進來，就會從沒做完的地方接著做。`}
         </span>
       </Banner>
     );
