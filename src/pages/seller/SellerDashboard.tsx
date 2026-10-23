@@ -13,6 +13,10 @@ import { dashboardCancelPrompt } from '../../lib/payment/refundView';
 import { getSellerReviewCounts } from '../../lib/reviews/api';
 import { useRefreshOnVisible } from '../../store/ReviewsContext';
 import PayoutCard from '../../components/payment/PayoutCard';
+import { LogisticsEntryRow, ReturnPrompt } from '../../components/logistics/ReturnPrompt';
+import { useReturnSettings } from '../../lib/logistics/useReturnSettings';
+import { shouldShowEntryRow, shouldShowReturnPrompt } from '../../lib/logistics/returnPrompt';
+import { SETTINGS_READ_TIMEOUT_MS } from './logisticsParts';
 
 export default function SellerDashboard() {
   const { myShop, products, shopOrders, user } = useStore();
@@ -51,6 +55,11 @@ export default function SellerDashboard() {
   useEffect(loadUnreplied, []);
   useRefreshOnVisible(loadUnreplied);
 
+  // 退貨地址設定只讀一次，提示卡與入口列共用；讀取中、失敗、資料庫未升級都不顯示提示卡（H-L5）
+  const returnRead = useReturnSettings({ timeoutMs: SETTINGS_READ_TIMEOUT_MS, refreshOnVisible: true });
+  const showReturnPrompt = shouldShowReturnPrompt(returnRead.phase, returnRead.settings);
+  const showEntryRow = shouldShowEntryRow(returnRead.phase, returnRead.settings);
+
   const top = [...mine].sort((a, b) => b.sold - a.sold).slice(0, 5);
 
   return (
@@ -83,6 +92,7 @@ export default function SellerDashboard() {
             </Link>
           );
         })()}
+        {showReturnPrompt && <ReturnPrompt />}
         <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md bg-line md:grid-cols-5">
           <Todo to="/seller/orders" n={toShip} label="待出貨" highlight={toShip > 0} />
           <Todo to="/seller/orders" n={shopOrders.filter(o => o.status === 'shipping').length} label="運送中" />
@@ -95,6 +105,8 @@ export default function SellerDashboard() {
           />
         </div>
       </section>
+
+      {showEntryRow && <LogisticsEntryRow />}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <section className="rounded-lg bg-white p-4 md:p-5">
