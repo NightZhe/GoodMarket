@@ -127,13 +127,13 @@ function FormView() {
   };
 
   const title = editing ? '編輯地址' : '新增地址';
-  const header = <SubHeader to="/account/addresses" backLabel="回到我的地址" title={title} />;
+  const header = <SubHeader to="/account/addresses" backLabel="回到我的地址" backText="我的地址" title={title} />;
 
   if (gone || (editing && known && !row && !initialized.current)) {
     return (
       <SubPage noTabBar>
         {header}
-        <div className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+        <div className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
           <Banner kind="error" title="這筆地址已經被刪除" actions={<Link to="/account/addresses" className={btnPrimary}>回我的地址</Link>}>
             可能是你在別的分頁或裝置刪掉了。
           </Banner>
@@ -146,7 +146,7 @@ function FormView() {
     return (
       <SubPage noTabBar>
         {header}
-        <div className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+        <div className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
           <Banner kind="warning" role="status" title="地址已經滿 10 筆" actions={<Link to="/account/addresses" className={btnPrimary}>回我的地址</Link>}>
             最多可以存 10 筆。請先刪除一筆，再新增。
           </Banner>
@@ -159,7 +159,7 @@ function FormView() {
     return (
       <SubPage noTabBar>
         {header}
-        <div className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+        <div className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
           {book.phase === 'error' ? (
             <Banner
               kind="error" title="讀不到這筆地址"
@@ -192,7 +192,7 @@ function FormView() {
     <SubPage noTabBar>
       {header}
 
-      <form noValidate onSubmit={e => { e.preventDefault(); void submit(); }} className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+      <form noValidate onSubmit={e => { e.preventDefault(); void submit(); }} className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
         {reauth && (
           <div className="mb-4">
             <Banner kind="info" role="status" title="已重新登入" actions={<button type="button" className={btnOutline} onClick={() => setReauth(false)}>知道了</button>}>

@@ -62,7 +62,7 @@ export default function ProductForm() {
   const existing = id ? getProduct(id) : undefined;
 
   if (id && (!existing || existing.shopId !== myShop?.id)) {
-    return <EmptyState icon="📦" title="找不到這件商品" action={<Link to="/seller/products" className="text-brand">回商品列表</Link>} />;
+    return <EmptyState title="找不到這件商品" action={<Link to="/seller/products" className="text-brand">回商品列表</Link>} />;
   }
   return <Form key={id ?? 'new'} existing={existing} shopId={myShop!.id} location={myShop!.location} onSave={saveProduct} />;
 }

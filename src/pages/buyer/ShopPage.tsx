@@ -1,8 +1,10 @@
 import { Link, useParams } from 'react-router-dom';
-import { Calendar, Package, Star } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import ProductCard from '../../components/ProductCard';
 import EmptyState from '../../components/EmptyState';
+import { pillButton } from '../../components/pillButton';
+import LetterAvatar from '../../components/LetterAvatar';
+import SectionHeader from '../../components/SectionHeader';
 import { ratingText } from '../../lib/reviews/format';
 import { useReviews } from '../../store/ReviewsContext';
 
@@ -12,7 +14,11 @@ export default function ShopPage() {
   const { shopStat, summaryState } = useReviews();
   const shop = getShop(id);
   if (!shop) {
-    return <div className="mx-auto max-w-6xl p-3 md:p-6"><EmptyState icon="🏚️" title="找不到這家商店" action={<Link to="/" className="text-brand">回首頁</Link>} /></div>;
+    return (
+      <div className="mx-auto max-w-6xl">
+        <EmptyState title="找不到這家商店" action={<Link to="/" className={pillButton}>回首頁</Link>} />
+      </div>
+    );
   }
   const list = products.filter(p => p.shopId === id && p.status === 'active');
   const stat = shopStat(id);
@@ -21,39 +27,41 @@ export default function ShopPage() {
 
   return (
     <div className="mx-auto max-w-6xl md:px-4 md:pt-6">
-      <section className="flex flex-col gap-5 bg-white p-4 md:flex-row md:items-center md:rounded-md md:p-6">
-        <div className="flex items-center gap-4 rounded-md bg-gradient-to-br from-[#3d3d3d] to-[#1f1f1f] p-5 text-white md:w-96">
-          <span className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-white/30 bg-white/10 text-5xl">{shop.avatar}</span>
+      <section className="px-5 pt-2 md:px-0">
+        <div className="flex items-center gap-4">
+          <LetterAvatar name={shop.name} size={64} />
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold">{shop.name}</h1>
-            <p className="text-xs opacity-70">{shop.location}</p>
+            <h1 className="truncate text-title2 font-bold text-ink">{shop.name}</h1>
+            <p className="text-subhead text-muted">{shop.location}</p>
           </div>
         </div>
-        <div className="grid flex-1 grid-cols-3 gap-3 text-sm">
-          <Stat icon={<Package size={16} />} label="商品" value={String(list.length)} />
-          <Stat icon={<Star size={16} />} label="評價" value={ratingValue} />
-          <Stat icon={<Calendar size={16} />} label="加入" value={new Date(shop.joinedAt).getFullYear() + ' 年'} />
-          <p className="col-span-3 text-muted">{shop.description}</p>
-        </div>
+        <dl className="mt-4 grid grid-cols-3 border-y-[0.5px] border-separator py-2.5 text-center md:max-w-md">
+          <Stat label="商品" value={String(list.length)} />
+          <Stat label="評價" value={ratingValue} />
+          <Stat label="加入" value={new Date(shop.joinedAt).getFullYear() + ' 年'} />
+        </dl>
+        {shop.description && <p className="mt-4 text-subhead text-muted">{shop.description}</p>}
       </section>
-      <h2 className="mt-3 border-b-4 border-brand bg-white px-4 py-3 text-sm font-medium text-brand md:mt-4 md:rounded-t-md">所有商品</h2>
+      <SectionHeader title="所有商品" className="mx-5 mt-8 mb-3 md:mx-0" />
       {list.length === 0 ? (
-        <EmptyState icon="📦" title="這家店還沒有上架商品" />
+        <EmptyState title="這家店還沒有上架商品" />
       ) : (
-        <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 md:grid-cols-6 md:px-0">
-          {list.map(p => <ProductCard key={p.id} product={p} />)}
+        <div className="@container">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 @max-[15rem]:grid-cols-1 md:grid-cols-4 md:px-0 lg:grid-cols-5">
+            {list.map(p => <ProductCard key={p.id} product={p} />)}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+/** 資訊條的一格（§4.8 第 6 點）：標籤在上，格與格之間 0.5pt 線 */
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-muted">{icon}</span>
-      <span className="text-muted">{label}</span>
-      <span className="text-brand">{value}</span>
+    <div className="min-w-0 border-separator px-1 [&:not(:first-child)]:border-l-[0.5px]">
+      <dt className="text-caption2 font-semibold text-muted">{label}</dt>
+      <dd className="mt-1 text-title3 font-bold text-muted">{value}</dd>
     </div>
   );
 }

@@ -110,7 +110,7 @@ function AddressesView() {
       <SubHeader to="/account" backLabel="回到我的帳號" title="我的地址" />
 
       {rows === null && phase === 'loading' && (
-        <ul aria-busy="true" aria-label="我的地址" className="mt-2 divide-y divide-line bg-white md:mt-3 md:rounded-md">
+        <ul aria-busy="true" aria-label="我的地址" className="mt-2 divide-y divide-line bg-white md:mt-3 rounded-card">
           <li className="sr-only" role="status">載入中</li>
           {[0, 1, 2].map(i => (
             <li key={i} aria-hidden="true" className="px-4 py-4 md:px-6">
@@ -123,7 +123,7 @@ function AddressesView() {
       )}
 
       {rows === null && phase === 'error' && (
-        <div className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+        <div className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
           {online ? (
             <Banner kind="error" title="讀不到你的地址" actions={<RetryButton busy={retrying} onClick={() => void retry()} />}>請檢查網路後再試一次。</Banner>
           ) : (
@@ -133,7 +133,7 @@ function AddressesView() {
       )}
 
       {rows !== null && rows.length === 0 && (
-        <div className="mt-2 flex flex-col items-center bg-white px-6 py-12 text-center md:mt-3 md:rounded-md">
+        <div className="mt-2 flex flex-col items-center bg-white px-6 py-12 text-center md:mt-3 rounded-card">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-canvas text-muted" aria-hidden="true"><MapPin size={28} /></span>
           <h2 ref={emptyTitle} tabIndex={-1} className="mt-4 text-base font-medium outline-none">還沒有收件地址</h2>
           <p className="mt-1 text-sm text-muted text-pretty">存起來之後，結帳時會自動帶入。</p>
@@ -146,11 +146,11 @@ function AddressesView() {
       {rows !== null && rows.length > 0 && (
         <>
           {!online && (
-            <div className="mt-2 px-2 md:mt-3 md:px-0">
+            <div className="mt-2 md:mt-3">
               <Banner kind="warning" role="status" title="目前沒有網路">連上網路後才能新增、編輯或刪除地址。</Banner>
             </div>
           )}
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 bg-white px-4 py-3 md:mt-3 md:rounded-md md:px-6">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 bg-white px-4 py-3 md:mt-3 rounded-card md:px-6">
             <p className={`min-w-0 text-sm ${full ? 'font-medium' : 'text-muted'}`}>
               {full ? `已存 ${rows.length} / ${ADDRESS_LIMIT} 筆，已達上限。刪除一筆後才能新增。` : `已存 ${rows.length} / ${ADDRESS_LIMIT} 筆`}
             </p>
@@ -165,7 +165,7 @@ function AddressesView() {
             )}
           </div>
 
-          <ul aria-label="我的地址" className="mt-2 divide-y divide-line bg-white md:mt-3 md:overflow-hidden md:rounded-md">
+          <ul aria-label="我的地址" className="mt-2 divide-y divide-line bg-white md:mt-3 overflow-hidden rounded-card">
             {rows.map(a => {
               const protectedDefault = a.is_default && rows.length > 1;
               return (

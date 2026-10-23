@@ -224,7 +224,7 @@ function OrdersView() {
 
   return (
     <div className="mx-auto max-w-4xl md:px-4 md:pt-6">
-      <div className="no-scrollbar sticky top-[52px] z-20 flex overflow-x-auto bg-white md:top-[108px] md:rounded-t-md">
+      <div className="no-scrollbar sticky top-[env(safe-area-inset-top)] z-20 flex overflow-x-auto bg-white md:rounded-t-md">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             aria-label={t.id === 'pending' && unfinished.length > 0 ? `待付款，${unfinished.length} 筆` : undefined}
@@ -261,7 +261,7 @@ function OrdersView() {
             </button>
           </div>
         ) : list.length === 0 ? (
-          <EmptyState icon="🧾" title={tab === 'pending' ? '沒有待付款的訂單' : '還沒有訂單'} action={<Link to="/" className="text-brand">去逛逛</Link>} />
+          <EmptyState title={tab === 'pending' ? '沒有待付款的訂單' : '還沒有訂單'} action={<Link to="/" className="text-brand">去逛逛</Link>} />
         ) : list.map(o => {
           const pay = payOf.get(o.id);
           const ps = stateOf(o);
