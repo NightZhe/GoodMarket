@@ -6,7 +6,12 @@ import { CONTACT_EMAIL, DELETION_WINDOW, PRIVACY_EFFECTIVE, PRIVACY_FIRST_PUBLIS
 
 /** 帳號頁 P-A（個人檔案、地址簿）上線日：已發生的修訂，不會再變 */
 const PRIVACY_P_A = '2026/10/18';
-/** 驗證碼簡訊服務商由 Twilio 改為三竹的修訂日：已發生的修訂，不會再變（修訂紀錄的「最新一筆」改用 PRIVACY_EFFECTIVE，所以這筆要有自己的固定日期） */
+/** 賣家『物流設定』（退貨收件資料的揭露）上線日：已發生的修訂，不會再變。
+ *  修訂紀錄的合併規則：同一天上線的修訂若有多筆，只有最新一筆用 PRIVACY_EFFECTIVE，其餘改成固定日期常數；
+ *  PR #8（簡訊商改 MAAC Go）與本檔同樣把這筆改成這個常數，並也在最上面加一筆用 PRIVACY_EFFECTIVE 的修訂，
+ *  後合併者合併時保留兩筆、把先合併者那筆的日期改成固定常數（日期＝對方實際推前端那天） */
+const PRIVACY_SELLER_LOGISTICS = '2026/10/25';
+/** 驗證碼簡訊服務商由 Twilio 改為三竹的修訂日：已發生的修訂，不會再變（修訂紀錄的「最新一筆」用 PRIVACY_EFFECTIVE，舊的每筆各有自己的固定日期） */
 const PRIVACY_SMS_VENDOR = '2026/10/20';
 /** 手機號碼登入與綁定手機上線日：已發生的修訂，不會再變 */
 const PRIVACY_PHONE_LOGIN = '2026/10/19';
@@ -47,6 +52,7 @@ const dataItems = (payOn: boolean): { name: string; detail: ReactNode }[] => [
   { name: '訂單', detail: payOn ? '你的訂單內容、金額、狀態與物流進度，以及線上付款的付款狀態、時間與綠界科技的交易編號。' : '你的訂單內容、金額、狀態與物流進度。' },
   { name: '暱稱', detail: '你在「個人檔案」設定的暱稱，只用來在寫評價時預填，不會公開顯示。' },
   { name: '評價', detail: '你寫的星等、文字、照片與暱稱。' },
+  { name: '檢舉紀錄', detail: '你檢舉時選的原因、說明、被檢舉的內容與時間，跟著你的帳號識別碼保存，用來處理檢舉與防止濫用；不會提供給被檢舉的一方。' },
 ];
 
 /** 隱私政策 #/privacy。日期、保存期間、信箱集中在 lib/site.ts。付款相關的段落隨線上付款開關顯示（關著時與上線前逐字相同） */
@@ -97,7 +103,7 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
 
         <h2 className="mt-8 text-base font-bold">4. 保存多久</h2>
         <p className="mt-2 text-base leading-7">
-          你的帳號存在期間，我們會保存帳號、購物車、收件地址、暱稱與評價等資料。你申請刪除帳號後，我們會在 {DELETION_WINDOW}刪除或去識別化你的個人資料，已公開的評價會改為「匿名買家」顯示。{payOn && '刪除帳號時，我們會先請綠界科技刪除你綁定的所有信用卡。你刪除信用卡時，好物集會刪除顯示用的卡片資料，並通知綠界科技撤銷綁定。'}訂單等交易紀錄{payOn ? '（含付款紀錄）' : ''}，依相關法規規定的期間保存。
+          你的帳號存在期間，我們會保存帳號、購物車、收件地址、暱稱與評價等資料。你申請刪除帳號後，我們會在 {DELETION_WINDOW}刪除或去識別化你的個人資料，已公開的評價會改為「匿名買家」顯示。{payOn && '刪除帳號時，我們會先請綠界科技刪除你綁定的所有信用卡。你刪除信用卡時，好物集會刪除顯示用的卡片資料，並通知綠界科技撤銷綁定。'}訂單等交易紀錄{payOn ? '（含付款紀錄）' : ''}，依相關法規規定的期間保存。我們會保留刪除申請的處理紀錄（申請、完成日期與已刪除帳號的識別碼），以及你檢舉過的內容紀錄（不含你的身分）。
         </p>
 
         <h2 className="mt-8 text-base font-bold">5. 刪除你的資料</h2>
@@ -105,19 +111,37 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
           收件地址可以隨時在「我的帳號 › 地址」刪除；{payOn && '信用卡可以隨時在「我的帳號 › 付款方式」刪除；'}暱稱可以在「個人檔案」清空。
         </p>
         <div className="mt-2 rounded-md border border-line bg-subtle p-4 text-base leading-7">
-          要刪除整個帳號，目前請來信申請，我們會人工處理。有開店的帳號請在信中註明，我們會另外與你確認處理方式。
+          要刪除整個帳號，請在 App 或網站的『我的 › 刪除帳號』提出申請，也可以直接從這裡
+          <Link
+            to="/account/delete"
+            className="-my-3 inline-flex min-h-11 items-center px-0.5 text-ink underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          >
+            申請刪除帳號
+          </Link>
+          。我們會在申請後 {DELETION_WINDOW}人工處理；處理完成前你可以隨時取消。還有待出貨或運送中的訂單時，要等訂單完成或取消後才能申請。有開店的帳號，店、商品與店內的訂單會一併刪除。刪除完成後，再用同一個登入方式登入會是全新的空帳號。
         </div>
 
-        <h2 className="mt-8 text-base font-bold">6. 聯絡我們</h2>
+        <h2 className="mt-8 text-base font-bold">6. 內容審核與檢舉</h2>
+        <p className="mt-2 text-base leading-7">
+          好物集上的商品、評價與照片由使用者刊登。我們以人工方式審核，發現或收到檢舉的違規內容（例如違禁品、仿冒品、詐騙、色情暴力、騷擾或洩露個人資料）會下架或移除。每個商品、評價與店家都可以按『檢舉』告訴我們，我們會在 2 個工作天內處理，不會讓被檢舉的一方知道是誰檢舉。你也可以在店家頁封鎖店家：封鎖只記在你這台裝置上，被封鎖店家的商品不會再出現在首頁與搜尋結果。其他問題請來信{' '}
+          <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>
+          。
+        </p>
+
+        <h2 className="mt-8 text-base font-bold">7. 聯絡我們</h2>
         <p className="mt-2 text-base leading-7">
           關於你的資料有任何問題，請來信：
           <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>
         </p>
 
-        <h2 className="mt-8 text-base font-bold">7. 修訂紀錄</h2>
+        <h2 className="mt-8 text-base font-bold">8. 修訂紀錄</h2>
         <dl className="mt-2 rounded-md border border-line px-4">
           <div className="border-t border-line py-3 first:border-t-0">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_EFFECTIVE}</dt>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">刪除帳號改為在 App 或網站提出申請、7 個工作天內處理；新增『內容審核與檢舉』與檢舉紀錄的說明。</dd>
+          </div>
+          <div className="border-t border-line py-3">
+            <dt className="text-sm font-medium tabular-nums">{PRIVACY_SELLER_LOGISTICS}</dt>
             <dd className="mt-0.5 text-sm leading-6 text-muted">新增賣家『物流設定』：說明賣家的退貨收件資料會顯示給哪些買家。</dd>
           </div>
           <div className="border-t border-line py-3">

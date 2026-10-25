@@ -13,6 +13,8 @@ interface Props {
   /** 賣場評價：多顯示商品名稱 */
   showProduct?: boolean;
   onOpenPhoto: (paths: string[], index: number, trigger: HTMLButtonElement) => void;
+  /** 有傳才顯示「檢舉」（買家端）；賣家端重用卡片時不傳 */
+  onReport?: (review: PublicReview) => void;
 }
 
 export function Avatar() {
@@ -66,7 +68,7 @@ export function SellerReplyBlock({ reply, at }: { reply: string; at: string | nu
 }
 
 /** 公開評價卡（商品頁、總覽頁共用）。沒有的欄位整塊不渲染，不留空白 */
-export default function ReviewCard({ review: r, clamp = false, showProduct = false, onOpenPhoto }: Props) {
+export default function ReviewCard({ review: r, clamp = false, showProduct = false, onOpenPhoto, onReport }: Props) {
   return (
     <article className="py-4 md:py-5">
       <div className="flex items-center gap-2">
@@ -90,7 +92,18 @@ export default function ReviewCard({ review: r, clamp = false, showProduct = fal
           <p className="mt-2 whitespace-pre-line break-words text-sm leading-6">{r.content}</p>
         ))}
         <PhotoThumbs paths={r.photos} onOpen={(i, el) => onOpenPhoto(r.photos, i, el)} />
-        <p className="mt-2.5 text-xs text-muted">{taipeiDate(r.created_at)}</p>
+        {/* 逐則重複的動作要安靜：次要色。-my-3 抵掉 44 高多出的部分，卡片只多 4pt；mt-3 避免熱區蓋到上方照片縮圖 */}
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-xs text-muted">{taipeiDate(r.created_at)}</p>
+          {onReport && (
+            <button
+              type="button" onClick={() => onReport(r)} aria-label={`檢舉 ${r.display_name} 的評價`} aria-haspopup="dialog"
+              className="-my-3 -mr-2 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-2 text-footnote text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
+              檢舉
+            </button>
+          )}
+        </div>
         {r.seller_reply && <SellerReplyBlock reply={r.seller_reply} at={r.seller_replied_at} />}
       </div>
     </article>

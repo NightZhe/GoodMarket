@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, LoaderCircle, Star } from 'lucide-react';
+import { ArrowLeft, LoaderCircle, MessageCircle, Star } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useReviews } from '../../store/ReviewsContext';
 import EmptyState from '../../components/EmptyState';
+import LetterAvatar from '../../components/LetterAvatar';
 import ProductImage from '../../components/ProductImage';
+import BlockedShopPanel from '../../components/report/BlockedShopPanel';
+import { useBlockActions } from '../../components/report/useBlockActions';
+import { useReport } from '../../components/report/useReport';
 import ReviewCard from '../../components/reviews/ReviewCard';
 import ReviewTabs from '../../components/reviews/ReviewTabs';
 import { FilterChips } from '../../components/reviews/FilterChips';
@@ -38,6 +42,15 @@ function ReviewsOverviewView({ id }: { id: string }) {
   const [snapShopId, setSnapShopId] = useState<string | null>(null);
   const shopId = resolveShopId(product, snapShopId ? { shop_id: snapShopId } : null);
   const shop = shopId ? getShop(shopId) : undefined;
+  // 封鎖店家（S-K11）：直接開網址進來也不顯示評價內容；取消封鎖後焦點移到頁面標題
+  const [refocusTitle, setRefocusTitle] = useState(false);
+  const blockActions = useBlockActions({ onUnblocked: () => setRefocusTitle(true) });
+  const shopBlocked = shopId !== null && blockActions.isBlocked(shopId);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (refocusTitle && !shopBlocked) { titleRef.current?.focus(); setRefocusTitle(false); }
+  }, [refocusTitle, shopBlocked]);
+  const report = useReport();
   // 取得快照 shop_id 後 shopId 才有值；用 ref 讀它，才不會讓 fetchPage 換身分、把剛載好的列表又重載一次
   const shopIdRef = useRef(shopId);
   shopIdRef.current = shopId;
@@ -107,6 +120,12 @@ function ReviewsOverviewView({ id }: { id: string }) {
   const changeTab = (t: Tab) => { setTab(t); setFilter(NO_FILTER); setReviews([]); setMeta(null); };
   const changeFilter = (f: BuyerFilter) => { setFilter(f); };
 
+  if (shopId !== null && shopBlocked) {
+    const saved = blockActions.shops.find(s => s.id === shopId)?.name;
+    const name = shop?.name ?? saved ?? '這家店';
+    return <BlockedShopPanel variant="page" shopName={name} titleRef={titleRef} onUnblock={() => blockActions.unblockShop({ id: shopId, name })} />;
+  }
+
   if (!product && state === 'ready' && meta?.total === 0 && tab === 'product') {
     return (
       <div className="mx-auto max-w-6xl p-3 md:p-6">
@@ -133,12 +152,12 @@ function ReviewsOverviewView({ id }: { id: string }) {
           <ArrowLeft size={22} aria-hidden="true" />
         </Link>
         {tab === 'shop' && shop ? (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-canvas text-2xl" aria-hidden="true">{shop.avatar}</span>
+          <LetterAvatar name={shop.name} size={40} />
         ) : image ? (
           <ProductImage src={image} alt="" size="sm" className="w-10 shrink-0 rounded-sm border border-line" />
         ) : null}
         <div className="min-w-0 flex-1 py-2">
-          <h1 className={`line-clamp-1 text-sm ${tab === 'shop' ? 'font-medium' : ''}`}>{title ?? '商品評價'}</h1>
+          <h1 ref={titleRef} tabIndex={-1} className={`line-clamp-1 text-sm outline-none ${tab === 'shop' ? 'font-medium' : ''}`}>{title ?? '商品評價'}</h1>
           <p className="flex items-center gap-1 text-xs text-muted">
             {stat && (
               <>
@@ -174,7 +193,7 @@ function ReviewsOverviewView({ id }: { id: string }) {
           {state === 'loading' && <ReviewSkeleton rows={3} />}
           {state === 'error' && <InlineError title="評價載入失敗" onRetry={() => void loadFirst(tab, filter)} />}
           {state === 'ready' && !hasAny && (
-            <EmptyBlock icon="💬" title="尚無評價" description="買家收到商品並評價後，會顯示在這裡" />
+            <EmptyBlock icon={<MessageCircle size={48} strokeWidth={1.5} className="text-muted" />} title="尚無評價" description="買家收到商品並評價後，會顯示在這裡" />
           )}
           {state === 'ready' && hasAny && reviews.length === 0 && (
             <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
@@ -185,7 +204,10 @@ function ReviewsOverviewView({ id }: { id: string }) {
           {state === 'ready' && reviews.length > 0 && (
             <div className="divide-y divide-line">
               {reviews.map(r => (
-                <ReviewCard key={r.id} review={r} showProduct={tab === 'shop'} onOpenPhoto={(p, i, el) => lightbox.open(p, i, el)} />
+                <ReviewCard
+                  key={r.id} review={r} showProduct={tab === 'shop'} onOpenPhoto={(p, i, el) => lightbox.open(p, i, el)}
+                  onReport={rv => report.open({ type: 'review', id: rv.id, subject: `${rv.display_name} 的評價` })}
+                />
               ))}
             </div>
           )}
@@ -204,6 +226,7 @@ function ReviewsOverviewView({ id }: { id: string }) {
         )}
       </div>
       {lightbox.element}
+      {report.sheet}
     </div>
   );
 }
