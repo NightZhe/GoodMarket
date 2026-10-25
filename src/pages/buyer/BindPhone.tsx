@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
 import Banner from '../../components/import/Banner';
+import { SubHeader, SubPage } from '../../components/account/ui';
 import { phoneErrorView } from '../../lib/auth/phoneErrors';
 import { useLoginProvider } from '../../components/auth/useLoginProvider';
 import CodeStep from '../../components/auth/CodeStep';
@@ -49,14 +49,9 @@ function BindView() {
   const leave = () => { clearFlow(flowStore()); navigate('/account'); };
 
   return (
-    <div className="mx-auto max-w-2xl md:px-4 md:pt-6">
-      <header className="flex items-center gap-1 px-2 py-1 md:px-0">
-        <Link to="/account" onClick={() => clearFlow(flowStore())} aria-label="返回帳號" className="flex h-11 w-11 items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand">
-          <ArrowLeft size={22} aria-hidden="true" />
-        </Link>
-        <h1 ref={titleRef} tabIndex={-1} className="text-lg font-bold outline-none">綁定手機</h1>
-      </header>
-      <section className="bg-white p-4 md:rounded-md md:p-6">
+    <SubPage>
+      <SubHeader to="/account" onBack={() => clearFlow(flowStore())} backLabel="回到我的帳號" title="綁定手機" titleRef={titleRef} />
+      <section className="rounded-card bg-white p-4 md:p-6">
         {step.flow ? (
           <CodeStep
             mode="bind" flow={step.flow} titleId="bind-title" titleSrOnly
@@ -82,6 +77,6 @@ function BindView() {
           </>
         )}
       </section>
-    </div>
+    </SubPage>
   );
 }

@@ -1,29 +1,19 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, CircleAlert, CircleCheck, CircleDashed, ClipboardList, Clock, CreditCard, IdCard, Landmark, LoaderCircle, LogOut, MapPin, ShieldCheck, ShoppingCart, Smartphone, Store } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { CircleAlert, CircleCheck, CircleDashed, Clock, LoaderCircle } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
-import LoginRequired from '../../components/auth/LoginRequired';
 import { useToast } from '../../components/Toast';
 import Banner from '../../components/import/Banner';
-import { btnOutline } from '../../components/import/ui';
 import Identity from '../../components/account/Identity';
-import { sectionTitleCls } from '../../components/account/ui';
+import { Group, NavRow, ROW, ROW_IN, SignedOut } from '../../components/account/AccountRows';
+import { clearGoto, rememberGoto, takeGoto } from '../../components/account/loginGoto';
+import { browserStores } from '../../lib/auth/pending';
 import { phoneOf } from '../../lib/auth/identity';
 import { MERCHANT_STATE_TEXT, type MerchantState } from '../../lib/payment/merchant';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useMerchantState } from '../../lib/payment/useMerchant';
-
-const ROW = 'flex min-h-12 items-center gap-3 px-4 text-sm focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand';
-
-/** 帳號頁 #/account：登入方式與 email 或遮罩門號、綁定手機、我的帳戶（個人檔案、地址）、購物、賣家、隱私政策、登出（只登出這台裝置）。刪除帳號的申請方式只寫在隱私政策頁（2026-10-18 使用者決定拿掉帳號頁的區塊） */
-export default function Account() {
-  return (
-    <LoginRequired kind="account">
-      <AccountView />
-    </LoginRequired>
-  );
-}
+import { useOnline } from '../../lib/useOnline';
 
 const BADGE: Record<MerchantState, { Icon: typeof Clock; tone: string }> = {
   none: { Icon: CircleDashed, tone: 'text-ink' },
@@ -38,7 +28,63 @@ function MerchantBadge({ state }: { state: MerchantState }) {
   return <span className={`inline-flex items-center gap-1 text-sm ${tone}`}><Icon size={14} aria-hidden="true" />{MERCHANT_STATE_TEXT[state].title}</span>;
 }
 
-function AccountView() {
+const store = () => browserStores()[0] ?? null;
+
+/**
+ * 「我的」#/account。頁首的大標題「我的」（h1）由 BuyerLayout 放，這裡不再放 h1。
+ * 沒登入也有頁面（登入入口＋購物、開店、其他）；登入後是帳號列表。登入狀態還不知道（authReady 前）時列表照樣顯示，頭像位置放灰塊。
+ * 刪除帳號的申請方式只寫在隱私政策頁（2026-10-18 使用者決定拿掉帳號頁的區塊）
+ */
+export default function Account() {
+  const { user, authReady } = useStore();
+  const { openLogin, panel } = useAuth();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const online = useOnline();
+  // 未登入時按「我的訂單／購物車／地址」想去的頁。Google／Apple 登入會整頁轉址，所以同時存 sessionStorage（見 loginGoto）；這個 ref 是儲存被擋時的備案
+  const gotoRef = useRef<string | null>(null);
+
+  // 登入完成就到剛才想去的頁。晚一拍：Google／Apple 轉址回來時 PendingRunner 會先把頁面「回到 /account」，我們要排在它後面
+  useEffect(() => {
+    if (!authReady || !user) return;
+    const t = setTimeout(() => {
+      const s = store();
+      const to = (s ? takeGoto(s, Date.now()) : null) ?? gotoRef.current;
+      gotoRef.current = null;
+      if (to) navigate(to);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [authReady, user, navigate]);
+
+  // 面板關了、人還是沒登入＝取消：留在這頁，不導頁、不顯示錯誤
+  useEffect(() => {
+    if (!authReady || user || panel) return;
+    gotoRef.current = null;
+    const s = store();
+    if (s) clearGoto(s);
+  }, [authReady, user, panel]);
+
+  /** to＝登入後要去的頁；null＝只是登入，留在這頁 */
+  const login = (to: string | null) => {
+    if (!online) { toast('連上網路後才能登入', 'info'); return; }
+    if (to) {
+      gotoRef.current = to;
+      const s = store();
+      if (s) rememberGoto(s, to, Date.now());
+    }
+    openLogin();
+  };
+
+  return (
+    <div className="min-h-dvh bg-canvas">
+      <div className="mx-auto max-w-2xl pb-8 pt-5">
+        {user ? <SignedIn /> : <SignedOut known={authReady} onLogin={login} />}
+      </div>
+    </div>
+  );
+}
+
+function SignedIn() {
   const { user, signOutBuyer, myShop } = useStore();
   // 線上付款開關關著時，「付款方式」「收款帳戶」兩個入口都不出現
   const { enabled: payEnabled } = usePaymentConfig();
@@ -73,78 +119,65 @@ function AccountView() {
     }
   };
 
-  const item = (to: string, icon: ReactNode, label: string) => (
-    <li><Link to={to} className={ROW}>{icon}<span className="flex-1">{label}</span><ChevronRight size={18} className="text-muted" aria-hidden="true" /></Link></li>
-  );
-  const group = (id: string, title: string, items: ReactNode) => (
-    <>
-      <h2 id={id} className={sectionTitleCls}>{title}</h2>
-      <ul aria-labelledby={id} className="divide-y divide-line bg-white md:rounded-md">{items}</ul>
-    </>
-  );
-
   return (
-    <div className="mx-auto max-w-2xl md:px-4 md:pt-6">
-      <h1 className="px-4 py-3 text-lg font-bold md:px-0 md:pt-0">我的帳號</h1>
-
+    <>
       {boundNote && (
-        <div ref={noteRef} tabIndex={-1} className="mb-2 px-4 outline-none md:mb-3 md:px-0">
+        <div ref={noteRef} tabIndex={-1} className="mx-4 mb-6 outline-none">
           <Banner kind="success" role="status" title={`已綁定 ${boundNote}`}>下次可以用這支手機登入同一個帳號。</Banner>
         </div>
       )}
 
-      <section className="bg-white px-4 py-4 md:rounded-md md:px-6">
+      <section className="mx-4 rounded-card bg-white p-4">
         <Identity user={user} />
       </section>
 
       {/* 還沒有門號的帳號才有；換號不在這一版，有門號就不顯示 */}
       {!phoneOf(user) && providers.phone && (
-        <nav aria-label="綁定手機" className="mt-2 bg-white md:mt-3 md:rounded-md">
-          <Link to="/account/phone" className={`${ROW} min-h-14 py-2`}>
-            <Smartphone size={20} className="shrink-0 text-muted" aria-hidden="true" />
-            <span className="flex-1">
-              <span className="block font-medium">綁定手機</span>
-              <span className="block text-xs leading-5 text-muted">綁定後，也能用手機號碼登入這個帳號</span>
+        <Group>
+          <NavRow to="/account/phone" label="綁定手機">
+            <span className="min-w-0 flex-1">
+              <span className="block">綁定手機</span>
+              <span className="block text-footnote text-muted">綁定後，也能用手機號碼登入這個帳號</span>
             </span>
-            <ChevronRight size={18} className="shrink-0 text-muted" aria-hidden="true" />
-          </Link>
-        </nav>
+          </NavRow>
+        </Group>
       )}
 
-      {group('acct-me', '我的帳戶', <>
-        {item('/account/profile', <IdCard size={20} className="shrink-0 text-muted" aria-hidden="true" />, '個人檔案')}
-        {payEnabled && item('/account/payment-methods', <CreditCard size={20} className="shrink-0 text-muted" aria-hidden="true" />, '付款方式')}
-        {item('/account/addresses', <MapPin size={20} className="shrink-0 text-muted" aria-hidden="true" />, '地址')}
-      </>)}
-      {group('acct-shop', '購物', <>
-        {item('/orders', <ClipboardList size={20} className="shrink-0 text-muted" aria-hidden="true" />, '我的訂單')}
-        {item('/cart', <ShoppingCart size={20} className="shrink-0 text-muted" aria-hidden="true" />, '購物車')}
-      </>)}
-      {group('acct-seller', '賣家', <>
-        {item('/seller', <Store size={20} className="shrink-0 text-muted" aria-hidden="true" />, '賣家中心')}
+      <Group id="acct-me" title="我的帳戶">
+        <NavRow to="/account/profile" label="個人檔案" />
+        {payEnabled && <NavRow to="/account/payment-methods" label="付款方式" />}
+        <NavRow to="/account/addresses" label="地址" />
+      </Group>
+      <Group id="acct-shop" title="購物">
+        <NavRow to="/orders" label="我的訂單" />
+        <NavRow to="/cart" label="購物車" />
+      </Group>
+      <Group id="acct-seller" title="賣家">
+        <NavRow to="/seller" label="賣家中心" />
         {payEnabled && myShop && (
-          <li>
-            <Link to="/account/payout" className={`${ROW} py-2`}>
-              <Landmark size={20} className="shrink-0 text-muted" aria-hidden="true" />
-              {/* 狀態文字與圖示一起顯示（不只靠顏色）；200% 時狀態換到標籤下面。還沒讀到狀態就不顯示 */}
-              <span className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
-                <span>收款帳戶</span>
-                {merchantState && <MerchantBadge state={merchantState} />}
-              </span>
-              <ChevronRight size={18} className="shrink-0 text-muted" aria-hidden="true" />
-            </Link>
-          </li>
+          <NavRow to="/account/payout" label="收款帳戶">
+            {/* 狀態文字與圖示一起顯示（不只靠顏色）；200% 時狀態換到標籤下面。還沒讀到狀態就不顯示 */}
+            <span className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
+              <span>收款帳戶</span>
+              {merchantState && <MerchantBadge state={merchantState} />}
+            </span>
+          </NavRow>
         )}
-      </>)}
-      {group('acct-privacy', '隱私', item('/privacy', <ShieldCheck size={20} className="shrink-0 text-muted" aria-hidden="true" />, '隱私政策'))}
+      </Group>
+      <Group id="acct-privacy" title="隱私">
+        <NavRow to="/privacy" label="隱私政策" />
+      </Group>
 
-      <section className="mt-5 bg-white p-4 md:mt-6 md:rounded-md md:px-6">
-        <button type="button" onClick={() => void logout()} aria-disabled={busy || undefined} className={`${btnOutline} h-12 w-full text-base`}>
-          {busy ? <LoaderCircle size={18} className="motion-safe:animate-spin" aria-hidden="true" /> : <LogOut size={18} aria-hidden="true" />}
-          {busy ? '登出中…' : '登出'}
-        </button>
-        <p className="mt-3 text-xs leading-5 text-muted">只會登出這台裝置。購物車、訂單和收件地址都存在帳號裡，下次登入就會回來。</p>
-      </section>
-    </div>
+      <Group footer="只會登出這台裝置。購物車、訂單和收件地址都存在帳號裡，下次登入就會回來。">
+        <li>
+          <button type="button" onClick={() => void logout()} aria-disabled={busy || undefined} className={`${ROW} justify-center pl-0 text-brand`}>
+            <span data-row="" className={`${ROW_IN} justify-center pl-3`}>
+              {busy && <LoaderCircle size={18} className="motion-safe:animate-spin" aria-hidden="true" />}
+              {busy ? '登出中…' : '登出'}
+            </span>
+          </button>
+        </li>
+      </Group>
+    </>
   );
 }

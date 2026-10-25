@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, MessageSquare } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { getProductReviews } from '../../lib/reviews/api';
 import type { PublicReviewList } from '../../lib/reviews/types';
 import { ratingText } from '../../lib/reviews/format';
@@ -39,13 +39,13 @@ export default function ProductReviewsSection({ productId }: { productId: string
   return (
     <section
       id="reviews" aria-labelledby="reviews-title"
-      className="mt-2 scroll-mt-16 bg-white p-4 md:mt-4 md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10 md:rounded-md md:p-6"
+      className="mt-8 scroll-mt-[calc(env(safe-area-inset-top)+--spacing(14))] px-5 md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10 md:px-0"
     >
       <div>
-        <div className="flex items-center justify-between">
-          <h2 id="reviews-title" className="text-base font-medium">商品評價{state === 'ready' && total > 0 && ` (${total})`}</h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 id="reviews-title" className="text-title2 font-bold text-ink">評分與評價{state === 'ready' && total > 0 && ` (${total})`}</h2>
           {state === 'ready' && total > 0 && (
-            <Link to={allLink} className="-mr-2 inline-flex min-h-11 items-center gap-0.5 px-2 text-sm md:hidden">
+            <Link to={allLink} className="-mr-2 inline-flex min-h-11 items-center gap-0.5 px-2 text-subhead text-brand transition-opacity duration-200 active:opacity-50 active:duration-0 md:hidden">
               查看全部<ChevronRight size={16} aria-hidden="true" />
             </Link>
           )}
@@ -53,8 +53,8 @@ export default function ProductReviewsSection({ productId }: { productId: string
         {state === 'ready' && total > 0 && stat && (
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="flex items-baseline gap-1">
-              <span className="text-3xl font-semibold text-brand md:text-5xl">{ratingText(stat.avg)}</span>
-              <span className="text-sm text-muted">/ 5</span>
+              <span className="text-title1 font-bold text-ink md:text-large-title">{ratingText(stat.avg)}</span>
+              <span className="text-subhead text-muted">/ 5</span>
             </span>
             <StarsAvg value={stat.avg} count={stat.count} />
           </div>
@@ -70,10 +70,9 @@ export default function ProductReviewsSection({ productId }: { productId: string
         {state === 'loading' && <ReviewSkeleton rows={2} />}
         {state === 'error' && <InlineError title="評價載入失敗" onRetry={() => void load()} />}
         {state === 'ready' && total === 0 && (
-          <div className="flex flex-col items-center gap-1 px-6 py-10 text-center">
-            <MessageSquare size={32} className="text-disabled" aria-hidden="true" />
-            <p className="mt-1 text-sm">尚無評價</p>
-            <p className="text-xs text-muted">買家收到商品並評價後，會顯示在這裡</p>
+          <div className="rounded-card bg-canvas p-4">
+            <p className="text-headline font-semibold text-ink">還沒有評價</p>
+            <p className="mt-0.5 text-subhead text-muted">完成訂單的買家可以寫評價。</p>
           </div>
         )}
         {state === 'ready' && data && total > 0 && (

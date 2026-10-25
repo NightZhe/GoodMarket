@@ -25,6 +25,8 @@ import { useOrderRefunds } from '../../lib/payment/useOrderRefunds';
 import type { OrderPaymentRow, OrderPaymentStatus } from '../../lib/payment/types';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import OrderTimeline from '../../components/OrderTimeline';
+import ReturnInfoToggle from '../../components/logistics/ReturnInfo';
+import { hasReturnInfoEntry } from '../../lib/logistics/returnInfoAccess';
 import type { Order, OrderStatus } from '../../types';
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -91,6 +93,8 @@ function OrdersView() {
   const online = useOnline();
   const [dialog, setDialog] = useState<CancelDialog | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
+  // 展開退貨資訊後發現資料庫還沒升級（N6）：記下是哪一張，其他訂單在這次頁面存活期間不再出現「退貨資訊」列
+  const [returnMissingId, setReturnMissingId] = useState<string | null>(null);
 
   // 線上付款的付款資訊（待付款、確認中、已付款…）。開關關著、也沒有任何線上付款訂單時不讀：舊資料庫沒有這支函式。
   // 開關關著但已經有線上付款訂單（軟回滾）：退款照常（R-RF9），所以讀，但只認已付款／退款中／已退款，其餘維持開關關著時的樣子
@@ -224,7 +228,7 @@ function OrdersView() {
 
   return (
     <div className="mx-auto max-w-4xl md:px-4 md:pt-6">
-      <div className="no-scrollbar sticky top-[52px] z-20 flex overflow-x-auto bg-white md:top-[108px] md:rounded-t-md">
+      <div className="no-scrollbar sticky top-[env(safe-area-inset-top)] z-20 flex overflow-x-auto bg-white md:rounded-t-md">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             aria-label={t.id === 'pending' && unfinished.length > 0 ? `待付款，${unfinished.length} 筆` : undefined}
@@ -261,7 +265,7 @@ function OrdersView() {
             </button>
           </div>
         ) : list.length === 0 ? (
-          <EmptyState icon="🧾" title={tab === 'pending' ? '沒有待付款的訂單' : '還沒有訂單'} action={<Link to="/" className="text-brand">去逛逛</Link>} />
+          <EmptyState title={tab === 'pending' ? '沒有待付款的訂單' : '還沒有訂單'} action={<Link to="/" className="text-brand">去逛逛</Link>} />
         ) : list.map(o => {
           const pay = payOf.get(o.id);
           const ps = stateOf(o);
@@ -333,6 +337,10 @@ function OrdersView() {
                   </button>
                   {openId === o.id && <div className="mt-3"><OrderTimeline order={o} /></div>}
                 </div>
+              )}
+
+              {hasReturnInfoEntry(o.status) && !isUnfinished(ps) && !expired && (returnMissingId === null || returnMissingId === o.id) && (
+                <ReturnInfoToggle orderId={o.id} orderNo={o.orderNo} onUnavailable={() => setReturnMissingId(cur => cur ?? o.id)} />
               )}
 
               {o.status === 'completed' && (() => {

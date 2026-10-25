@@ -167,7 +167,7 @@ function CartView() {
     return (
       <div className="mx-auto max-w-6xl p-3 md:p-6">
         {liveRegion}
-        <EmptyState icon="🛒" title="購物車還是空的" description="你在其他裝置加入的商品，登入後也會出現在這裡。" action={
+        <EmptyState title="購物車還是空的" description="你在其他裝置加入的商品，登入後也會出現在這裡。" action={
           <Link to="/" className="rounded-sm bg-brand px-8 py-2.5 text-white">去逛逛</Link>
         } />
       </div>

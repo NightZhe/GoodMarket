@@ -39,6 +39,9 @@ import ProductForm from './pages/seller/ProductForm';
 import SellerOrders from './pages/seller/SellerOrders';
 import SellerReviews from './pages/seller/SellerReviews';
 import SellerPayout from './pages/seller/SellerPayout';
+import SellerLogistics from './pages/seller/SellerLogistics';
+import SellerLogisticsStoreForm from './pages/seller/SellerLogisticsStoreForm';
+import SellerLogisticsAddressForm from './pages/seller/SellerLogisticsAddressForm';
 import RequirePayment from './components/payment/RequirePayment';
 
 // 匯入精靈很少用到，且會載入約 650 KB 的 Excel 解析程式，所以整頁延後載入
@@ -104,6 +107,10 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
         <Route path="products/:id/edit" element={<ProductForm />} />
         <Route path="orders" element={<SellerOrders />} />
         <Route path="reviews" element={<SellerReviews />} />
+        <Route path="logistics" element={<SellerLogistics />} />
+        <Route path="logistics/stores/new" element={<SellerLogisticsStoreForm />} />
+        <Route path="logistics/stores/:id" element={<SellerLogisticsStoreForm />} />
+        <Route path="logistics/address" element={<SellerLogisticsAddressForm />} />
         <Route path="payout" element={<RequirePayment to="/seller"><SellerPayout /></RequirePayment>} />
       </Route>
     </Route>
