@@ -23,6 +23,7 @@ import EmptyState from '../../components/EmptyState';
 import { useToast } from '../../components/Toast';
 import { useOnline } from '../../lib/useOnline';
 import { cheapestVariant, discountOf, money, priceRange, soldText } from '../../lib/format';
+import { reduceMotion } from '../../lib/ui/scroll';
 import type { Product } from '../../types';
 
 // 用 key 讓切換到另一個商品時，規格／數量等狀態重新開始
@@ -90,8 +91,7 @@ function ProductDetailView({ id }: { id: string }) {
   const category = CATEGORIES.find(c => c.id === product.categoryId);
   const stat = productStat(product.id);
   const goReviews = () => {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    document.getElementById('reviews')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
+    document.getElementById('reviews')?.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth' });
   };
 
   // 賣家不能買自己商店的商品（D12）：常駐說明，按鈕不可按但仍可聚焦（aria-disabled，不用 disabled）
