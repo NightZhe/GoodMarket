@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NATIVE_AUTH_REDIRECT, parseNativeCallback } from './callback';
+import { NATIVE_AUTH_REDIRECT, parseNativeCallback, parseNativeRoute } from './callback';
 
 describe('parseNativeCallback', () => {
   it('讀出 code', () => {
@@ -19,5 +19,23 @@ describe('parseNativeCallback', () => {
   });
   it('沒有參數就是什麼都沒有', () => {
     expect(parseNativeCallback(NATIVE_AUTH_REDIRECT)).toEqual({ code: null, failure: null });
+  });
+});
+
+describe('parseNativeRoute', () => {
+  it('scheme://review-login → /review-login（審查員登入頁）', () => {
+    expect(parseNativeRoute('io.github.nightzhe.goodmarket://review-login')).toBe('/review-login');
+    expect(parseNativeRoute('io.github.nightzhe.goodmarket://review-login/')).toBe('/review-login');
+  });
+  it('多層路徑與 query 保留，hash 丟掉', () => {
+    expect(parseNativeRoute('io.github.nightzhe.goodmarket://product/p1?x=1#frag')).toBe('/product/p1?x=1');
+  });
+  it('登入回跳不是一般深連結', () => {
+    expect(parseNativeRoute('io.github.nightzhe.goodmarket://auth?code=x')).toBeNull();
+    expect(parseNativeRoute('io.github.nightzhe.goodmarket://auth/')).toBeNull();
+  });
+  it('別的 scheme、壞網址回 null', () => {
+    expect(parseNativeRoute('https://nightzhe.github.io/GoodMarket/#/review-login')).toBeNull();
+    expect(parseNativeRoute('not a url')).toBeNull();
   });
 });

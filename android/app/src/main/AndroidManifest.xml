@@ -22,12 +22,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- 登入回跳（Supabase redirectTo 自訂 scheme，見 src/lib/native/callback.ts） -->
+            <!-- 自訂 scheme：登入回跳 ://auth 與一般深連結（如審查員登入頁 ://review-login），見 src/lib/native/callback.ts -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="io.github.nightzhe.goodmarket" android:host="auth" />
+                <data android:scheme="io.github.nightzhe.goodmarket" />
             </intent-filter>
 
         </activity>
