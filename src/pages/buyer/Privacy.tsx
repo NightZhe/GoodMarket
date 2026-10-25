@@ -11,6 +11,8 @@ const PRIVACY_P_A = '2026/10/18';
  *  PR #8（簡訊商改 MAAC Go）與本檔同樣把這筆改成這個常數，並也在最上面加一筆用 PRIVACY_EFFECTIVE 的修訂，
  *  後合併者合併時保留兩筆、把先合併者那筆的日期改成固定常數（日期＝對方實際推前端那天） */
 const PRIVACY_SELLER_LOGISTICS = '2026/10/25';
+/** 驗證碼簡訊服務商改為 MAAC Go（三竹備援）的修訂日（PR #8，2026-10-25 深夜推上、網站顯示 2026/10/26）：已發生的修訂，不會再變 */
+const PRIVACY_SMS_MAACGO = '2026/10/26';
 /** 驗證碼簡訊服務商由 Twilio 改為三竹的修訂日：已發生的修訂，不會再變（修訂紀錄的「最新一筆」用 PRIVACY_EFFECTIVE，舊的每筆各有自己的固定日期） */
 const PRIVACY_SMS_VENDOR = '2026/10/20';
 /** 手機號碼登入與綁定手機上線日：已發生的修訂，不會再變 */
@@ -21,7 +23,7 @@ const TURNSTILE_PRIVACY_URL = 'https://www.cloudflare.com/turnstile-privacy-poli
 // 保存期限的數字、生效日期與修訂紀錄都待使用者確認）；「不會儲存完整卡號」要等 AC-E8 驗收通過後才能上線。
 const dataItems = (payOn: boolean): { name: string; detail: ReactNode }[] => [
   { name: '登入帳號', detail: '帳號識別碼，以及你選用的登入方式提供的資料：用 Google 或 Apple 登入時是它們提供的電子郵件（如果 Apple 讓你選「隱藏我的電子郵件」，我們收到的是轉寄信箱，不是你的真實 email）；用手機號碼登入或綁定手機時是你的手機號碼。' },
-  { name: '驗證碼簡訊', detail: '用手機號碼登入或綁定手機時，驗證碼簡訊由簡訊服務商三竹資訊股份有限公司（位於台灣）代為傳送，它會處理你的手機號碼與簡訊內容。' },
+  { name: '驗證碼簡訊', detail: '用手機號碼登入或綁定手機時，驗證碼簡訊由簡訊服務商漸強實驗室股份有限公司（MAAC Go，位於台灣）代為傳送，它會處理你的手機號碼與簡訊內容。如果 MAAC Go 暫時無法傳送，會改由三竹資訊股份有限公司（位於台灣）代為傳送，處理的資料相同。' },
   {
     name: '安全驗證',
     detail: (
@@ -103,7 +105,7 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
 
         <h2 className="mt-8 text-base font-bold">4. 保存多久</h2>
         <p className="mt-2 text-base leading-7">
-          你的帳號存在期間，我們會保存帳號、購物車、收件地址、暱稱與評價等資料。你申請刪除帳號後，我們會在 {DELETION_WINDOW}刪除或去識別化你的個人資料，已公開的評價會改為「匿名買家」顯示。{payOn && '刪除帳號時，我們會先請綠界科技刪除你綁定的所有信用卡。你刪除信用卡時，好物集會刪除顯示用的卡片資料，並通知綠界科技撤銷綁定。'}訂單等交易紀錄{payOn ? '（含付款紀錄）' : ''}，依相關法規規定的期間保存。我們會保留刪除申請的處理紀錄（申請、完成日期與已刪除帳號的識別碼），以及你檢舉過的內容紀錄（不含你的身分）。
+          你的帳號存在期間，我們會保存帳號、購物車、收件地址、暱稱與評價等資料。你申請刪除帳號後，我們會在 {DELETION_WINDOW}刪除或去識別化你的個人資料，你寫的評價與照片會一併刪除。{payOn && '刪除帳號時，我們會先請綠界科技刪除你綁定的所有信用卡。你刪除信用卡時，好物集會刪除顯示用的卡片資料，並通知綠界科技撤銷綁定。'}訂單等交易紀錄{payOn ? '（含付款紀錄）' : ''}，依相關法規規定的期間保存。我們會保留刪除申請的處理紀錄（申請、完成日期與已刪除帳號的識別碼），以及你檢舉過的內容紀錄（不含你的身分）。
         </p>
 
         <h2 className="mt-8 text-base font-bold">5. 刪除你的資料</h2>
@@ -138,7 +140,11 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
         <dl className="mt-2 rounded-md border border-line px-4">
           <div className="border-t border-line py-3 first:border-t-0">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_EFFECTIVE}</dt>
-            <dd className="mt-0.5 text-sm leading-6 text-muted">刪除帳號改為在 App 或網站提出申請、7 個工作天內處理；新增『內容審核與檢舉』與檢舉紀錄的說明。</dd>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">刪除帳號改為在 App 或網站提出申請、7 個工作天內處理，刪除時評價與照片一併刪除；新增『內容審核與檢舉』與檢舉紀錄的說明。</dd>
+          </div>
+          <div className="border-t border-line py-3">
+            <dt className="text-sm font-medium tabular-nums">{PRIVACY_SMS_MAACGO}</dt>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">驗證碼簡訊服務商由三竹資訊股份有限公司改為漸強實驗室股份有限公司（MAAC Go，位於台灣）；三竹資訊改為備援，只在 MAAC Go 暫時無法傳送時使用。</dd>
           </div>
           <div className="border-t border-line py-3">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_SELLER_LOGISTICS}</dt>

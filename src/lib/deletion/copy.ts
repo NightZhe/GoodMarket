@@ -5,10 +5,10 @@ import { DELETION_WINDOW } from '../site';
 export const INTRO = `你可以在這裡申請刪除你的好物集帳號。我們會在 ${DELETION_WINDOW}人工處理，處理完成後無法復原。`;
 
 export const SECTIONS: readonly { title: string; body: string }[] = [
-  { title: '會刪除的資料', body: '你的帳號與所有登入方式（Google、Apple、手機號碼）、購物車、個人檔案（暱稱）、地址簿。' },
+  { title: '會刪除的資料', body: '你的帳號與所有登入方式（Google、Apple、手機號碼）、購物車、個人檔案（暱稱）、地址簿。你寫過的評價與照片會一併刪除。' },
   {
     title: '會保留的資料',
-    body: '訂單交易紀錄會依相關法規規定的期間保存，但不再連結到你的帳號。你寫過的評價會保留內容、星等與照片，名稱改為『匿名買家』：評價是其他買家參考的購物資訊，也影響賣家的評分。',
+    body: '訂單交易紀錄會依相關法規規定的期間保存，但不再連結到你的帳號。',
   },
   {
     title: '完成後怎麼知道',
