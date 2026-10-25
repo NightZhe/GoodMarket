@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#FFFFFF" />
+    <meta name="robots" content="noindex" />
+    <!-- 只允許 Cloudflare Turnstile 的腳本與 iframe；本頁沒有其他外部資源 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'" />
+    <title>安全驗證｜好物集</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: #fff; color: #1a1a1a; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro TC", "PingFang TC", "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.5;
+        padding: calc(24px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+        min-height: 100vh;
+      }
+      main { max-width: 448px; margin: 0 auto; }
+      h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+      .en { display: block; font-size: 15px; font-weight: 400; color: #6b6b6b; }
+      p { margin: 0; font-size: 15px; }
+      p .en { display: block; margin-top: 2px; }
+      .lead { margin-top: 12px; color: #4a4a4a; }
+      #widget { margin-top: 20px; min-height: 65px; }
+      .msg { margin-top: 20px; padding: 12px 14px; border-radius: 12px; font-size: 15px; }
+      .msg-ok { background: #edf7ee; color: #1d5a2b; }
+      .msg-err { background: #fdecea; color: #8a1c12; }
+      .msg-info { background: #f3f3f3; color: #4a4a4a; }
+      .actions { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+      .btn {
+        display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 16px;
+        border-radius: 12px; font-size: 17px; font-weight: 600; text-decoration: none; cursor: pointer;
+        border: 1px solid transparent; font-family: inherit;
+      }
+      .btn-primary { background: #BF4419; color: #fff; }
+      .btn-outline { background: #fff; color: #1a1a1a; border-color: #c9c9c9; }
+      .btn:focus-visible { outline: 2px solid #BF4419; outline-offset: 2px; }
+      .hidden { display: none !important; }
+      .hint { margin-top: 16px; font-size: 13px; color: #6b6b6b; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>安全驗證 <span class="en" lang="en">Security check</span></h1>
+      <p class="lead">好物集需要確認你不是機器人。完成下方的驗證後，會自動回到 App。<span class="en" lang="en">GoodMarket needs to confirm you are not a robot. After you pass the check below, you will be returned to the app automatically.</span></p>
+
+      <div id="widget"></div>
+
+      <div id="loading" class="msg msg-info" role="status">正在載入安全驗證…<span class="en" lang="en">Loading the security check…</span></div>
+
+      <div id="done" class="msg msg-ok hidden" role="status">驗證完成。如果沒有自動回到 App，請按下方按鈕。<span class="en" lang="en">Done. If the app does not open by itself, tap the button below.</span></div>
+      <div id="failed" class="msg msg-err hidden" role="alert">安全驗證沒有通過，請再試一次。<span class="en" lang="en">The security check did not pass. Please try again.</span></div>
+      <div id="unavailable" class="msg msg-err hidden" role="alert">安全驗證載入失敗，請檢查網路後重新載入。<span class="en" lang="en">The security check could not be loaded. Check your connection and reload.</span></div>
+
+      <div class="actions">
+        <a id="back-ok" class="btn btn-primary hidden" href="#">回到好物集 <span lang="en">／ Back to the app</span></a>
+        <button id="retry" type="button" class="btn btn-outline hidden">再試一次 <span lang="en">／ Try again</span></button>
+        <button id="reload" type="button" class="btn btn-outline hidden">重新載入 <span lang="en">／ Reload</span></button>
+        <a id="back-cancel" class="btn btn-outline hidden" href="#">先回到好物集 <span lang="en">／ Back without verifying</span></a>
+      </div>
+      <p class="hint">這一頁由 Cloudflare Turnstile 提供驗證，會處理你的 IP 位址與瀏覽器資訊。<span class="en" lang="en">Verification is provided by Cloudflare Turnstile, which processes your IP address and browser information.</span></p>
+    </main>
+    <script src="captcha.js" defer></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=gmOnTurnstileLoad&render=explicit" defer onerror="window.gmTurnstileScriptFailed && window.gmTurnstileScriptFailed()"></script>
+  </body>
+</html>

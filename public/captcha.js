@@ -7,6 +7,9 @@
   'use strict';
   var DEFAULT_SITEKEY = '0x4AAAAAAFh8HZ6cfA1LLg9i';
   var MSG = 'gm-turnstile';
+  // 只把事件（含 token）送給 App 的 WebView 來源：別的網站把這一頁嵌進 iframe 拿不到 token，sitekey 的網域限制才不會被繞過
+  var PARENT_ORIGIN = 'capacitor://nightzhe.github.io';
+  var API_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=gmOnTurnstileLoad&render=explicit';
 
   var q = new URLSearchParams(window.location.search);
   var qsKey = q.get('sitekey') || '';
@@ -19,7 +22,7 @@
     if (window.parent === window) return;
     var m = { type: MSG, event: event };
     if (extra) for (var k in extra) m[k] = extra[k];
-    window.parent.postMessage(m, '*');
+    window.parent.postMessage(m, PARENT_ORIGIN);
   }
 
   // 官方 flexible 最小寬 300；容器更窄（縮放 200%）改 compact（與 App 內 turnstileSize 同一規則）
@@ -37,7 +40,11 @@
   // 腳本 10 秒還沒載入（被擋、離線）就當載入不了
   var slow = window.setTimeout(function () { if (!loaded) post('script-failed'); }, 10000);
 
-  window.gmTurnstileScriptFailed = function () { window.clearTimeout(slow); post('script-failed'); };
+  // 官方腳本由這裡動態插入：靜態 <script> 的 inline onerror 會被本頁 CSP（script-src 沒有 'unsafe-inline'）擋掉，載入失敗就只能等 10 秒
+  var api = document.createElement('script');
+  api.src = API_SRC;
+  api.async = true;
+  api.onerror = function () { window.clearTimeout(slow); post('script-failed'); };
 
   window.gmOnTurnstileLoad = function () {
     window.clearTimeout(slow);
@@ -65,4 +72,6 @@
       post('script-failed');
     }
   };
+
+  document.head.appendChild(api);
 })();

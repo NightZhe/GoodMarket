@@ -120,8 +120,9 @@ export function useTurnstile({ enabled, lazy = false }: { enabled: boolean; lazy
         return;
       }
       if (m.event === 'height') { iframe.style.height = `${m.height}px`; return; }
+      // 與 widget 模式一致：只有 error／expired／timeout 會讓既有 token 失效；interactive 不清（已有 token 時狀態留在 ready）
       if (m.event === 'token') tokenRef.current = m.token;
-      else if (m.event !== 'after-interactive') tokenRef.current = null;
+      else if (m.event === 'error' || m.event === 'expired' || m.event === 'timeout') tokenRef.current = null;
       const ev = frameEventToTs(m);
       if (ev) fire(ev);
     };
