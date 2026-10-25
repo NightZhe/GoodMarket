@@ -35,7 +35,9 @@ describe('刪除帳號申請頁：說明（所有狀態共用）', () => {
       expect(h).toContain('好物集');
       expect(h).toContain(INTRO);
       for (const t of ['會刪除的資料', '會保留的資料', '完成後怎麼知道', '處理期間']) expect(h, t).toContain(`>${t}</h2>`);
-      expect(h).toContain('名稱改為『匿名買家』');
+      expect(h).toContain('你的帳號與所有登入方式（Google、Apple、手機號碼）、購物車、個人檔案（暱稱）、地址簿。你寫過的評價與照片會一併刪除。');
+      expect(h).toContain('訂單交易紀錄會依相關法規規定的期間保存，但不再連結到你的帳號。');
+      expect(h).not.toContain('匿名買家');
       expect(h).toContain('再用同一個 Google、Apple 帳號或手機號碼登入，會是一個全新的空帳號');
     });
   }

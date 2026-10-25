@@ -86,7 +86,7 @@ describe('賣家退貨收件資料的揭露（AC-L38、AC-L39）', () => {
 });
 
 describe('刪除帳號申請與內容審核檢舉（AC-D33、D35、D36、K23、K24）', () => {
-  const REVISION = '刪除帳號改為在 App 或網站提出申請、7 個工作天內處理；新增『內容審核與檢舉』與檢舉紀錄的說明。';
+  const REVISION = '刪除帳號改為在 App 或網站提出申請、7 個工作天內處理，刪除時評價與照片一併刪除；新增『內容審核與檢舉』與檢舉紀錄的說明。';
   const section = (page: string, from: string, to: string) => page.split(from)[1].split(to)[0];
 
   it('第 4 節：期限是 7 個工作天內，並說明刪除申請與檢舉紀錄的保存', () => {
@@ -95,6 +95,14 @@ describe('刪除帳號申請與內容審核檢舉（AC-D33、D35、D36、K23、K
       expect(s4).toContain('我們會在 7 個工作天內刪除或去識別化你的個人資料');
       expect(s4).toContain('我們會保留刪除申請的處理紀錄（申請、完成日期與已刪除帳號的識別碼），以及你檢舉過的內容紀錄（不含你的身分）。');
       expect(s4).not.toContain('1 年');
+    }
+  });
+  it('第 4 節：評價與照片隨帳號一併刪除，不再有匿名評價（N3＝B）；整頁不含「匿名買家」', () => {
+    for (const on of [false, true]) {
+      const page = html(on);
+      const s4 = section(page, '4. 保存多久', '5. 刪除你的資料');
+      expect(s4).toContain('刪除或去識別化你的個人資料，你寫的評價與照片會一併刪除。');
+      expect(page).not.toContain('匿名買家');
     }
   });
   it('第 5 節：不再叫人來信申請，改為 App 或網站申請，連結到 #/account/delete', () => {

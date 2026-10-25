@@ -103,7 +103,7 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
 
         <h2 className="mt-8 text-base font-bold">4. 保存多久</h2>
         <p className="mt-2 text-base leading-7">
-          你的帳號存在期間，我們會保存帳號、購物車、收件地址、暱稱與評價等資料。你申請刪除帳號後，我們會在 {DELETION_WINDOW}刪除或去識別化你的個人資料，已公開的評價會改為「匿名買家」顯示。{payOn && '刪除帳號時，我們會先請綠界科技刪除你綁定的所有信用卡。你刪除信用卡時，好物集會刪除顯示用的卡片資料，並通知綠界科技撤銷綁定。'}訂單等交易紀錄{payOn ? '（含付款紀錄）' : ''}，依相關法規規定的期間保存。我們會保留刪除申請的處理紀錄（申請、完成日期與已刪除帳號的識別碼），以及你檢舉過的內容紀錄（不含你的身分）。
+          你的帳號存在期間，我們會保存帳號、購物車、收件地址、暱稱與評價等資料。你申請刪除帳號後，我們會在 {DELETION_WINDOW}刪除或去識別化你的個人資料，你寫的評價與照片會一併刪除。{payOn && '刪除帳號時，我們會先請綠界科技刪除你綁定的所有信用卡。你刪除信用卡時，好物集會刪除顯示用的卡片資料，並通知綠界科技撤銷綁定。'}訂單等交易紀錄{payOn ? '（含付款紀錄）' : ''}，依相關法規規定的期間保存。我們會保留刪除申請的處理紀錄（申請、完成日期與已刪除帳號的識別碼），以及你檢舉過的內容紀錄（不含你的身分）。
         </p>
 
         <h2 className="mt-8 text-base font-bold">5. 刪除你的資料</h2>
@@ -138,7 +138,7 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
         <dl className="mt-2 rounded-md border border-line px-4">
           <div className="border-t border-line py-3 first:border-t-0">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_EFFECTIVE}</dt>
-            <dd className="mt-0.5 text-sm leading-6 text-muted">刪除帳號改為在 App 或網站提出申請、7 個工作天內處理；新增『內容審核與檢舉』與檢舉紀錄的說明。</dd>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">刪除帳號改為在 App 或網站提出申請、7 個工作天內處理，刪除時評價與照片一併刪除；新增『內容審核與檢舉』與檢舉紀錄的說明。</dd>
           </div>
           <div className="border-t border-line py-3">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_SELLER_LOGISTICS}</dt>
