@@ -1,0 +1,34 @@
+name: CI
+
+# PR 到 main 與任何分支的 push 都跑：安裝、lint、測試、build。
+# build 的三個 VITE_* 用 repo secrets；來自 fork 的 PR 拿不到 secrets，會以空值 build，
+# 前端對缺少設定有降級（src/lib/supabase.ts、SetupNotice），所以空值也能 build 過。
+on:
+  pull_request:
+    branches: [main]
+  push:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_TURNSTILE_SITEKEY: ${{ secrets.VITE_TURNSTILE_SITEKEY }}
