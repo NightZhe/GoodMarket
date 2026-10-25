@@ -3,7 +3,7 @@ import { pillPress } from './pillButton';
 /** 列表底部整列寬的膠囊（桌機置中固定寬）；「顯示更多商品」與「回到頂端」共用同一個外觀 */
 function FooterPill({ onClick, children }: { onClick: () => void; children: string }) {
   return (
-    <div className="px-5 pt-6">
+    <div className="px-5 pb-6 pt-6">
       <button
         type="button"
         onClick={onClick}

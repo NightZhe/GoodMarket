@@ -76,6 +76,19 @@ describe('首頁「全部商品」：一批 24 件', () => {
   });
 });
 
+describe('資料變少自動截短', () => {
+  it('返回記憶 60 件，但背景重讀後只剩 30 件：畫 30 張卡，不留空格', () => {
+    mock.products = make(30);
+    vi.stubGlobal('sessionStorage', {
+      getItem: (k: string) => (k === 'reveal:home' ? JSON.stringify({ shown: 60, scrollY: 0 }) : null),
+      setItem: () => {},
+    });
+    const h = home();
+    expect(homeGridCards(h)).toBe(30);
+    expect(h).not.toContain('顯示更多商品');
+  });
+});
+
 describe('逛逛結果：一批 24 件', () => {
   it('71 件：只畫 24 張卡，退回「顯示更多商品」，沒有「回到頂端」', () => {
     mock.products = make(71);
