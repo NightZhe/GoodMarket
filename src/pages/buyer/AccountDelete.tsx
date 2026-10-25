@@ -46,7 +46,8 @@ export default function AccountDelete() {
   // 焦點在對話框卸載「之後」才移：LeaveDialog 的清理會把焦點還給已不存在的元素
   useEffect(() => {
     if (!focusWish || dialog !== null) return;
-    if (focusWish === 'status') statusRef.current?.focus();
+    // 狀態卡在頁面最上方：先捲到頂再聚焦（focus() 的最小捲動會把標題停在黏頂頁首底下，看不到；小q 驗收發現）
+    if (focusWish === 'status') { window.scrollTo({ top: 0 }); statusRef.current?.focus({ preventScroll: true }); }
     else titleRef.current?.focus();
     setFocusWish(null);
   }, [focusWish, dialog, view]);

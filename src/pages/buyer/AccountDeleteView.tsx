@@ -165,7 +165,7 @@ export function DeletionStatusCard({ request, justSubmitted, online, titleRef, o
       <div className="flex items-start gap-3">
         <Icon size={24} className={`mt-0.5 shrink-0 ${justSubmitted ? 'text-success-text' : 'text-info-text'}`} aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <h2 id="del-status-title" ref={titleRef} tabIndex={-1} className="text-title3 font-bold outline-none">
+          <h2 id="del-status-title" ref={titleRef} tabIndex={-1} className="scroll-mt-[calc(env(safe-area-inset-top)+--spacing(14))] text-title3 font-bold outline-none">
             {justSubmitted ? '已收到你的刪除申請' : '刪除申請處理中'}
           </h2>
           <dl className="mt-3 space-y-1 text-body">
