@@ -22,6 +22,12 @@
 
 推 `main` 由 GitHub Actions 自動部署到 GitHub Pages，不用 `/deploy` skill（那是 Railway 用的）。
 
+## 本機環境與 worktree
+
+- 開 worktree 時不要另裝套件：`ln -s /Users/ben/harryaiagent/GoodMarket/node_modules node_modules` 指向主 checkout。
+- main 拉新後若 `package.json` 有變，到主 checkout 跑 `npm install`，所有 worktree 一起生效。
+- CI（`.github/workflows/ci.yml`）在乾淨環境跑 lint／測試／build，會抓到「本機能跑、乾淨環境不能跑」的問題。
+
 ## 資料庫（2026-10-16 起）
 
 - **來源真相是 `supabase/migrations/`**：基準檔是正式站唯讀匯出，之後每次異動新增一個 migration。
