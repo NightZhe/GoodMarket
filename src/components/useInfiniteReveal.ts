@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigationType } from 'react-router-dom';
 import { hasMore, initialShown, nextShown, showBackToTop, type RevealNav } from '../lib/ui/revealPolicy';
+import { currentNavKind } from '../lib/ui/navKind';
 import { scrollPageToTop } from '../lib/ui/scroll';
 
 /**
@@ -14,7 +15,7 @@ import { scrollPageToTop } from '../lib/ui/scroll';
  * - 背景重讀讓 items 變少時，畫出的件數自動截短（不寫回 state，資料又變多時能回來）。
  */
 export function useInfiniteReveal<T>(items: T[], memoryKey: string) {
-  const nav: RevealNav = useNavigationType() === 'POP' ? 'back' : 'go';
+  const nav: RevealNav = currentNavKind(useNavigationType());
   const total = items.length;
   const observable = typeof IntersectionObserver !== 'undefined';
 
