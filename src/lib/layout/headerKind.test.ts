@@ -11,24 +11,28 @@ describe('headerFor：依路徑決定買家前台的頁首樣式', () => {
 
   it('商品頁：返回「首頁」，右側有分享與購物車，分享要帶商品編號', () => {
     expect(headerFor('/product/p001')).toEqual({
-      kind: 'nav', back: { to: '/', label: '首頁' }, cart: true, shareProductId: 'p001',
+      kind: 'nav', back: { to: '/', label: '首頁' }, cart: true, share: { kind: 'product', id: 'p001' },
     });
   });
 
   it('商品評價頁：返回「商品」，只有購物車', () => {
     expect(headerFor('/product/p001/reviews')).toEqual({
-      kind: 'nav', back: { to: '/product/p001', label: '商品' }, cart: true, shareProductId: null,
+      kind: 'nav', back: { to: '/product/p001', label: '商品' }, cart: true, share: null,
     });
   });
 
-  it('店家頁、隱私政策返回「首頁」', () => {
-    for (const p of ['/shop/s1', '/privacy']) {
-      expect(headerFor(p)).toMatchObject({ kind: 'nav', back: { to: '/', label: '首頁' }, cart: true, shareProductId: null });
-    }
+  it('店家頁返回「首頁」，右側有分享（帶店家編號）與購物車', () => {
+    expect(headerFor('/shop/s1')).toEqual({
+      kind: 'nav', back: { to: '/', label: '首頁' }, cart: true, share: { kind: 'shop', id: 's1' },
+    });
+  });
+
+  it('隱私政策返回「首頁」，沒有分享', () => {
+    expect(headerFor('/privacy')).toEqual({ kind: 'nav', back: { to: '/', label: '首頁' }, cart: true, share: null });
   });
 
   it('購物車頁返回「首頁」，且不放指向自己的購物車鈕', () => {
-    expect(headerFor('/cart')).toEqual({ kind: 'nav', back: { to: '/', label: '首頁' }, cart: false, shareProductId: null });
+    expect(headerFor('/cart')).toEqual({ kind: 'nav', back: { to: '/', label: '首頁' }, cart: false, share: null });
   });
 
   it('結帳返回「購物車」', () => {

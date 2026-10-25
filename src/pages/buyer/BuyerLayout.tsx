@@ -6,7 +6,9 @@ import { useAuth } from '../../store/AuthContext';
 import { useToast } from '../../components/Toast';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useOnline } from '../../lib/useOnline';
-import { headerFor } from '../../lib/layout/headerKind';
+import { headerFor, type ShareTarget } from '../../lib/layout/headerKind';
+import { isNative } from '../../lib/native/platform';
+import { publicUrl } from '../../lib/share/publicUrl';
 import { pillButtonPrimary } from '../../components/pillButton';
 import { scrollPageToTop } from '../../lib/ui/scroll';
 
@@ -49,7 +51,7 @@ export default function BuyerLayout() {
   // 「我的」不需要商品資料（登入狀態它自己處理），商品還在載入時也直接顯示，不擋
   const needsProducts = pathname !== '/account' && !pathname.startsWith('/account/');
   // 載入骨架依路由：商品頁（導覽列帶分享鈕的那一種）＝主圖＋標題＋停用的購買列，其餘＝首頁形狀
-  const skeleton = header.kind === 'nav' && header.shareProductId ? 'product' : 'home';
+  const skeleton = header.kind === 'nav' && header.share?.kind === 'product' ? 'product' : 'home';
   // 「我的」頁是灰底分組列表：頁首安全區條、tab bar 與整頁底色都跟著換
   const grouped = pathname === '/account';
   const material = grouped ? 'material-grouped' : 'material';
@@ -83,7 +85,7 @@ export default function BuyerLayout() {
             </Link>
             <div className="flex items-center">
               <DesktopLinks className="mr-4" />
-              {header.shareProductId && <ShareButton productId={header.shareProductId} />}
+              {header.share && <ShareButton target={header.share} />}
               {header.cart && <CartNavLink count={cartCount} />}
             </div>
           </div>
@@ -190,16 +192,28 @@ function CartNavLink({ count }: { count: number }) {
   );
 }
 
-/** 系統分享面板；沒有（多數桌機瀏覽器）就複製網址 */
-function ShareButton({ productId }: { productId: string }) {
-  const { products } = useStore();
+/**
+ * 分享商品頁／店家頁（D-7b）。App 內走系統分享面板（原生外掛只在 App 內動態載入）；
+ * 網頁版用 Web Share API，沒有（多數桌機瀏覽器）就複製網址。
+ */
+function ShareButton({ target }: { target: ShareTarget }) {
+  const { products, getShop } = useStore();
   const toast = useToast();
+  const title = (target.kind === 'product' ? products.find(p => p.id === target.id)?.title : getShop(target.id)?.name) ?? '好物集';
+  const route = `/${target.kind}/${target.id}`;
 
   const share = async () => {
-    const url = window.location.href;
+    // App 內的 location 是 capacitor://…，分享出去別人打不開，改用正式站網址；網頁版自己就在正式站
+    const url = isNative() ? publicUrl(route) : window.location.href;
+    if (isNative()) {
+      const r = await (await import('../../lib/native/share')).nativeShare({ title, url });
+      // 系統面板失敗（對方 App 的分享延伸出錯等）：WebView 裡的 navigator.clipboard 不可用，不走下面的複製退路
+      if (r === 'unavailable') toast('分享失敗，請再試一次', 'error');
+      return;
+    }
     if (typeof navigator.share === 'function') {
       try {
-        await navigator.share({ title: products.find(p => p.id === productId)?.title ?? '好物集', url });
+        await navigator.share({ title, url });
         return;
       } catch (e) {
         if (e instanceof DOMException && e.name === 'AbortError') return; // 使用者自己關掉面板
