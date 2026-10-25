@@ -83,6 +83,14 @@ Cloudflare Turnstile Captcha 開（sitekey 由 GitHub secret `VITE_TURNSTILE_SIT
 之後 `tools/metrics/m2.sql` 的 `unchecked_orders` 應維持 0；還原用 `tools/rollback-tighten.sql`（runbook 第 9 節 A）。
 本機 `db reset --local` 會連收緊一起套，驗「舊前端＋新資料庫」要先跑 `tools/rollback-tighten.sql`（`interface.md` §7）。
 
+**賣家物流設定（退貨地址）**（`seller-logistics/`，2026-10-25 上線；PR #6，分支 `claude/seller-logistics-41bfa8`）：賣家中心第六頁「物流設定」`#/seller/logistics` 存退貨收件資料——
+超商退貨門市 ≤ 5（唯一預設、品牌 7-ELEVEN／全家／萊爾富／OKmart）、宅配退貨個人地址 1 筆、退貨說明 ≤ 200 字；新增／編輯表單是獨立頁（N5）；手機底欄維持 5 格、從賣場總覽的常駐入口列或「尚未設定退貨地址」提示卡進（N4＝B）。
+買家只在自己「運送中／已完成」的訂單展開「退貨資訊」時經 `get_order_return_info(p_order)` 讀到（展開才讀；別人的／不存在的訂單同碼 `ORDER_NOT_FOUND`）；資料庫未升級時展開才顯示「暫時無法使用」（N6）。
+資料表 `return_stores`／`return_personal_addresses`／`return_notes` 都掛在 `shops`（cascade，不指向 `auth.users`），對 anon／authenticated 零權限，只走八個 RPC；正式站已套 `20261023150000_seller_return_addresses.sql`（紀錄 `prod-apply-log.md`，既有物件指紋前後相同）。
+刪店工具 `.work/phone-otp-auth/tools/` 21～23／`seller-lib.mjs` 已認得三張新表（已知外鍵 24 條），**2026-10-23 之前的刪店預覽檔作廢**；刪帳號工具不用改。隱私政策第 3 節加一句、生效日改 2026/10/25。
+規格、決策（D1～D19、N1～N8）、設計、介面契約、驗收報告、`prod-runbook.md`、`tools/metrics/l-m1～l-m5.sql`、還原 `tools/rollback-logistics.sql` 都在 `.work/seller-logistics/`。
+不做（另開規格）：物流方式與運費、退貨申請狀態機、超商 API。待辦：隱私政策簡訊服務商仍寫「三竹」但正式站是 MAAC Go（N3，另開一張盡快修）。
+
 下一個該做的：付款（P-B／P-C，等 PAYUNi 拍板）。
 
 維運提醒：
@@ -93,6 +101,6 @@ Cloudflare Turnstile Captcha 開（sitekey 由 GitHub secret `VITE_TURNSTILE_SIT
 - 手機登入上線後：Supabase **Confirm phone 不得關閉**（關了簡訊額度不生效、門號可被改綁到他人帳號）；緊急止血要同時關 Phone provider **並**把 Rate Limits 的 SMS 每小時調低（只關 provider 止不住綁手機那條路）。MAAC Go 餘額（函式 log 的 `balance_cents`，低於 `SMS_LOW_BALANCE_CENTS` 預設 NT$10 會記 `maacgo_low_balance`）與 Cloudflare Turnstile 統計每週看；Turnstile Secret 與 MAAC Go key 只在後台，不進 repo。刪帳號改用 `.work/phone-otp-auth/tools/account-tool-phone.mjs`（認得 phone 身分），`buyer-auth` 舊工具作廢。
 - 正式站 runbook 的指令用函式 `Q()` 包 `npx supabase db query --linked`；舊 `buyer-auth/prod-runbook.md` 的字串變數寫法在 zsh 會 command not found。
 
-已知小問題（不急）：下單成功路徑小計仍是 integer，單張訂單超過 21 億元會 `integer out of range`（舊函式也一樣，不會建錯單）；失敗畫面 VoiceOver 實聽未驗（無障礙樹已對）；登入方式設定讀取超過 5 秒會先顯示兩顆按鈕；平板寬度賣家首頁與商品頁有橫向捲軸；
+已知小問題（不急）：160px 寬（320 寬機型開 200% 字）物流設定頁與既有 `AddressFields` 的 `min-w-40` 讓主內容橫向溢出 28px（188px 正常）；物流設定頁回到前景的靜默重讀在離線時也會發請求；退貨資訊的 iPhone 實機（VoiceOver、200%、複製、離線）待使用者；下單成功路徑小計仍是 integer，單張訂單超過 21 億元會 `integer out of range`（舊函式也一樣，不會建錯單）；失敗畫面 VoiceOver 實聽未驗（無障礙樹已對）；登入方式設定讀取超過 5 秒會先顯示兩顆按鈕；平板寬度賣家首頁與商品頁有橫向捲軸；
 購物車兩次更新間隔 3 秒內讀屏可能不重念；賣家中心頂欄在 188px 寬（手機 200%）橫向溢出，快改面板的關閉鈕會被擠出；
 `.claude/agents/qa.md` 沒有「交件前必跑關卡」表（其他四個角色都有）；快改與帳號頁地址簿的 iPhone Safari／LINE 實機驗收待使用者；離線按登出時「登出失敗」訊息與實際已登出矛盾（既有）；「我的訂單」不顯示收件地址（既有）；隱私頁與結帳底欄在 188px 寬有幾 px 橫向溢出（既有）。

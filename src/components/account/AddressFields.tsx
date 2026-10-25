@@ -26,8 +26,58 @@ const remainText = (n: number) => (n < 0 ? `超過 ${-n} 字` : `剩 ${n} 字`);
  * 地址欄位組（設計 6.1～6.2）：收件人、手機、縣市→鄉鎮市區→郵遞區號、詳細地址。
  * 個人檔案以外所有地址輸入（地址頁、結帳抽屜、結帳內嵌表單）共用這一份，規則、文案、無障礙只有一份。
  * 兩個下拉用原生 select：iPhone 的滾輪、VoiceOver、自動填入都是現成的。
+ * 賣家的退貨門市表單要把「門市地址」和「收件人資料」分在兩個 fieldset，所以拆成下面兩段；這個元件照舊＝先收件人資料、後地址。
  */
-export default function AddressFields({ value, errors, onChange, onBlurField, busy = false, idPrefix: p, compact = false }: Props) {
+export default function AddressFields(props: Props) {
+  return (
+    <div>
+      <AddressContactFields {...props} />
+      <div className="mt-4">
+        <AddressRegionFields {...props} />
+      </div>
+    </div>
+  );
+}
+
+/** 收件人、手機。第一個欄位沒有上邊距，由外層決定與前一段的距離 */
+export function AddressContactFields({ value, errors, onChange, onBlurField, busy = false, idPrefix: p }: Props) {
+  const set = (patch: Partial<AddressDraft>) => onChange({ ...value, ...patch });
+  const describedBy = (field: AddressField, ...extra: string[]) =>
+    [...extra, errors[field] ? `${p}-${field}-err` : ''].filter(Boolean).join(' ') || undefined;
+  const textRO = busy || undefined;
+
+  return (
+    <div>
+      <div>
+        <label htmlFor={`${p}-recipient`} className={labelCls}>收件人</label>
+        <input
+          id={`${p}-recipient`} type="text" value={value.recipient} placeholder="王小明" readOnly={textRO}
+          autoComplete="name" autoCapitalize="off" autoCorrect="off" enterKeyHint="next"
+          aria-invalid={errors.recipient ? true : undefined} aria-describedby={describedBy('recipient')}
+          onChange={e => set({ recipient: e.target.value })} onBlur={() => onBlurField('recipient')}
+          className={`mt-1 scroll-mt-20 ${fieldCls(Boolean(errors.recipient))}`}
+        />
+        <FieldError id={`${p}-recipient-err`}>{errors.recipient}</FieldError>
+      </div>
+
+      <div className="mt-4">
+        <label htmlFor={`${p}-phone`} className={labelCls}>手機號碼</label>
+        <input
+          id={`${p}-phone`} type="tel" inputMode="tel" value={value.phone} placeholder="0912-345-678" readOnly={textRO}
+          autoComplete="tel" enterKeyHint="next"
+          aria-invalid={errors.phone ? true : undefined} aria-describedby={describedBy('phone', `${p}-phone-help`)}
+          onChange={e => set({ phone: e.target.value })} onBlur={() => onBlurField('phone')}
+          className={`mt-1 scroll-mt-20 ${fieldCls(Boolean(errors.phone))}`}
+        />
+        <p id={`${p}-phone-help`} className={helpCls}>09 開頭、10 碼，可以輸入連字號</p>
+        <FieldError id={`${p}-phone-err`}>{errors.phone}</FieldError>
+      </div>
+    </div>
+  );
+}
+
+/** 縣市→鄉鎮市區→郵遞區號→詳細地址，含連動後的播報區域（一個表單只能有一個）。第一個欄位沒有上邊距 */
+export function AddressRegionFields({ value, errors, onChange, onBlurField, busy = false, idPrefix: p, compact = false }: Props) {
   // 連動後的播報：區域永遠存在於 DOM（先渲染空的再改字），否則 iOS 不會念
   const [announce, setAnnounce] = useState('');
   const districts = districtsOf(value.city);
@@ -59,32 +109,7 @@ export default function AddressFields({ value, errors, onChange, onBlurField, bu
     <div>
       <p role="status" aria-live="polite" className="sr-only">{announce}</p>
 
-      <div>
-        <label htmlFor={`${p}-recipient`} className={labelCls}>收件人</label>
-        <input
-          id={`${p}-recipient`} type="text" value={value.recipient} placeholder="王小明" readOnly={textRO}
-          autoComplete="name" autoCapitalize="off" autoCorrect="off" enterKeyHint="next"
-          aria-invalid={errors.recipient ? true : undefined} aria-describedby={describedBy('recipient')}
-          onChange={e => set({ recipient: e.target.value })} onBlur={() => onBlurField('recipient')}
-          className={`mt-1 scroll-mt-20 ${fieldCls(Boolean(errors.recipient))}`}
-        />
-        <FieldError id={`${p}-recipient-err`}>{errors.recipient}</FieldError>
-      </div>
-
-      <div className="mt-4">
-        <label htmlFor={`${p}-phone`} className={labelCls}>手機號碼</label>
-        <input
-          id={`${p}-phone`} type="tel" inputMode="tel" value={value.phone} placeholder="0912-345-678" readOnly={textRO}
-          autoComplete="tel" enterKeyHint="next"
-          aria-invalid={errors.phone ? true : undefined} aria-describedby={describedBy('phone', `${p}-phone-help`)}
-          onChange={e => set({ phone: e.target.value })} onBlur={() => onBlurField('phone')}
-          className={`mt-1 scroll-mt-20 ${fieldCls(Boolean(errors.phone))}`}
-        />
-        <p id={`${p}-phone-help`} className={helpCls}>09 開頭、10 碼，可以輸入連字號</p>
-        <FieldError id={`${p}-phone-err`}>{errors.phone}</FieldError>
-      </div>
-
-      <div className={`mt-4 grid gap-4 ${compact ? '' : 'md:grid-cols-[1fr_1fr_7rem]'}`}>
+      <div className={`grid gap-4 ${compact ? '' : 'md:grid-cols-[1fr_1fr_7rem]'}`}>
         <div>
           <label htmlFor={`${p}-city`} className={labelCls}>縣市</label>
           <div className="relative mt-1">

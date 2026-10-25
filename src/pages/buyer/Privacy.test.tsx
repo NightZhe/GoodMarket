@@ -45,9 +45,41 @@ describe('驗證碼簡訊服務商（AC-M40）', () => {
     // 修訂紀錄是歷史，會提到 Twilio；正文（修訂紀錄之前）不能再有
     expect(page.split('修訂紀錄')[0]).not.toContain('Twilio');
   });
-  it('修訂紀錄：最新一筆用生效日、說明服務商更換；上一筆是固定日期且維持當時的原句', () => {
+  it('修訂紀錄：簡訊服務商更換那筆維持固定日期 2026/10/20 與當時的原句，不跟著生效日走', () => {
     const page = html(false);
-    expect(page).toContain(`${PRIVACY_EFFECTIVE}</dt><dd class="mt-0.5 text-sm leading-6 text-muted">驗證碼簡訊服務商由 Twilio 改為三竹資訊股份有限公司（位於台灣）。`);
+    expect(page).toContain('2026/10/20</dt><dd class="mt-0.5 text-sm leading-6 text-muted">驗證碼簡訊服務商由 Twilio 改為三竹資訊股份有限公司（位於台灣）。');
     expect(page).toContain('2026/10/19</dt><dd class="mt-0.5 text-sm leading-6 text-muted">新增手機號碼登入與綁定手機');
+  });
+});
+
+describe('賣家退貨收件資料的揭露（AC-L38、AC-L39）', () => {
+  const RETURN_SENTENCE = '有開店的賣家在『物流設定』填的退貨收件資料（收件人姓名、手機、退貨門市或地址、退貨說明），會顯示給向這家店購買、且訂單已出貨或已完成的買家；賣場頁與商品頁不會顯示。';
+  const RETURN_REVISION = '新增賣家『物流設定』：說明賣家的退貨收件資料會顯示給哪些買家。';
+
+  it('第 3 節「誰看得到」出現退貨收件資料那一句（開關開或關都在）', () => {
+    for (const on of [false, true]) {
+      const page = html(on);
+      const section3 = page.split('3. 誰看得到')[1].split('4. 保存多久')[0];
+      expect(section3).toContain(RETURN_SENTENCE);
+    }
+  });
+  it('新句與修訂紀錄新句都不含付款字樣（開關關著時整頁仍沒有）', () => {
+    for (const w of PAY_WORDS) {
+      expect(RETURN_SENTENCE, w).not.toContain(w);
+      expect(RETURN_REVISION, w).not.toContain(w);
+    }
+    const off = html(false);
+    for (const w of PAY_WORDS) expect(off, w).not.toContain(w);
+  });
+  it('修訂紀錄：最新一筆用生效日、是本次的新增說明，且排在簡訊服務商那筆（2026/10/20）之前', () => {
+    const page = html(false);
+    const latest = `${PRIVACY_EFFECTIVE}</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${RETURN_REVISION}`;
+    expect(page).toContain(latest);
+    expect(page.indexOf(latest)).toBeLessThan(page.indexOf('2026/10/20</dt>'));
+    expect(page).toContain(`生效日期：${PRIVACY_EFFECTIVE}`);
+  });
+  it('生效日晚於舊修訂 2026/10/20（改生效日沒有改到舊紀錄）', () => {
+    expect(PRIVACY_EFFECTIVE > '2026/10/20').toBe(true);
+    expect(html(false).split('7. 修訂紀錄')[1].match(/2026\/10\/20<\/dt>/g)).toHaveLength(1);
   });
 });
