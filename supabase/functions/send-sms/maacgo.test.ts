@@ -356,7 +356,9 @@ describe('handler：MAAC Go 失敗一律 200＋502，永遠不把 429 等狀態�
 
 describe('handler：MAAC Go 逾時（3 秒、不重試）', () => {
   const untilFetched = async () => {
-    for (let i = 0; i < 200 && fetchMock.mock.calls.length === 0; i++) await new Promise((r) => setImmediate(r));
+    // 不用固定迴圈次數：CI runner 忙時 WebCrypto 驗簽可能要讓出幾百次以上，改用真實時間當上限（Date.now 沒被假造）
+    const deadline = Date.now() + 5000;
+    while (fetchMock.mock.calls.length === 0 && Date.now() < deadline) await new Promise((r) => setImmediate(r));
     expect(fetchMock).toHaveBeenCalled();
   };
   const hang = (_u: string, init: RequestInit) => new Promise<Response>((_res, rej) => {
