@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ImageOff, LoaderCircle, X } from 'lucide-react';
 import { reviewPhotoUrl } from '../../lib/reviews/api';
+import { reduceMotion } from '../../lib/ui/scroll';
 
 interface Props {
   paths: string[];
@@ -9,8 +10,6 @@ interface Props {
   returnFocusTo: HTMLElement | null;
   onClose: () => void;
 }
-
-const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
  * 全螢幕大圖檢視器（買家與賣家共用，S-7）。

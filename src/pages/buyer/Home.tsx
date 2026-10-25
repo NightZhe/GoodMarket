@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../../store/StoreContext';
 import { CATEGORIES } from '../../data/seed';
@@ -13,13 +13,14 @@ import Photo from '../../components/Photo';
 import PricePill from '../../components/PricePill';
 import SectionHeader from '../../components/SectionHeader';
 import Shelf from '../../components/Shelf';
-import { pillButton, pillPress } from '../../components/pillButton';
+import { pillButton } from '../../components/pillButton';
+import { RevealFooter } from '../../components/RevealFooter';
+import { useInfiniteReveal } from '../../components/useInfiniteReveal';
+import { HOME_REVEAL_KEY } from '../../lib/ui/revealPolicy';
 import EmptyState from '../../components/EmptyState';
 import { useProductView } from '../../components/useProductView';
 import type { Category, Product } from '../../types';
 
-/** 「顯示更多商品」一次多幾件 */
-const PAGE = 12;
 /** 「最新上架」橫滑貨架最多幾件，其餘到 › 目的地 */
 const SHELF_MAX = 10;
 /** 列表列：放在架商品最多的前幾個分類、每個分類幾列（§4.6） */
@@ -32,7 +33,6 @@ const newestFirst = (a: Product, b: Product) => b.createdAt.localeCompare(a.crea
 export default function Home() {
   const { products: allProducts } = useStore();
   const { blockedIds } = useBlockedShops();
-  const [shown, setShown] = useState(PAGE);
   // 封鎖的店家整個濾掉（貨架、列表、故事卡候選、分類排序計數都吃這份），封鎖後立即生效（R-K12、S-K14）
   const products = useMemo(() => visibleProducts(allProducts, blockedIds), [allProducts, blockedIds]);
 
@@ -53,6 +53,8 @@ export default function Home() {
   );
   // 全部商品照銷量排；新上架的有「最新上架」貨架，不會被銷量 0 壓到看不見
   const recommended = useMemo(() => [...active].sort((a, b) => b.sold - a.sold), [active]);
+  // 滑近底部自動多畫一批；沒有商品時下面直接 return，這支 hook 照樣要在 return 之前呼叫
+  const reveal = useInfiniteReveal(recommended, HOME_REVEAL_KEY);
 
   if (active.length === 0) {
     return (
@@ -93,20 +95,10 @@ export default function Home() {
       {/* 容器查詢要掛在父層：格子本身窄於 15rem（200% 縮放）時改單欄，價格才放得下 */}
       <div className="@container">
         <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-5 @max-[15rem]:grid-cols-1 md:grid-cols-4 lg:grid-cols-6">
-          {recommended.slice(0, shown).map(p => <ProductCard key={p.id} product={p} />)}
+          {reveal.visible.map(p => <ProductCard key={p.id} product={p} />)}
         </div>
       </div>
-      {shown < recommended.length && (
-        <div className="px-5 pt-6">
-          <button
-            type="button"
-            onClick={() => setShown(s => s + PAGE)}
-            className={`flex h-12.5 w-full items-center justify-center rounded-full bg-canvas text-headline font-semibold text-brand active:bg-press md:mx-auto md:w-80 ${pillPress}`}
-          >
-            顯示更多商品
-          </button>
-        </div>
-      )}
+      <RevealFooter reveal={reveal} />
     </div>
   );
 }

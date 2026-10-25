@@ -8,6 +8,7 @@ import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useOnline } from '../../lib/useOnline';
 import { headerFor } from '../../lib/layout/headerKind';
 import { pillButtonPrimary } from '../../components/pillButton';
+import { scrollPageToTop } from '../../lib/ui/scroll';
 
 export default function BuyerLayout() {
   const { cartCount, loading, loadError, reload } = useStore();
@@ -142,7 +143,7 @@ export default function BuyerLayout() {
 
       {!hideTabBar && (
         <nav aria-label="主要分頁" className={`${material} pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t-[0.5px] border-separator md:hidden`}>
-          <Tab to="/" label="首頁" end icon={<House size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<HouseFilled />} />
+          <Tab to="/" label="首頁" end onReselect={pathname === '/' ? scrollPageToTop : undefined} icon={<House size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<HouseFilled />} />
           <Tab to="/search" label="逛逛" icon={<SearchIcon size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<SearchIcon size={26} strokeWidth={2.5} aria-hidden="true" />} />
           <Tab to="/orders" label="訂單" icon={<ClipboardList size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<ClipboardList size={26} strokeWidth={2.5} aria-hidden="true" />} />
           <Tab to="/seller" label="我要賣" icon={<Store size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<Store size={26} strokeWidth={1.7} aria-hidden="true" />} />
@@ -334,12 +335,14 @@ function ProductSkeleton() {
   );
 }
 
-function Tab({ to, label, end, icon, activeIcon }: { to: string; label: string; end?: boolean; icon: React.ReactNode; activeIcon: React.ReactNode }) {
+/** onReselect：已經在這一頁時再點一次的動作（例如首頁捲回頂端）；有給才攔截預設導覽，否則照一般連結走 */
+function Tab({ to, label, end, onReselect, icon, activeIcon }: { to: string; label: string; end?: boolean; onReselect?: () => void; icon: React.ReactNode; activeIcon: React.ReactNode }) {
   return (
     <NavLink
       to={to}
       end={end}
       aria-label={label}
+      onClick={onReselect && (e => { e.preventDefault(); onReselect(); })}
       className={({ isActive }) => `${PRESS_FADE} flex h-[49px] flex-col items-center gap-px pt-1.5 text-caption2 font-medium ${isActive ? 'text-brand' : 'text-muted'}`}
     >
       {({ isActive }) => (

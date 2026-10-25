@@ -37,15 +37,34 @@ describe('隱私政策隨線上付款開關顯示付款段落', () => {
   });
 });
 
-describe('驗證碼簡訊服務商（AC-M40）', () => {
-  it('資料項目寫三竹資訊（位於台灣），不再寫 Twilio 與美國', () => {
+describe('驗證碼簡訊服務商（AC-M40；2026-10 改為 MAAC Go，三竹備援）', () => {
+  const SMS_SENTENCE = '用手機號碼登入或綁定手機時，驗證碼簡訊由簡訊服務商漸強實驗室股份有限公司（MAAC Go，位於台灣）代為傳送，它會處理你的手機號碼與簡訊內容。如果 MAAC Go 暫時無法傳送，會改由三竹資訊股份有限公司（位於台灣）代為傳送，處理的資料相同。';
+  const SMS_REVISION = '驗證碼簡訊服務商由三竹資訊股份有限公司改為漸強實驗室股份有限公司（MAAC Go，位於台灣）；三竹資訊改為備援，只在 MAAC Go 暫時無法傳送時使用。';
+
+  it('資料項目寫漸強實驗室（MAAC Go，位於台灣）為主、三竹資訊為備援，不再寫 Twilio 與美國', () => {
     const page = html(false);
-    expect(page).toContain('驗證碼簡訊由簡訊服務商三竹資訊股份有限公司（位於台灣）代為傳送，它會處理你的手機號碼與簡訊內容。');
+    const section1 = page.split('1. 我們收集的資料')[1].split('2. 怎麼使用')[0];
+    expect(section1).toContain(SMS_SENTENCE);
     expect(page).not.toContain('位於美國');
     // 修訂紀錄是歷史，會提到 Twilio；正文（修訂紀錄之前）不能再有
     expect(page.split('修訂紀錄')[0]).not.toContain('Twilio');
+    // 正文只剩這一句提到三竹（備援），不能再有「由三竹代為傳送」當主要服務商的舊句
+    expect(page.split('修訂紀錄')[0]).not.toContain('由簡訊服務商三竹資訊');
   });
-  it('修訂紀錄：簡訊服務商更換那筆維持固定日期 2026/10/20 與當時的原句，不跟著生效日走', () => {
+  it('新句與修訂紀錄新句都不含付款字樣', () => {
+    for (const w of PAY_WORDS) {
+      expect(SMS_SENTENCE, w).not.toContain(w);
+      expect(SMS_REVISION, w).not.toContain(w);
+    }
+  });
+  it('修訂紀錄：MAAC Go 那筆（PR #8）維持固定日期 2026/10/26 與當時的原句，排在刪除帳號申請那筆之後、物流設定（2026/10/25）之前', () => {
+    const page = html(false);
+    const entry = `2026/10/26</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${SMS_REVISION}`;
+    expect(page).toContain(entry);
+    expect(page.indexOf(entry)).toBeLessThan(page.indexOf('2026/10/25</dt>'));
+    expect(page.indexOf(entry)).toBeGreaterThan(page.indexOf('刪除帳號改為在 App 或網站提出申請'));
+  });
+  it('修訂紀錄：Twilio 改三竹那筆維持固定日期 2026/10/20 與當時的原句，不跟著生效日走', () => {
     const page = html(false);
     expect(page).toContain('2026/10/20</dt><dd class="mt-0.5 text-sm leading-6 text-muted">驗證碼簡訊服務商由 Twilio 改為三竹資訊股份有限公司（位於台灣）。');
     expect(page).toContain('2026/10/19</dt><dd class="mt-0.5 text-sm leading-6 text-muted">新增手機號碼登入與綁定手機');

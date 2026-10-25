@@ -8,6 +8,8 @@ import { handoffWhenLoggedOut, mayRunPending } from '../lib/auth/handoff';
 import { ALL_PROVIDERS, fetchProviderSettings, type EnabledProviders } from '../lib/auth/providers';
 import { supabaseAnonKey, supabaseUrl } from '../lib/supabase';
 import { detectInApp, type InAppKind } from '../lib/auth/inapp';
+import { isNative } from '../lib/native/platform';
+import { NATIVE_AUTH_EVENT, NATIVE_BACK_EVENT, takeNativeAuthOutcome, type NativeAuthOutcome } from '../lib/native/callback';
 import { browserStores, clearPending, peekPending, type PendingAction, type PendingInput } from '../lib/auth/pending';
 import { clearVia } from '../lib/auth/loginVia';
 import { flowStore, isGateRoute, loadFlow } from '../lib/auth/phoneFlow';
@@ -27,7 +29,8 @@ export interface AutoNotice {
   retry?: () => void;
 }
 
-interface PanelState { trigger: PendingInput | null; expired: boolean }
+/** remount＝換一個 key 讓登入面板重新掛載（App 內登入取消或失敗後，按鈕的「前往…」狀態才會重設） */
+interface PanelState { trigger: PendingInput | null; expired: boolean; remount?: number }
 
 interface AuthCtx {
   inApp: InAppKind | null;
@@ -80,7 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [loginError, setLoginError] = useState<LoginError>(null);
   const [autoNotice, setAutoNotice] = useState<AutoNotice | null>(null);
-  const inApp = useMemo(() => detectInApp(navigator.userAgent), []);
+  // App 殼不是 LINE／FB／IG 的內建瀏覽器：原生平台一律不套用內建瀏覽器的退路畫面
+  const inApp = useMemo(() => (isNative() ? null : detectInApp(navigator.userAgent)), []);
   const [handoff, setHandoff] = useState<PendingAction | null>(boot.handoff);
   const clearHandoff = useCallback(() => setHandoff(null), []);
   const [providers, setProviders] = useState<EnabledProviders>(ALL_PROVIDERS);
@@ -155,6 +159,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!trigger || trigger.kind === 'goto') toast('登入成功');
   }, [toast]);
 
+  // App 內的 Google／Apple 登入在同一頁完成（lib/native/auth.ts）：成功走手機登入同一條路執行待辦動作；
+  // 取消與失敗的處理對齊整頁跳轉回來的版本（上面的 boot.outcome），並重新掛載面板讓按鈕狀態重設。
+  // 冷啟動（App 被殺掉後由回跳網址叫醒）時結果可能在這裡掛載前就送出：掛載時先到信箱補收一次
+  const handleNativeOutcome = useCallback((outcome: NativeAuthOutcome) => {
+    const rec = peekPending(browserStores(), Date.now());
+    const trigger = rec && !rec.expired ? toInput(rec.action) : null;
+    if (outcome === 'signed_in') {
+      completePhoneLogin(trigger);
+    } else if (outcome === 'cancelled') {
+      clearPending(browserStores());
+      setPanel(p => (p ? { ...p, remount: Date.now() } : p));
+      toast('登入已取消', 'info');
+    } else {
+      setLoginError('failed');
+      const seller = routeOfHash(window.location.hash).startsWith('/seller');
+      if (!seller) setPanel({ trigger, expired: false, remount: Date.now() });
+    }
+  }, [completePhoneLogin, toast]);
+  useEffect(() => {
+    if (!isNative()) return;
+    const onNative = (e: Event) => {
+      takeNativeAuthOutcome();
+      handleNativeOutcome((e as CustomEvent<NativeAuthOutcome>).detail);
+    };
+    window.addEventListener(NATIVE_AUTH_EVENT, onNative);
+    const boxed = takeNativeAuthOutcome();
+    if (boxed) handleNativeOutcome(boxed);
+    return () => window.removeEventListener(NATIVE_AUTH_EVENT, onNative);
+  }, [handleNativeOutcome]);
+
+  // Android 實體返回鍵：登入面板開著就只關面板（等同按 X），不回上一頁
+  useEffect(() => {
+    if (!isNative() || !panel) return;
+    const onBack = (e: Event) => { e.preventDefault(); closeLogin(); };
+    window.addEventListener(NATIVE_BACK_EVENT, onBack);
+    return () => window.removeEventListener(NATIVE_BACK_EVENT, onBack);
+  }, [panel, closeLogin]);
+
   const runPendingOnLoad = mayRunPending(boot.outcome);
 
   const value = useMemo<AuthCtx>(() => ({
@@ -165,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={value}>
       {children}
-      {panel && <AuthSheet trigger={panel.trigger} expired={panel.expired} error={loginError} inApp={inApp} providers={providers} onClose={closeLogin} />}
+      {panel && <AuthSheet key={panel.remount ?? 0} trigger={panel.trigger} expired={panel.expired} error={loginError} inApp={inApp} providers={providers} onClose={closeLogin} />}
     </Ctx.Provider>
   );
 }
