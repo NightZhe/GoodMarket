@@ -368,7 +368,9 @@ describe('三竹回覆 → hook 回應', () => {
 describe('逾時', () => {
   // fake timers 下不能用 vi.waitFor（它會偷偷推進時間）；setImmediate 沒被假造，用它讓出事件迴圈直到 fetch 被呼叫（驗簽的 WebCrypto 是真的非同步）
   const untilFetched = async () => {
-    for (let i = 0; i < 200 && fetchMock.mock.calls.length === 0; i++) await new Promise((r) => setImmediate(r));
+    // 不用固定迴圈次數：CI runner 忙時 WebCrypto 驗簽可能要讓出幾百次以上，改用真實時間當上限（Date.now 沒被假造）
+    const deadline = Date.now() + 5000;
+    while (fetchMock.mock.calls.length === 0 && Date.now() < deadline) await new Promise((r) => setImmediate(r));
     expect(fetchMock).toHaveBeenCalled();
   };
   // fetch 假件：永遠不回，直到 signal 被 abort 才以 AbortError 拒絕
