@@ -52,8 +52,8 @@ export default function BuyerLayout() {
   const needsProducts = pathname !== '/account' && !pathname.startsWith('/account/');
   // 載入骨架依路由：商品頁（導覽列帶分享鈕的那一種）＝主圖＋標題＋停用的購買列，其餘＝首頁形狀
   const skeleton = header.kind === 'nav' && header.share?.kind === 'product' ? 'product' : 'home';
-  // 「我的」頁是灰底分組列表：頁首安全區條、tab bar 與整頁底色都跟著換
-  const grouped = pathname === '/account';
+  // 「我的」頁與它的子頁（都是 SubPage 灰底分組版面）：頁首安全區條、tab bar 與整頁底色都跟著換（子頁不算進去的話，App 內白色安全區條接灰色導覽列會有一條明顯接縫）
+  const grouped = pathname === '/account' || pathname.startsWith('/account/');
   const material = grouped ? 'material-grouped' : 'material';
 
   return (

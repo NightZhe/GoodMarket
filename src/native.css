@@ -4,5 +4,10 @@
    賣家登入頁（賣家路由、沒有黏頂頂欄）則把整個 body 往下推（html.native-no-sticky 由 shell.ts 用 MutationObserver 維護；買家前台不套用）。
    頂欄版面屬 UI 改版線（src/pages 不在本線範圍），所以由殼這邊補內距；
    改版線接手頂欄時請直接在頂欄加 pt-[env(safe-area-inset-top)]，然後刪掉這兩條。 */
-html.native header.sticky.top-0 { padding-top: env(safe-area-inset-top); }
+/* 賣家中心頂欄（SellerLayout，固定高 h-14＝3.5rem、border-box）：只加 padding-top 會把內容壓到剩幾 px 而溢出到頂欄外
+   （2026-10-26 真機 iPhone 13 Pro Max 實測，安全區 47px），所以高度要一起加上安全區，內容列維持 3.5rem。只打 h-14 的那個頂欄。 */
+html.native header.sticky.top-0.h-14 { padding-top: env(safe-area-inset-top); height: calc(3.5rem + env(safe-area-inset-top)); }
+/* iOS 導覽列（components/account/ui.tsx SubHeader，買家「我的」子頁與賣家物流表單）：買家前台上面已有安全區色帶，
+   這裡不墊內距（墊了會在頁面最上方多一條空白），改成黏在色帶下緣；賣家物流表單裡它本來就黏在賣家頂欄後面，行為與網頁版相同。 */
+html.native header.material-grouped.sticky.top-0 { top: env(safe-area-inset-top); }
 html.native.native-no-sticky body { padding-top: env(safe-area-inset-top); }
