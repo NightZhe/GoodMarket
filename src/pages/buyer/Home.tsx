@@ -34,7 +34,8 @@ export default function Home() {
   const active = useMemo(() => products.filter(p => p.status === 'active'), [products]);
   const categories = useMemo(() => orderCategories(CATEGORIES, products), [products]);
   // 故事卡的「現在」只在商品資料變動時取一次（含靜默重讀），不在每次 render 讀時鐘
-  const story = useMemo(() => pickStory(products, CATEGORIES, Date.now()), [products]);
+  const now = useMemo(() => Date.now(), [products]);
+  const story = useMemo(() => pickStory(products, CATEGORIES, now), [products, now]);
 
   const newest = useMemo(() => [...active].sort(newestFirst), [active]);
   // categories 已依在架數由多到少排；在架 0 件的分類整段不出現
