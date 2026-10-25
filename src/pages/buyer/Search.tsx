@@ -8,6 +8,9 @@ import { orderCategories } from '../../lib/home/categoryOrder';
 import ProductCard from '../../components/ProductCard';
 import EmptyState from '../../components/EmptyState';
 import { pillButton } from '../../components/pillButton';
+import { BackToTopButton, MoreButton } from '../../components/RevealFooter';
+import { useInfiniteReveal } from '../../components/useInfiniteReveal';
+import { browseRevealKey } from '../../lib/ui/revealPolicy';
 import { cheapestVariant, discountOf } from '../../lib/format';
 import type { Product } from '../../types';
 
@@ -67,6 +70,9 @@ export default function Search() {
     };
     return list.sort(by[sort]);
   }, [products, shops, q, cat, sort, free]);
+
+  // 結果太多時分批畫；記憶 key 跟著四個篩選條件走，任一變動就回第一批
+  const reveal = useInfiniteReveal(results, browseRevealKey({ q, cat, sort, free }));
 
   const sortBtn = (value: Sort, label: string) => (
     <button
@@ -173,8 +179,11 @@ export default function Search() {
         ) : (
           <div className="@container">
             <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 @max-[15rem]:grid-cols-1 md:grid-cols-4 md:px-0 lg:grid-cols-5">
-              {results.map(p => <ProductCard key={p.id} product={p} />)}
+              {reveal.visible.map(p => <ProductCard key={p.id} product={p} />)}
             </div>
+            <div ref={reveal.sentinelRef} aria-hidden="true" />
+            {reveal.showFallback && <MoreButton onClick={reveal.showMore} />}
+            {reveal.showBackToTop && <BackToTopButton onClick={reveal.backToTop} />}
           </div>
         )}
       </section>
