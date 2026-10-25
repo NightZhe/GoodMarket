@@ -207,9 +207,11 @@ function ShareButton({ target }: { target: ShareTarget }) {
     const url = isNative() ? publicUrl(route) : window.location.href;
     if (isNative()) {
       const r = await (await import('../../lib/native/share')).nativeShare({ title, url });
-      if (r !== 'unavailable') return;
-      // 沒有可分享的 App（罕見）退回複製網址
-    } else if (typeof navigator.share === 'function') {
+      // 系統面板失敗（對方 App 的分享延伸出錯等）：WebView 裡的 navigator.clipboard 不可用，不走下面的複製退路
+      if (r === 'unavailable') toast('分享失敗，請再試一次', 'error');
+      return;
+    }
+    if (typeof navigator.share === 'function') {
       try {
         await navigator.share({ title, url });
         return;
