@@ -30,6 +30,7 @@ import { useOnline } from '../../lib/useOnline';
 import { cheapestVariant, discountOf, money, priceRange, soldText } from '../../lib/format';
 import { reduceMotion } from '../../lib/ui/scroll';
 import type { Product } from '../../types';
+import { hapticSuccess } from '../../lib/native/haptics';
 
 // 用 key 讓切換到另一個商品時，規格／數量等狀態重新開始
 export default function ProductDetail() {
@@ -159,6 +160,7 @@ function ProductDetailView({ id }: { id: string }) {
           await addToCart({ productId: product.id, variantId: chosen.id, qty: chosenQty });
           setAutoNotice(null);
           toast('已加入購物車');
+          void hapticSuccess();
         } catch (e) {
           // 登入在這段時間失效：當作沒登入，開面板（待辦動作會在按下登入時存起來）
           if (toAccountError(e).kind === 'auth') openLogin({ trigger });
