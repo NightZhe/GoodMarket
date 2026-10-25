@@ -69,6 +69,9 @@ App 內 Google／Apple 登入走系統瀏覽器視圖＋自訂 scheme 回跳（`
 **審查員登入深連結**（PR #11，2026-10-26 合併）：`io.github.nightzhe.goodmarket://review-login` 冷啟動直達 `#/review-login`（`src/lib/native/deeplink.ts`，一般 `://<路由>` 都接、`://auth` 留給登入回跳）。
 **WebView hostname 是 `nightzhe.github.io`**（`capacitor.config.ts` `server.hostname`）：Capacitor 預設 localhost 不在 Cloudflare Turnstile 允許網域（110200），改成正式站網域後 App 內簡訊登入與審查員登入的安全驗證才載得起來；Android 模擬器 Turnstile 回 600010（疑似機器人）要真機驗。
 審查備註草稿 `.work/app-shell/review-notes.md`。
+**TestFlight build 1 已上傳**（2026-10-26 01:25，PR #13：橘底白購物袋 icon／白底啟動畫面，來源 `assets/`，重產指令見該 PR；Info.plist `ITSAppUsesNonExemptEncryption=false`）。
+封存／上傳流程：worktree 切最新 main → `npm run build && npx cap sync` → `xcodebuild archive`（Release、Team F7WL42HXND、`-allowProvisioningUpdates`）→ `-exportArchive`（method app-store-connect、destination upload、`manageAppVersionAndBuildNumber=true`）。
+Xcode 的 Apple ID 階段過期時上傳會回 DVTPortalServiceErrorDomain 1100，使用者在 Xcode Settings → Apple Accounts 重新登入即可。夥伴測試由使用者在 App Store Connect 加內部測試者。
 **尚未上架**，第一版還要做（見 `decisions.md` D-7～D-11）：原生 Sign in with Apple（Supabase Apple provider 的 Client IDs 要把 bundle id 加在 Services ID 後面）、分享面板、觸覺回饋、App icon／啟動畫面、
 **帳號刪除 App 內入口（Apple 5.1.1(v) 硬門檻，10/18 拿掉的區塊要加回，可人工處理但不能只叫人寄信）**、檢舉／封鎖（Apple 1.2，待拍板）、審查用賣家示範帳號（待拍板）、App Privacy／Data safety 填寫。
 使用者側前置（Google Play 帳號、App ID、Play 簽章、商店圖文）見 `prereqs-user.md`。
