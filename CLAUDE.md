@@ -99,6 +99,16 @@ Cloudflare Turnstile Captcha 開（sitekey 由 GitHub secret `VITE_TURNSTILE_SIT
 待使用者實機驗：AC-7 登入後導頁、AC-15 VoiceOver、AC-20 加入主畫面；待小p 定故事卡副標的關鍵字規則（目前副標不顯示）。
 `src/pages/buyer/ReviewForm.tsx`／`ReviewsOverview.tsx`／`Orders.tsx` 仍有 emoji（不在改版工單範圍）。
 
+**App 殼（iOS／Android App，Capacitor 8）**（2026-10-25 合併 PR #5，`.work/app-shell/`：選型與決策 `decisions.md`、上架門檻一手條文 `store-requirements.md`、使用者前置清單 `prereqs-user.md`、
+tracer 結果 `tracer-report.md`、小q 驗收 `qa-report-tracer.md`、正式站設定紀錄 `prod-apply-log.md`）：一套程式碼三平台，`ios/`、`android/` 原生專案進版控，
+bundle id／application id `io.github.nightzhe.goodmarket`。App 的更新流程：`npm run build` → `npx cap sync` → Xcode（`ios/App/App.xcodeproj`，SPM）或 Gradle（`android/`，**需 JDK 21**，
+`export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`；Gradle 會自動補 SDK，不需 Android Studio）。
+App 內 Google／Apple 登入走系統瀏覽器視圖＋自訂 scheme 回跳（`src/lib/native/`；Supabase Redirect URLs 已加 `io.github.nightzhe.goodmarket://auth`），原生外掛只在 App 內動態載入，網頁 bundle 不受影響。
+殼專用樣式 `src/native.css` 只在 `html.native` 生效：買家前台改版後自己處理安全區，殼只補賣家中心（`header.sticky.top-0`）與賣家登入頁。
+**尚未上架**，第一版還要做（見 `decisions.md` D-7～D-11）：原生 Sign in with Apple（Supabase Apple provider 的 Client IDs 要把 bundle id 加在 Services ID 後面）、分享面板、觸覺回饋、App icon／啟動畫面、
+**帳號刪除 App 內入口（Apple 5.1.1(v) 硬門檻，10/18 拿掉的區塊要加回，可人工處理但不能只叫人寄信）**、檢舉／封鎖（Apple 1.2，待拍板）、審查用賣家示範帳號（待拍板）、App Privacy／Data safety 填寫。
+使用者側前置（Google Play 帳號、App ID、Play 簽章、商店圖文）見 `prereqs-user.md`。
+
 下一個該做的：付款（P-B／P-C，等 PAYUNi 拍板）。
 
 維運提醒：
