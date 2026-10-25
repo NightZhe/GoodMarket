@@ -55,10 +55,10 @@ export default function TurnstileSlot({ ctl, inApp, ios, where, needMessage, nee
         </p>
       )}
       {ctl.status === 'failed' && (
-        <Banner kind="error" title={ctl.external ? '安全驗證沒有完成，請再試一次。' : '安全驗證沒有通過，請再試一次。'} actions={<button type="button" onClick={() => { ctl.retry(); ctl.focus(); }} className={btnOutline}>再試一次</button>} />
+        <Banner kind="error" title="安全驗證沒有通過，請再試一次。" actions={<button type="button" onClick={() => { ctl.retry(); ctl.focus(); }} className={btnOutline}>再試一次</button>} />
       )}
       {ctl.status === 'unavailable' && (
-        <Banner kind="error" title={ctl.external ? '無法開啟安全驗證頁面，請再試一次，或改用 Apple／Google 登入。' : turnstileUnavailableText(inApp, ios)} actions={<button type="button" onClick={() => { ctl.retry(); ctl.focus(); }} className={btnOutline}>{ctl.external ? '再試一次' : '重新載入安全驗證'}</button>} />
+        <Banner kind="error" title={turnstileUnavailableText(inApp, ios)} actions={<button type="button" onClick={() => { ctl.retry(); ctl.focus(); }} className={btnOutline}>重新載入安全驗證</button>} />
       )}
     </div>
   );

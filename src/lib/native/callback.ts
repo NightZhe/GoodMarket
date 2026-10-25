@@ -32,7 +32,7 @@ export function takeNativeAuthOutcome(): NativeAuthOutcome | null {
 
 /**
  * 一般深連結：io.github.nightzhe.goodmarket://review-login → 站內路由 '/review-login'（query 保留、hash 丟掉）。
- * 登入回跳（host＝auth）與安全驗證回跳（host＝captcha）不在此列，各由 parseNativeCallback／captchaUrl.ts 處理；不是本 App 的 scheme、或路由不安全，回 null。
+ * 登入回跳（host＝auth）不在此列，由 parseNativeCallback 處理；不是本 App 的 scheme、或路由不安全，回 null。
  */
 export function parseNativeRoute(url: string): string | null {
   let u: URL;
@@ -40,8 +40,6 @@ export function parseNativeRoute(url: string): string | null {
   if (u.protocol !== `${NATIVE_AUTH_SCHEME}:`) return null;
   const path = `/${u.host}${u.pathname}`.replace(/\/+$/, '') || '/';
   if (path === '/auth' || path.startsWith('/auth/')) return null;
-  // 安全驗證回跳（://captcha?token=…）由 captcha.ts 處理：token 不能進 hash 路由（R-7 token 不進 URL）
-  if (path === '/captcha' || path.startsWith('/captcha/')) return null;
   const route = `${path}${u.search}`;
   return isSafeRoute(route) ? route : null;
 }

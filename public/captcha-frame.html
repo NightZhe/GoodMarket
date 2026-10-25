@@ -14,7 +14,7 @@
     </style>
   </head>
   <body>
-    <!-- App（iOS Capacitor）的登入面板把這一頁放在 iframe 裡：Turnstile 只接受 http／https 來源，WebView 自己是 capitor:// -->
+    <!-- App（iOS Capacitor）的登入面板把這一頁放在 iframe 裡：Turnstile 只接受 http／https 來源，WebView 自己是 capacitor:// -->
     <div id="widget"></div>
     <script src="captcha.js" defer></script>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=gmOnTurnstileLoad&render=explicit" defer onerror="window.gmTurnstileScriptFailed && window.gmTurnstileScriptFailed()"></script>

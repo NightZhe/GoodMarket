@@ -10,8 +10,6 @@ export type TokenResult =
 
 export interface TurnstileCtl {
   status: TsStatus;
-  /** 安全驗證在系統瀏覽器視圖裡做（iOS App 方案 B）：橫幅文案不同，勾選框不在畫面上 */
-  external: boolean;
   /** 掛 widget 的容器（兩個地方都要有：預設不顯示任何東西） */
   hostRef: (el: HTMLDivElement | null) => void;
   /** 按下「傳送」「重新傳送」時取得這一次要用的 token：沒好就等最多 10 秒；需要互動就請使用者先勾選 */
@@ -26,14 +24,11 @@ export interface TurnstileCtl {
 
 /**
  * widget＝官方腳本直接畫在頁面上（網頁版、Android App）。
- * frame＝iOS App：WebView 來源 capacitor:// 不被 Turnstile 接受，改在正式站 captcha-frame.html（https）畫，放 iframe 載（方案 A）。
- * browser＝iOS App：用系統瀏覽器視圖開正式站 captcha.html，通過後 scheme 回跳帶 token（方案 B）。
+ * frame＝iOS App（decisions D-12）：WebView 來源 capacitor:// 不被 Turnstile 接受（token 一律無效），
+ * 改在正式站 captcha-frame.html（https 來源）畫，放 iframe 載，事件用 postMessage 回來。
  */
-type Mode = 'widget' | 'frame' | 'browser';
-const IOS_MODE: Mode = (import.meta.env.VITE_TURNSTILE_NATIVE_MODE as string | undefined) === 'browser' ? 'browser' : 'frame';
-const pickMode = (): Mode => (nativePlatform() === 'ios' ? IOS_MODE : 'widget');
-/** Turnstile token 300 秒到期；瀏覽器模式拿到的 token 放太久就重拿 */
-const BROWSER_TOKEN_TTL_MS = 270_000;
+type Mode = 'widget' | 'frame';
+const pickMode = (): Mode => (nativePlatform() === 'ios' ? 'frame' : 'widget');
 
 /**
  * R-15 Turnstile。Managed ＋ interaction-only：平常完全隱形，Cloudflare 判定需要互動時才長出勾選框。
@@ -47,7 +42,6 @@ export function useTurnstile({ enabled, lazy = false }: { enabled: boolean; lazy
   const [status, setStatus] = useState<TsStatus>(on ? 'loading' : 'off');
   const statusRef = useRef<TsStatus>(status);
   const tokenRef = useRef<string | null>(null);
-  const tokenAtRef = useRef(0);
   const widgetRef = useRef<string | undefined>(undefined);
   const apiRef = useRef<TurnstileApi | null>(null);
   const frameRef = useRef<{ iframe: HTMLIFrameElement; origin: string } | null>(null);
@@ -150,35 +144,8 @@ export function useTurnstile({ enabled, lazy = false }: { enabled: boolean; lazy
     f?.iframe.contentWindow?.postMessage({ type: FRAME_MSG, cmd: 'reset' }, f.origin);
   }, []);
 
-  // browser：開系統瀏覽器視圖做驗證，回跳帶 token。取消＝failed（可再試）；開不了＝unavailable
-  const browserCaptcha = useCallback(async (): Promise<TokenResult> => {
-    if (statusRef.current !== 'loading') fire({ type: 'retry' });
-    let r: Awaited<ReturnType<typeof import('../../lib/native/captcha').runNativeCaptcha>>;
-    try {
-      const [{ runNativeCaptcha }, { CAPTCHA_PAGE_URL, captchaPageUrl }] = await Promise.all([import('../../lib/native/captcha'), import('../../lib/native/captchaUrl')]);
-      r = await runNativeCaptcha(captchaPageUrl(CAPTCHA_PAGE_URL, TURNSTILE_SITEKEY));
-    } catch {
-      r = { ok: false, reason: 'unavailable' };
-    }
-    if (r.ok) {
-      tokenRef.current = r.token;
-      tokenAtRef.current = Date.now();
-      fire({ type: 'token' });
-      return { ok: true, token: r.token };
-    }
-    tokenRef.current = null;
-    if (r.reason === 'unavailable') { fire({ type: 'script-failed' }); return { ok: false, reason: 'unavailable' }; }
-    fire({ type: 'error' });
-    return { ok: false, reason: 'failed' };
-  }, [fire]);
-
   const requestToken = useCallback(async (): Promise<TokenResult> => {
     if (!on) return { ok: true };
-    if (mode === 'browser') {
-      if (tokenRef.current && Date.now() - tokenAtRef.current < BROWSER_TOKEN_TTL_MS) return { ok: true, token: tokenRef.current };
-      tokenRef.current = null;
-      return browserCaptcha();
-    }
     setWanted(true);
     let d = tokenDecision(statusRef.current);
     if (d === 'wait') {
@@ -191,12 +158,11 @@ export function useTurnstile({ enabled, lazy = false }: { enabled: boolean; lazy
     if (d === 'send' && tokenRef.current) return { ok: true, token: tokenRef.current };
     if (d === 'send' || d === 'wait') return { ok: false, reason: 'unavailable' };
     return { ok: false, reason: d };
-  }, [on, mode, fire, browserCaptcha]);
+  }, [on, fire]);
 
   const consume = useCallback(() => {
     if (!on) return;
     tokenRef.current = null;
-    if (mode === 'browser') { fire({ type: 'consumed' }); return; }
     if (mode === 'frame') { if (frameRef.current) { fire({ type: 'consumed' }); frameReset(); } return; }
     if (apiRef.current && widgetRef.current !== undefined) {
       fire({ type: 'consumed' });
@@ -207,15 +173,14 @@ export function useTurnstile({ enabled, lazy = false }: { enabled: boolean; lazy
   const retry = useCallback(() => {
     if (!on) return;
     tokenRef.current = null;
-    if (mode === 'browser') { void browserCaptcha(); return; }
     const wasUnavailable = statusRef.current === 'unavailable' || (mode === 'frame' ? !frameRef.current : !apiRef.current);
     fire({ type: 'retry' });
     if (wasUnavailable) setAttempt(n => n + 1);
     else if (mode === 'frame') frameReset();
     else if (apiRef.current && widgetRef.current !== undefined) apiRef.current.reset(widgetRef.current);
-  }, [on, mode, fire, frameReset, browserCaptcha]);
+  }, [on, mode, fire, frameReset]);
 
   const focus = useCallback(() => host?.focus(), [host]);
 
-  return { status, external: mode === 'browser', hostRef: setHost, requestToken, consume, retry, focus };
+  return { status, hostRef: setHost, requestToken, consume, retry, focus };
 }
