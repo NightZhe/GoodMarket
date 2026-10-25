@@ -34,6 +34,10 @@ describe('parseNativeRoute', () => {
     expect(parseNativeRoute('io.github.nightzhe.goodmarket://auth?code=x')).toBeNull();
     expect(parseNativeRoute('io.github.nightzhe.goodmarket://auth/')).toBeNull();
   });
+  it('安全驗證回跳不是一般深連結（token 不能進 hash 路由）', () => {
+    expect(parseNativeRoute('io.github.nightzhe.goodmarket://captcha?token=x')).toBeNull();
+    expect(parseNativeRoute('io.github.nightzhe.goodmarket://captcha/')).toBeNull();
+  });
   it('別的 scheme、壞網址回 null', () => {
     expect(parseNativeRoute('https://nightzhe.github.io/GoodMarket/#/review-login')).toBeNull();
     expect(parseNativeRoute('not a url')).toBeNull();
