@@ -1,18 +1,20 @@
 import { App } from '@capacitor/app';
 import { nativePlatform } from './platform';
 import { initNativeAuth } from './auth';
+import { initNativeDeepLinks } from './deeplink';
 import { NATIVE_BACK_EVENT } from './callback';
 
 // 原生殼的啟動：只在 App 內由 main.tsx 動態載入（網頁 bundle 不含這些外掛）。
 //   - <html> 加 class native／native-ios／native-android，殼專用樣式（native.css，由 main.tsx 靜態載入）靠它生效
 //   - Android 實體返回鍵：先問畫面（登入面板開著就只關面板），再來 hash 路由能回就回，回到底就離開 App
-//   - 登入回跳與瀏覽器視圖的監聽
+//   - 登入回跳與瀏覽器視圖的監聽；一般深連結（審查員登入頁 ://review-login）
 
 export async function initNativeShell(): Promise<void> {
   const platform = nativePlatform();
   if (!platform) return;
   document.documentElement.classList.add('native', `native-${platform}`);
   await initNativeAuth();
+  await initNativeDeepLinks();
   // 狀態列安全區：買家前台（App Store 風改版後）自己處理（安全區色帶＋sticky top-[env(...)] 頂欄），殼不插手；
   // 只有還沒改版的賣家側要補：賣家中心的 header.sticky top-0 由 native.css 讓它長高，賣家登入頁（沒有黏頂頂欄）把 body 往下推。
   // 用 MutationObserver 看 DOM（路由切換是 pushState，不會發 hashchange）；不用 CSS :has()（WKWebView 上實測沒有命中，原因未查明）。

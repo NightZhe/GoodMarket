@@ -1,4 +1,5 @@
 import { classifyAuthError, type AuthFailure } from '../auth/callback';
+import { isSafeRoute } from '../auth/pending';
 
 // App 內登入回跳網址的解析（純函式，不碰 Capacitor，才測得到）。
 // 自訂 scheme 回跳：io.github.nightzhe.goodmarket://auth?code=…；供應商錯誤可能在 query 或 hash。
@@ -27,6 +28,20 @@ export function takeNativeAuthOutcome(): NativeAuthOutcome | null {
   const o = boxed;
   boxed = null;
   return o;
+}
+
+/**
+ * 一般深連結：io.github.nightzhe.goodmarket://review-login → 站內路由 '/review-login'（query 保留、hash 丟掉）。
+ * 登入回跳（host＝auth）不在此列，由 parseNativeCallback 處理；不是本 App 的 scheme、或路由不安全，回 null。
+ */
+export function parseNativeRoute(url: string): string | null {
+  let u: URL;
+  try { u = new URL(url); } catch { return null; }
+  if (u.protocol !== `${NATIVE_AUTH_SCHEME}:`) return null;
+  const path = `/${u.host}${u.pathname}`.replace(/\/+$/, '') || '/';
+  if (path === '/auth' || path.startsWith('/auth/')) return null;
+  const route = `${path}${u.search}`;
+  return isSafeRoute(route) ? route : null;
 }
 
 export interface NativeCallback {
