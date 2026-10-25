@@ -27,7 +27,7 @@ export default function ReviewTabs<T extends string>({ tabs, value, onChange, la
   return (
     <div
       role="tablist" aria-label={label}
-      className={`flex border-b border-line bg-white ${sticky ? 'sticky top-[52px] z-20 md:top-[108px] md:rounded-t-md' : 'px-2'} ${className}`}
+      className={`flex border-b border-line bg-white ${sticky ? 'sticky top-[calc(env(safe-area-inset-top)+44px)] z-20 md:rounded-t-md' : 'px-2'} ${className}`}
     >
       {tabs.map((t, i) => {
         const on = t.id === value;

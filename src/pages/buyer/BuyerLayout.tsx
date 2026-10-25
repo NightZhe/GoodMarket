@@ -1,24 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ClipboardList, Home, Loader2, LogIn, Search as SearchIcon, ShoppingCart, Store, UserRound } from 'lucide-react';
+import { ChevronLeft, CircleUserRound, ClipboardList, House, Search as SearchIcon, Share, ShoppingCart, Store } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
+import { useToast } from '../../components/Toast';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
-
-export function Logo({ light = true }: { light?: boolean }) {
-  return (
-    <Link to="/" className={`flex shrink-0 items-center gap-1.5 ${light ? 'text-white' : 'text-brand'}`}>
-      <span className="text-2xl leading-none md:text-3xl">🛍️</span>
-      <span className="text-xl font-bold tracking-tight md:text-2xl">好物集</span>
-    </Link>
-  );
-}
+import { useOnline } from '../../lib/useOnline';
+import { headerFor } from '../../lib/layout/headerKind';
+import { pillButtonPrimary } from '../../components/pillButton';
 
 export default function BuyerLayout() {
-  const { cartCount, loading, loadError, reload, user } = useStore();
-  const { openLogin } = useAuth();
+  const { cartCount, loading, loadError, reload } = useStore();
   usePaymentConfig(); // 先讀一次線上付款開關，之後帳號頁、結帳頁不必再等
-  // 只有第一次載入商品時用轉圈圈取代頁面。登入、登出、登入過期之後的重新載入是在背景進行：
+  const online = useOnline();
+  // 只有第一次載入商品時用骨架取代頁面。登入、登出、登入過期之後的重新載入是在背景進行：
   // 頁面若被卸載，結帳頁填到一半的收件資料就會消失（登入過期時要能留著，AC-13）
   const loadedOnce = useRef(false);
   if (!loading) loadedOnce.current = true;
@@ -28,6 +23,13 @@ export default function BuyerLayout() {
   const [q, setQ] = useState(params.get('q') ?? '');
 
   useEffect(() => setQ(params.get('q') ?? ''), [params]);
+
+  // 從背景回來（§3.4）：靜默重讀，失敗就保留畫面上的資料。頁面不重掛，捲動與橫滑位置自然保留
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') void reload({ silent: true }); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [reload]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,72 +44,86 @@ export default function BuyerLayout() {
     // 綁卡頁有鍵盤（綠界欄位）、付款結果頁要專心看結果
     || pathname === '/account/payment-methods/new' || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/');
 
-  return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-40 bg-gradient-to-b from-brand to-[#f46b35] text-white shadow-sm">
-        <div className="mx-auto hidden max-w-6xl items-center justify-between px-4 pt-1.5 text-xs md:flex">
-          <div className="flex gap-4 opacity-95">
-            <Link to="/seller" className="hover:opacity-80">賣家中心</Link>
-            <span className="opacity-50">|</span>
-            <Link to="/seller" className="hover:opacity-80">免費開店上架</Link>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link to="/orders" className="hover:opacity-80">我的訂單</Link>
-            <span className="opacity-50">|</span>
-            {user ? (
-              <Link to="/account" className="inline-flex items-center gap-1 font-medium hover:opacity-80">
-                <UserRound size={12} aria-hidden="true" />我的帳號
-              </Link>
-            ) : (
-              <button type="button" onClick={() => openLogin()} className="inline-flex items-center gap-1 font-medium hover:opacity-80">
-                <LogIn size={12} aria-hidden="true" />登入
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-2.5 md:gap-10 md:px-4 md:py-4">
-          <Logo />
-          <form onSubmit={submit} className="flex min-w-0 flex-1 items-center rounded-sm bg-white p-[3px]">
-            <input
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="搜尋商品、店家"
-              aria-label="搜尋"
-              className="min-w-0 flex-1 px-2.5 text-sm text-ink outline-none placeholder:text-muted"
-            />
-            <button type="submit" aria-label="搜尋" className="flex h-8 items-center rounded-sm bg-brand px-4 text-white transition hover:bg-brand-dark md:h-9 md:px-6">
-              <SearchIcon size={18} />
-            </button>
-          </form>
-          <Link to="/cart" aria-label={`購物車，${cartCount} 件`} className="relative shrink-0 p-1.5 transition hover:opacity-80">
-            <ShoppingCart size={26} strokeWidth={1.8} />
-            {cartCount > 0 && (
-              <span className="absolute -right-1 -top-0.5 min-w-5 rounded-full border-2 border-brand bg-white px-1 text-center text-[11px] font-semibold leading-4 text-brand">
-                {cartCount > 99 ? '99+' : cartCount}
-              </span>
-            )}
-          </Link>
-        </div>
-      </header>
+  const header = headerFor(pathname);
+  // 「我的」不需要商品資料（登入狀態它自己處理），商品還在載入時也直接顯示，不擋
+  const needsProducts = pathname !== '/account' && !pathname.startsWith('/account/');
+  // 載入骨架依路由：商品頁（導覽列帶分享鈕的那一種）＝主圖＋標題＋停用的購買列，其餘＝首頁形狀
+  const skeleton = header.kind === 'nav' && header.shareProductId ? 'product' : 'home';
+  // 「我的」頁是灰底分組列表：頁首安全區條、tab bar 與整頁底色都跟著換
+  const grouped = pathname === '/account';
+  const material = grouped ? 'material-grouped' : 'material';
 
-      <main className={`flex-1 ${hideTabBar ? '' : 'pb-20 md:pb-0'}`}>
-        {loadError ? (
-          <div className="mx-auto max-w-md px-4 py-24 text-center">
-            <p className="text-5xl">📡</p>
-            <p className="mt-4 font-medium">載入商品失敗</p>
-            <p className="mt-1 text-sm text-muted">{loadError}</p>
-            <button onClick={() => void reload()} className="mt-5 rounded-sm bg-brand px-6 py-2.5 text-sm text-white">重新載入</button>
+  return (
+    <div className={`flex min-h-dvh flex-col ${grouped ? 'bg-canvas' : ''}`}>
+      {/* 唯一一直釘在頂端的東西：蓋住狀態列／動態島的材質條（桌機高度為 0） */}
+      <div aria-hidden="true" className={`${material} sticky top-0 z-40 h-[env(safe-area-inset-top)] shrink-0`} />
+
+      {header.kind === 'large' && (
+        <header className="mx-auto w-full max-w-6xl">
+          <div className="flex h-[52px] items-end justify-between px-5">
+            <h1 className="text-large-title font-bold">{header.title}</h1>
+            <div className="flex items-end gap-5">
+              <DesktopLinks className="mb-2.5" />
+              {header.cart && <CartCircle count={cartCount} />}
+            </div>
           </div>
-        ) : loading && !loadedOnce.current ? (
-          <div className="flex items-center justify-center py-32 text-muted">
-            <Loader2 size={28} className="animate-spin" />
+          {header.search && (pathname === '/search'
+            ? <SearchForm q={q} setQ={setQ} onSubmit={submit} />
+            : <SearchLink />)}
+        </header>
+      )}
+
+      {header.kind === 'nav' && (
+        <header className={`${material} sticky top-[env(safe-area-inset-top)] z-40`}>
+          <div className="mx-auto flex h-11 max-w-6xl items-center justify-between pl-2 pr-1.5 md:px-5">
+            <Link to={header.back.to} aria-label={`返回${header.back.label}`} className={`${PRESS_FADE} -ml-1 flex h-11 items-center pr-3 text-body text-brand`}>
+              <ChevronLeft size={28} strokeWidth={2.4} aria-hidden="true" />
+              {header.back.label}
+            </Link>
+            <div className="flex items-center">
+              <DesktopLinks className="mr-4" />
+              {header.shareProductId && <ShareButton productId={header.shareProductId} />}
+              {header.cart && <CartNavLink count={cartCount} />}
+            </div>
           </div>
+        </header>
+      )}
+
+      {header.kind === 'plain' && (
+        // 帳號子頁自己有導覽列；桌機沒有 tab bar，所以這裡留一條回首頁與常用連結
+        <div className="mx-auto hidden h-11 w-full max-w-6xl items-center justify-between px-5 md:flex">
+          <Link to="/" className="text-headline font-bold">好物集</Link>
+          <DesktopLinks />
+        </div>
+      )}
+
+      <div role="status">
+        {!online && (
+          <p className="bg-canvas px-5 py-2 text-center text-footnote text-muted">目前離線，顯示的是上次載入的內容</p>
+        )}
+      </div>
+
+      <main className={`flex-1 ${hideTabBar ? '' : 'pb-[calc(49px+env(safe-area-inset-bottom))] md:pb-0'}`}>
+        {loadError && needsProducts ? (
+          <div role="alert" className="mx-auto max-w-md px-5 py-24 text-center">
+            <p className="text-title3 font-bold">載入商品失敗</p>
+            <p className="mt-1 break-words text-subhead text-muted">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => void reload()}
+              className={`${pillButtonPrimary} mt-6`}
+            >
+              重新載入
+            </button>
+          </div>
+        ) : loading && !loadedOnce.current && needsProducts ? (
+          <LoadingSkeleton kind={skeleton} />
         ) : (
           <Outlet />
         )}
       </main>
 
-      <footer className="mt-10 hidden border-t-4 border-brand bg-white md:block">
+      <footer className="mt-10 hidden border-t border-line bg-white md:block">
         <div className="mx-auto grid max-w-6xl grid-cols-3 gap-8 px-4 py-10 text-sm text-muted">
           <div>
             <p className="mb-3 font-semibold text-ink">客服中心</p>
@@ -125,37 +141,234 @@ export default function BuyerLayout() {
       </footer>
 
       {!hideTabBar && (
-        <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-white/95 backdrop-blur md:hidden">
-          <Tab to="/" icon={<Home size={22} />} label="首頁" end />
-          <Tab to="/search" icon={<SearchIcon size={22} />} label="逛逛" />
-          <Tab to="/orders" icon={<ClipboardList size={22} />} label="訂單" />
-          <Tab to="/seller" icon={<Store size={22} />} label="我要賣" />
-          {user ? (
-            <Tab to="/account" icon={<UserRound size={22} />} label="我的" ariaLabel="我的帳號" />
-          ) : (
-            // 登入不是一個頁面，是開登入面板、登入完留在原頁：所以是按鈕，不會亮起
-            <button type="button" onClick={() => openLogin()} className={TAB_CLASS('text-muted')}>
-              <LogIn size={22} aria-hidden="true" />登入
-            </button>
-          )}
+        <nav aria-label="主要分頁" className={`${material} pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t-[0.5px] border-separator md:hidden`}>
+          <Tab to="/" label="首頁" end icon={<House size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<HouseFilled />} />
+          <Tab to="/search" label="逛逛" icon={<SearchIcon size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<SearchIcon size={26} strokeWidth={2.5} aria-hidden="true" />} />
+          <Tab to="/orders" label="訂單" icon={<ClipboardList size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<ClipboardList size={26} strokeWidth={2.5} aria-hidden="true" />} />
+          <Tab to="/seller" label="我要賣" icon={<Store size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<Store size={26} strokeWidth={1.7} aria-hidden="true" />} />
+          {/* 第 5 格一律是前往 /account 的分頁，未登入時登入入口在頁內（HIG：tab bar 用來導覽，不是放動作） */}
+          <Tab to="/account" label="我的" icon={<CircleUserRound size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<ProfileFilled />} />
         </nav>
       )}
     </div>
   );
 }
 
-const TAB_CLASS = (tone: string) => `flex min-h-11 flex-col items-center gap-0.5 py-2 text-[11px] ${tone}`;
+/** 按下時淡到 50%，放開 200ms 淡回。要在 iPhone Safari 顯示 :active，需要 main.tsx 的 touchstart 監聽（R1） */
+const PRESS_FADE = 'transition-opacity duration-200 active:opacity-50 active:duration-0';
 
-function Tab({ to, icon, label, end, ariaLabel }: { to: string; icon: React.ReactNode; label: string; end?: boolean; ariaLabel?: string }) {
+function CountBadge({ count, className }: { count: number; className: string }) {
+  if (count <= 0) return null;
+  return (
+    <span aria-hidden="true" className={`absolute min-w-[18px] rounded-full bg-badge px-[5px] text-center text-[12px] font-semibold leading-[18px] text-white ring-2 ring-white ${className}`}>
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
+/** 大標題列右側的購物車圓鈕：視覺 36、熱區 44 */
+function CartCircle({ count }: { count: number }) {
+  return (
+    <Link to="/cart" aria-label={`購物車，${count} 件`} className="group -mb-px -mr-1 flex size-11 shrink-0 items-center justify-center">
+      <span className="relative flex size-9 items-center justify-center rounded-full bg-canvas text-brand transition-colors duration-200 group-active:bg-press group-active:duration-0">
+        <ShoppingCart size={20} strokeWidth={1.7} aria-hidden="true" />
+        <CountBadge count={count} className="-right-1.5 -top-[3px]" />
+      </span>
+    </Link>
+  );
+}
+
+const NAV_ICON_BTN = `${PRESS_FADE} relative flex size-11 items-center justify-center text-brand`;
+
+function CartNavLink({ count }: { count: number }) {
+  return (
+    <Link to="/cart" aria-label={`購物車，${count} 件`} className={NAV_ICON_BTN}>
+      <ShoppingCart size={22} strokeWidth={1.7} aria-hidden="true" />
+      <CountBadge count={count} className="right-1 top-1.5" />
+    </Link>
+  );
+}
+
+/** 系統分享面板；沒有（多數桌機瀏覽器）就複製網址 */
+function ShareButton({ productId }: { productId: string }) {
+  const { products } = useStore();
+  const toast = useToast();
+
+  const share = async () => {
+    const url = window.location.href;
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: products.find(p => p.id === productId)?.title ?? '好物集', url });
+        return;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return; // 使用者自己關掉面板
+        // 其他原因（例如被政策擋）退回複製網址
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('已複製連結', 'info');
+    } catch {
+      toast('無法複製連結，請從網址列複製', 'error');
+    }
+  };
+
+  return (
+    <button type="button" onClick={() => void share()} aria-label="分享" className={NAV_ICON_BTN}>
+      <Share size={22} strokeWidth={1.7} aria-hidden="true" />
+    </button>
+  );
+}
+
+/** 桌機（md 以上）沒有 tab bar，常用入口放在頁首右側。手機不顯示 */
+function DesktopLinks({ className = '' }: { className?: string }) {
+  const { user } = useStore();
+  const { openLogin } = useAuth();
+  return (
+    <div className={`hidden items-center gap-5 text-subhead text-muted md:flex ${className}`}>
+      <Link to="/seller" className="hover:text-brand">賣家中心</Link>
+      <Link to="/orders" className="hover:text-brand">我的訂單</Link>
+      {user ? (
+        <Link to="/account" className="hover:text-brand">我的帳號</Link>
+      ) : (
+        <button type="button" onClick={() => openLogin()} className="hover:text-brand">登入</button>
+      )}
+    </div>
+  );
+}
+
+const SEARCH_BOX = 'flex h-9 items-center gap-1.5 rounded-[10px] bg-search px-2 text-body';
+
+/** 首頁的搜尋框：長得像輸入框的連結，點了到 /search 並聚焦（那邊的 SearchForm 讀 focus=1） */
+function SearchLink() {
+  return (
+    <Link to="/search?focus=1" aria-label="搜尋商品、店家" className="group mx-5 mt-1.5 block py-1">
+      <span className={`${SEARCH_BOX} text-muted transition-colors duration-200 group-active:bg-press group-active:duration-0`}>
+        <SearchIcon size={18} strokeWidth={1.7} aria-hidden="true" />
+        商品、店家
+      </span>
+    </Link>
+  );
+}
+
+function SearchForm({ q, setQ, onSubmit }: { q: string; setQ: (v: string) => void; onSubmit: (e: React.FormEvent) => void }) {
+  const [params, setParams] = useSearchParams();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wantFocus = params.get('focus') === '1';
+
+  // 從首頁搜尋框點進來：聚焦輸入框，並把 focus 參數拿掉（replace，返回鍵不會再聚焦一次）
+  useLayoutEffect(() => {
+    if (!wantFocus) return;
+    inputRef.current?.focus();
+    const next = new URLSearchParams(params);
+    next.delete('focus');
+    setParams(next, { replace: true });
+  }, [wantFocus, params, setParams]);
+
+  return (
+    <form
+      role="search"
+      onSubmit={e => { onSubmit(e); inputRef.current?.blur(); }}
+      className={`${SEARCH_BOX} mx-5 mt-2.5 text-ink pointer-fine:has-[:focus-visible]:outline-2 pointer-fine:has-[:focus-visible]:outline-offset-2 pointer-fine:has-[:focus-visible]:outline-brand`}
+    >
+      <SearchIcon size={18} strokeWidth={1.7} className="shrink-0 text-muted" aria-hidden="true" />
+      <input
+        ref={inputRef}
+        type="search"
+        enterKeyHint="search"
+        value={q}
+        onChange={e => setQ(e.target.value)}
+        placeholder="商品、店家"
+        aria-label="搜尋商品、店家"
+        className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted"
+      />
+    </form>
+  );
+}
+
+/** 首次載入：靜態灰塊（不閃爍）。搜尋框已經在頁首，所以首頁形狀不重複 */
+function LoadingSkeleton({ kind }: { kind: 'home' | 'product' }) {
+  return kind === 'product' ? <ProductSkeleton /> : <HomeSkeleton />;
+}
+
+function HomeSkeleton() {
+  return (
+    <div role="status" className="mx-auto max-w-6xl px-5 pt-3">
+      <span className="sr-only">載入中</span>
+      <div aria-hidden="true">
+        <div className="flex gap-2 overflow-hidden">
+          {[0, 1, 2, 3, 4].map(i => <div key={i} className="h-9 w-24 shrink-0 rounded-full bg-canvas" />)}
+        </div>
+        <div className="mt-4 aspect-[4/3] rounded-story bg-canvas md:aspect-[16/5]" />
+        <div className="mt-4 h-4 w-2/3 rounded-md bg-canvas" />
+        <div className="mt-2 h-4 w-1/3 rounded-md bg-canvas" />
+      </div>
+    </div>
+  );
+}
+
+/** 商品頁骨架（§3.4）：主圖灰塊＋標題 2 條灰條，購買列先出現但停用。尺寸同 ProductDetail 的第一張照片與購買列，載入完不跳版 */
+function ProductSkeleton() {
+  return (
+    // 高度＝視窗扣掉安全區條與 44 的導覽列，購買列才會貼在底部（手機沒有 tab bar）
+    <div className="mx-auto flex min-h-[calc(100dvh-env(safe-area-inset-top)-44px)] max-w-6xl flex-col md:block md:min-h-0 md:px-4 md:pt-4">
+      <div role="status" className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[450px_1fr] md:gap-8">
+        <span className="sr-only">載入中</span>
+        <div aria-hidden="true" className="px-5 pt-1 md:px-0 md:pt-0">
+          <div className="aspect-square w-75 max-w-full rounded-story bg-canvas md:w-full" />
+        </div>
+        <div aria-hidden="true" className="px-5 pt-4 md:px-0 md:pt-0">
+          <div className="h-5 w-4/5 rounded-md bg-canvas" />
+          <div className="mt-2 h-5 w-1/2 rounded-md bg-canvas" />
+        </div>
+      </div>
+      {/* 與 ProductDetail 的手機購買列同一組 class；按鈕停用，點了沒有反應 */}
+      <div className="material sticky bottom-0 z-40 mt-auto grid grid-cols-[repeat(auto-fit,minmax(--spacing(32),1fr))] gap-3 border-t-[0.5px] border-separator pt-2 pr-[max(--spacing(5),env(safe-area-inset-right))] pb-[calc(--spacing(2)+env(safe-area-inset-bottom))] pl-[max(--spacing(5),env(safe-area-inset-left))] md:hidden">
+        {['加入購物車', '直接購買'].map(label => (
+          <button key={label} type="button" aria-disabled="true" className="inline-flex h-12.5 items-center justify-center rounded-full bg-canvas px-4 text-headline font-semibold text-muted-2">
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Tab({ to, label, end, icon, activeIcon }: { to: string; label: string; end?: boolean; icon: React.ReactNode; activeIcon: React.ReactNode }) {
   return (
     <NavLink
       to={to}
       end={end}
-      aria-label={ariaLabel}
-      className={({ isActive }) => TAB_CLASS(isActive ? 'text-brand' : 'text-muted')}
+      aria-label={label}
+      className={({ isActive }) => `${PRESS_FADE} flex h-[49px] flex-col items-center gap-px pt-1.5 text-caption2 font-medium ${isActive ? 'text-brand' : 'text-muted'}`}
     >
-      {icon}
-      {label}
+      {({ isActive }) => (
+        <>
+          {isActive ? activeIcon : icon}
+          {label}
+        </>
+      )}
     </NavLink>
+  );
+}
+
+// 實心版：lucide 沒有 fill 版，直接填色會把內部細節（門、人像）也塗成同色而消失，所以內部細節改白色。
+// 幾何與 lucide 的 House、CircleUserRound 相同，切換選中時不會跳動
+function HouseFilled() {
+  return (
+    <svg width={26} height={26} viewBox="0 0 24 24" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="fill-current stroke-current">
+      <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" className="fill-white stroke-white" />
+    </svg>
+  );
+}
+
+function ProfileFilled() {
+  return (
+    <svg width={26} height={26} viewBox="0 0 24 24" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="fill-current stroke-current">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="11" r="4" className="fill-white stroke-white" />
+      <path d="M17.925 20.056a6 6 0 0 0-11.851.001" className="fill-white stroke-white" />
+    </svg>
   );
 }

@@ -248,7 +248,7 @@ function CheckoutView() {
   if (!groups.length) {
     return (
       <div className="mx-auto max-w-6xl p-3 md:p-6">
-        <EmptyState icon="🧾" title="沒有要結帳的商品" action={<Link to="/cart" className="text-brand">回購物車</Link>} />
+        <EmptyState title="沒有要結帳的商品" action={<Link to="/cart" className="text-brand">回購物車</Link>} />
       </div>
     );
   }

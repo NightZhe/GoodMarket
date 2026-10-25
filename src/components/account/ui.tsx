@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CircleAlert, LoaderCircle } from 'lucide-react';
+import { ChevronLeft, CircleAlert, LoaderCircle } from 'lucide-react';
 
 // 帳號子頁（個人檔案、地址）共用的 class 與小元件。class 逐字取自設計稿 1.2；只用 index.css 現有 token。
 
@@ -42,30 +42,44 @@ export function FieldError({ id, children }: { id: string; children?: string }) 
   );
 }
 
-/** 返回（確定的 Link，不用 history.back）＋標題的白色標題列 */
-export function SubHeader({ to, backLabel, title }: { to: string; backLabel: string; title: string }) {
+/**
+ * iOS 導覽列：44pt、材質底、貼頂；左「‹ 上一層名稱」brand 17pt，標題 17／600 置中。
+ * 返回是確定的 Link（不用 history.back）。backText＝上一層的名稱（預設「我的」）；backLabel 是讀屏念的完整說法，要包含 backText。
+ * -mx-4 抵掉 SubPage 的左右內距，讓材質底填滿容器寬。onBack／titleRef 給有自己離開流程與焦點管理的頁（綁定手機）
+ */
+export function SubHeader({ to, backLabel, backText = '我的', title, onBack, titleRef }: {
+  to: string; backLabel: string; backText?: string; title: string; onBack?: () => void; titleRef?: Ref<HTMLHeadingElement>;
+}) {
   return (
-    <header className="flex items-center gap-1 bg-white px-2 pr-4 md:rounded-md">
-      <Link to={to} aria-label={backLabel} className="flex h-11 w-11 shrink-0 items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand">
-        <ArrowLeft size={22} aria-hidden="true" />
-      </Link>
-      <h1 className="min-w-0 text-base font-medium md:text-lg">{title}</h1>
+    <header className="material-grouped sticky top-0 z-30 -mx-4 mb-2 border-b-[0.5px] border-separator">
+      <div className="grid h-11 grid-cols-[1fr_auto_1fr] items-center">
+        <Link
+          to={to} onClick={onBack} aria-label={backLabel}
+          className="flex h-11 min-w-11 items-center justify-self-start pl-1 pr-3 text-body text-brand active:text-brand-dark"
+        >
+          <ChevronLeft size={28} strokeWidth={2.4} className="shrink-0" aria-hidden="true" />
+          <span className="whitespace-nowrap">{backText}</span>
+        </Link>
+        <h1 ref={titleRef} tabIndex={titleRef ? -1 : undefined} className="max-w-[55vw] min-w-0 truncate text-headline font-semibold outline-none">{title}</h1>
+      </div>
     </header>
   );
 }
 
-/** 子頁外層。noTabBar：新增／編輯頁藏起底部分頁，頁尾要自己補安全區域 */
+/** 子頁外層：整頁 canvas 灰底，內容白色圓角區塊左右各留 16。noTabBar：新增／編輯頁藏起底部分頁，頁尾要自己補安全區域 */
 export function SubPage({ children, noTabBar = false }: { children: ReactNode; noTabBar?: boolean }) {
   return (
-    <div className="mx-auto max-w-2xl md:px-4 md:pt-6">
-      {children}
-      {noTabBar ? <div className="pb-safe"><div className="h-6" /></div> : <div className="h-6" />}
+    <div className="min-h-dvh bg-canvas">
+      <div className="mx-auto max-w-2xl px-4">
+        {children}
+        {noTabBar ? <div className="pb-safe"><div className="h-6" /></div> : <div className="h-6" />}
+      </div>
     </div>
   );
 }
 
-/** 區塊標題列的 h2（灰底、粗體 ink） */
-export const sectionTitleCls = 'px-4 pb-2 pt-5 text-sm font-bold md:px-0 md:pt-6';
+/** 區塊標題列的 h2：分組列表的組標題（13 muted，距螢幕左緣 36） */
+export const sectionTitleCls = 'px-5 pb-1.5 pt-6 text-footnote text-muted';
 
 export function Spinner({ size = 18 }: { size?: number }) {
   return <LoaderCircle size={size} className="motion-safe:animate-spin" aria-hidden="true" />;

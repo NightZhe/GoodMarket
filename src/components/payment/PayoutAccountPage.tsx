@@ -62,13 +62,13 @@ export default function PayoutAccountPage({ backTo, backLabel }: { backTo: strin
 
   const header = <SubHeader to={backTo} backLabel={backLabel} title="收款帳戶" />;
 
-  if (!shopReady) return <SubPage>{header}<div aria-busy="true" role="status" className="mt-2 bg-white p-6 md:rounded-md"><span className="sr-only">載入中</span><Bone className="h-12 w-12" /></div></SubPage>;
+  if (!shopReady) return <SubPage>{header}<div aria-busy="true" role="status" className="mt-2 bg-white p-6 rounded-card"><span className="sr-only">載入中</span><Bone className="h-12 w-12" /></div></SubPage>;
 
   if (!myShop) {
     return (
       <SubPage>
         {header}
-        <div className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+        <div className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
           <Banner kind="info" role="status" title="你還沒有開店" actions={<Link to="/seller" className={btnOutline}>前往賣家中心</Link>}>
             開店之後，才需要開通收款。
           </Banner>
@@ -81,20 +81,20 @@ export default function PayoutAccountPage({ backTo, backLabel }: { backTo: strin
     <SubPage>
       {header}
       {load.kind === 'loading' && (
-        <div aria-busy="true" className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+        <div aria-busy="true" className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
           <p role="status" className="sr-only">載入中</p>
           <div className="flex gap-3"><Bone className="h-12 w-12 !rounded-full" /><div className="flex-1 space-y-2 pt-1"><Bone className="h-3 w-24" /><Bone className="h-5 w-32" /><Bone className="h-3 w-full" /></div></div>
         </div>
       )}
       {load.kind === 'error' && (
-        <div className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+        <div className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
           <Banner kind="error" title="讀不到收款狀態" actions={<button type="button" className={btnOutline} onClick={() => void reload()}>重試</button>}>請檢查網路後再試一次。</Banner>
         </div>
       )}
       {load.kind === 'ready' && (
         <>
           {!online && (
-            <div className="mt-2 px-2 md:mt-3 md:px-0">
+            <div className="mt-2 md:mt-3">
               <Banner kind="warning" role="status" title="目前沒有網路">顯示的是上次讀到的狀態，可能不是最新的。連上網路後會自動更新。</Banner>
             </div>
           )}
@@ -119,7 +119,7 @@ function StatusBlock({ row, online, refreshing, onRefresh, onSubmitted }: {
 
   return (
     <>
-      <section className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+      <section className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
         <div className="flex items-start gap-3">
           <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${tone}`} aria-hidden="true"><Icon size={24} /></span>
           <div className="min-w-0 flex-1">
@@ -197,7 +197,7 @@ function StatusBlock({ row, online, refreshing, onRefresh, onSubmitted }: {
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+    <section className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
       <h2 className="mb-2 text-sm font-bold">{title}</h2>
       {children}
     </section>
@@ -232,7 +232,7 @@ function MerchantForm({ online, defaultValue, onSubmitted }: { online: boolean; 
   };
 
   return (
-    <section className="mt-2 bg-white p-4 md:mt-3 md:rounded-md md:p-6">
+    <section className="mt-2 bg-white p-4 md:mt-3 rounded-card md:p-6">
       <h2 className="mb-2 text-sm font-bold">填入綠界特約商店編號</h2>
       <form onSubmit={e => void submit(e)} noValidate>
         <label htmlFor="merchant-id" className={labelCls}>特約商店編號</label>

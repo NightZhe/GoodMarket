@@ -134,7 +134,7 @@ function ProfileView() {
       <SubHeader to="/account" backLabel="回到我的帳號" title="個人檔案" />
 
       {reauth && (
-        <div className="mt-2 px-2 md:mt-3 md:px-0">
+        <div className="mt-2 md:mt-3">
           <Banner kind="info" role="status" title="已重新登入" actions={<button type="button" className={btnOutline} onClick={() => setReauth(false)}>知道了</button>}>
             你填的暱稱還在，請再按一次儲存。
           </Banner>
@@ -142,7 +142,7 @@ function ProfileView() {
       )}
 
       <h2 className={sectionTitleCls}>登入方式</h2>
-      <section className="bg-white md:rounded-md">
+      <section className="bg-white rounded-card">
         <div className="px-4 py-4 md:px-6">{user && <Identity user={user} />}</div>
         <p className="border-t border-line px-4 py-3 text-sm text-muted md:px-6">
           登入方式與帳號由 {provider === 'google' || provider === 'apple' ? providerLabel(provider) : '登入服務'} 管理，這裡不能修改。
@@ -150,7 +150,7 @@ function ProfileView() {
       </section>
 
       <h2 className={sectionTitleCls}>個人資料</h2>
-      <section className="bg-white p-4 md:rounded-md md:p-6" aria-busy={load === 'loading' || undefined}>
+      <section className="bg-white p-4 rounded-card md:p-6" aria-busy={load === 'loading' || undefined}>
         {load === 'loading' && (
           <div>
             <p role="status" className="sr-only">載入中</p>

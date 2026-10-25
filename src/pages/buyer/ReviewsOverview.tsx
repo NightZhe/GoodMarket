@@ -110,7 +110,7 @@ function ReviewsOverviewView({ id }: { id: string }) {
   if (!product && state === 'ready' && meta?.total === 0 && tab === 'product') {
     return (
       <div className="mx-auto max-w-6xl p-3 md:p-6">
-        <EmptyState icon="📦" title="商品不存在或已下架" action={<Link to="/" className="text-brand">回首頁</Link>} />
+        <EmptyState title="商品不存在或已下架" action={<Link to="/" className="text-brand">回首頁</Link>} />
       </div>
     );
   }
