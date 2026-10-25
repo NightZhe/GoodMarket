@@ -8,7 +8,7 @@ import { scrollPageToTop } from '../lib/ui/scroll';
  * 列表無限捲動（首頁「全部商品」與逛逛結果共用）：滑近底部自動多畫一批，規則在 revealPolicy。
  * 整頁捲動，不建立內層捲動容器。資料仍是進站一次抓全部，所以多畫一批是瞬間完成，不放 spinner。
  *
- * - 哨兵（sentinelRef）放在列表最後一件之後；用 IntersectionObserver 觀察，rootMargin 一個視窗高，
+ * - 哨兵（sentinelRef）放在列表最後一件之後；用 IntersectionObserver 觀察，rootMargin 兩個視窗高（小q 實測一個視窗高在極速甩動時會撞到底），
  *   提前畫好所以看不到空白。每次件數變動會重新觀察，哨兵仍在範圍內就會連續補批。
  * - 沒有 IntersectionObserver（舊瀏覽器、靜態渲染）時回報 showFallback，頁面畫原本的「顯示更多商品」按鈕。
  * - 件數與捲動位置寫在 sessionStorage（key＝記憶 key，只負責索引）。是否重置看導覽（location.key）：
@@ -70,7 +70,7 @@ export function useInfiniteReveal<T>(items: T[], memoryKey: string) {
       entries => {
         if (entries.some(e => e.isIntersecting)) setState(grow(total));
       },
-      { rootMargin: '100% 0px 100% 0px' },
+      { rootMargin: '200% 0px 200% 0px' },
     );
     io.observe(el);
     return () => io.disconnect();
