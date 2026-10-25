@@ -91,6 +91,14 @@ Cloudflare Turnstile Captcha 開（sitekey 由 GitHub secret `VITE_TURNSTILE_SIT
 規格、決策（D1～D19、N1～N8）、設計、介面契約、驗收報告、`prod-runbook.md`、`tools/metrics/l-m1～l-m5.sql`、還原 `tools/rollback-logistics.sql` 都在 `.work/seller-logistics/`。
 不做（另開規格）：物流方式與運費、退貨申請狀態機、超商 API。待辦：隱私政策簡訊服務商仍寫「三竹」但正式站是 MAAC Go（N3，另開一張盡快修）。
 
+**買家端 App Store 風改版**（2026-10-25 上線，PR #7，`.work/ui-redesign/`：決策 `decisions.md` D1～D6／R1～R6、定稿 `design-final.md`、mock `mock-appstore.html`、小q 五輪驗收 `qa-report-round1～5.md`）：
+白底、大標題（首頁「好物集」、其他分頁用分頁名）、系統字、膠囊、`.material` 毛玻璃 tab bar（第 5 格改「我的」，未登入有頁面）、
+故事卡規則自動挑（`src/lib/home/pickStory.ts`：近 7 天上新最多的分類、≥3 件才顯示）、單色線條分類圖示（`src/data/categoryIcons.tsx`）、
+商品卡價格緊貼圖下＋「已售 N」同列（`cardLabel.ts` 組 aria-label；原價依剩餘空間顯示，優先序 價格 > 已售 > 原價，門檻在 `ProductCard.tsx` 的 `origShowAt`）。
+主色改 `#BF4419`（`brand`），原橘只留 `brand-logo`；token 與字級在 `src/index.css` `@theme`。賣家中心只換色未重排。
+待使用者實機驗：AC-7 登入後導頁、AC-15 VoiceOver、AC-20 加入主畫面；待小p 定故事卡副標的關鍵字規則（目前副標不顯示）。
+`src/pages/buyer/ReviewForm.tsx`／`ReviewsOverview.tsx`／`Orders.tsx` 仍有 emoji（不在改版工單範圍）。
+
 下一個該做的：付款（P-B／P-C，等 PAYUNi 拍板）。
 
 維運提醒：
