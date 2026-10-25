@@ -15,6 +15,7 @@ import type { Product } from '../../types';
 import { QuickCellButton, QuickEditBlock } from './QuickEditCell';
 import QuickEditSheet from './QuickEditSheet';
 import type { SavedInfo } from './useQuickEdit';
+import { hapticSuccess } from '../../lib/native/haptics';
 
 type Tab = 'all' | 'active' | 'soldout' | 'hidden';
 
@@ -166,6 +167,7 @@ export default function SellerProducts() {
     });
     const index = rows.findIndex(r => r.id === p.id);
     closeEdit({ productId: p.id, kind, index, gone: leftTab !== null });
+    void hapticSuccess(); // 快改儲存成功（App 內才有震動，D-7c）
     if (leftTab !== null) {
       // 這列離開了目前的分頁籤，格子裡的提示會跟著消失，只能用 toast（toast 自己是 role=status，不再另念）
       toast(outcome.text, outcome.kind === 'warn' ? 'info' : 'success');

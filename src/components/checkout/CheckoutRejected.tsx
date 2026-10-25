@@ -11,6 +11,7 @@ import {
   type RejectedItem,
 } from '../../lib/account/priceCheck';
 import type { CheckoutRejection } from '../../types';
+import { hapticError } from '../../lib/native/haptics';
 
 interface Props {
   changes: CheckoutRejection[];
@@ -90,6 +91,7 @@ export default function CheckoutRejected({ changes, fromCart, shopOrder, submitt
   useEffect(() => {
     window.scrollTo(0, 0);
     h1.current?.focus();
+    void hapticError(); // 下單失敗（App 內才有震動，D-7c）
   }, []);
 
   const groups = groupRejections(changes, shopOrder);

@@ -68,11 +68,14 @@ App 內 Google／Apple 登入走系統瀏覽器視圖＋自訂 scheme 回跳（`
 殼專用樣式 `src/native.css` 只在 `html.native` 生效：買家前台改版後自己處理安全區，殼只補賣家中心（`header.sticky.top-0`）與賣家登入頁。
 **審查員登入深連結**（PR #11，2026-10-26 合併）：`io.github.nightzhe.goodmarket://review-login` 冷啟動直達 `#/review-login`（`src/lib/native/deeplink.ts`，一般 `://<路由>` 都接、`://auth` 留給登入回跳）。
 **WebView hostname 是 `nightzhe.github.io`**（`capacitor.config.ts` `server.hostname`）：Capacitor 預設 localhost 不在 Cloudflare Turnstile 允許網域（110200），改成正式站網域後 App 內簡訊登入與審查員登入的安全驗證才載得起來；Android 模擬器 Turnstile 回 600010（疑似機器人）要真機驗。
+**App 內 Turnstile 不能直接畫在 WebView 裡**（2026-10-26，PR #14＋#15，決策 D-12）：Cloudflare 只接受 http／https 來源，iOS 的 `capacitor://` 一律拿到無效 token（真機「驗證失敗」），所以 widget 改畫在正式站的靜態頁 `public/captcha-frame.html`（https 來源；`public/captcha.js` 用 postMessage 回報事件與高度，**只送給 `capacitor://nightzhe.github.io` 這個 parent 來源**，別的網站嵌入拿不到 token），`useTurnstile` 只在原生 iOS 切成 iframe 模式、只收 `https://nightzhe.github.io` 來源的訊息；網頁與 Android 原路不變。真機 iPhone 13 Pro Max 已驗登入面板與 `://review-login` 都通過。本機 dev server 的 hostname 不在 Turnstile 允許清單（110200），模擬器要驗管線用 Cloudflare 測試 key＋`VITE_TURNSTILE_FRAME_URL`；備案（系統瀏覽器視圖＋scheme 回跳）在 commit 63f889d。
 審查備註草稿 `.work/app-shell/review-notes.md`。
 **TestFlight build 1 已上傳**（2026-10-26 01:25，PR #13：橘底白購物袋 icon／白底啟動畫面，來源 `assets/`，重產指令見該 PR；Info.plist `ITSAppUsesNonExemptEncryption=false`）。
 封存／上傳流程：worktree 切最新 main → `npm run build && npx cap sync` → `xcodebuild archive`（Release、Team F7WL42HXND、`-allowProvisioningUpdates`）→ `-exportArchive`（method app-store-connect、destination upload、`manageAppVersionAndBuildNumber=true`）。
 Xcode 的 Apple ID 階段過期時上傳會回 DVTPortalServiceErrorDomain 1100，使用者在 Xcode Settings → Apple Accounts 重新登入即可。夥伴測試由使用者在 App Store Connect 加內部測試者。
-**尚未上架**，第一版還要做（見 `decisions.md` D-7～D-11）：原生 Sign in with Apple（Supabase Apple provider 的 Client IDs 要把 bundle id 加在 Services ID 後面）、分享面板、觸覺回饋、App icon／啟動畫面、
+**原生整合第一批**（2026-10-26，分支 `claude/app-native-batch1`，`decisions.md` 末節「2026-10-26 原生整合第一批」）：iOS 的 Apple 登入改走原生 Sign in with Apple（`@capacitor-community/apple-sign-in` 7.1.0 → `signInWithIdToken`，`src/lib/native/auth.ts`／`appleSignIn.ts`；Xcode 專案加 `App.entitlements`；Google 與 Android 仍走瀏覽器視圖）、
+商品頁＋店家頁分享鈕在 App 內走 `@capacitor/share`（分享正式站網址，`src/lib/share/publicUrl.ts`）、觸覺回饋 `@capacitor/haptics`（加入購物車／快改儲存成功、下單失敗）、狀態列深色文字 `@capacitor/status-bar`（`capacitor.config.ts` `style:'LIGHT'`）。外掛只在 App 內動態載入。
+**尚未上架**，第一版還要做（見 `decisions.md` D-7～D-11）：原生 Sign in with Apple 真機實登（程式已在上述分支）、App icon／啟動畫面（PR #13 已做）、
 **帳號刪除 App 內入口（Apple 5.1.1(v) 硬門檻，10/18 拿掉的區塊要加回，可人工處理但不能只叫人寄信）**、檢舉／封鎖（Apple 1.2，待拍板）、審查用賣家示範帳號（待拍板）、App Privacy／Data safety 填寫。
 使用者側前置（Google Play 帳號、App ID、Play 簽章、商店圖文）見 `prereqs-user.md`。
 

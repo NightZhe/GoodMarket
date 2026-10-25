@@ -7,6 +7,7 @@ import { toAccountError } from '../../lib/account/errors';
 import { useAuth } from '../../store/AuthContext';
 import { useStore } from '../../store/StoreContext';
 import { useToast } from '../Toast';
+import { hapticSuccess } from '../../lib/native/haptics';
 
 type ProductAction = Extract<PendingAction, { kind: 'add_to_cart' | 'buy_now' }>;
 
@@ -43,6 +44,7 @@ export default function PendingRunner() {
         await addToCart({ productId: a.productId, variantId: a.variantId, qty: a.qty });
         setAutoNotice(null);
         toast('登入成功，已加入購物車');
+        void hapticSuccess();
       } catch (e) {
         const err = toAccountError(e);
         // 前端預檢沒擋到、資料庫擋下的（例如剛好被搶購）走同一套說明

@@ -6,6 +6,7 @@ import { NATIVE_BACK_EVENT } from './callback';
 
 // 原生殼的啟動：只在 App 內由 main.tsx 動態載入（網頁 bundle 不含這些外掛）。
 //   - <html> 加 class native／native-ios／native-android，殼專用樣式（native.css，由 main.tsx 靜態載入）靠它生效
+//   - 狀態列文字深色（白底 App）
 //   - Android 實體返回鍵：先問畫面（登入面板開著就只關面板），再來 hash 路由能回就回，回到底就離開 App
 //   - 登入回跳與瀏覽器視圖的監聽；一般深連結（審查員登入頁 ://review-login）
 
@@ -13,6 +14,9 @@ export async function initNativeShell(): Promise<void> {
   const platform = nativePlatform();
   if (!platform) return;
   document.documentElement.classList.add('native', `native-${platform}`);
+  // 狀態列文字顏色（D-7d）：App 只有白底，時間／電量要深色。capacitor.config.ts 的 plugins.StatusBar.style 讓第一幀就對，
+  // 這裡再設一次是保險。Capacitor 的命名：Style.Light＝淺色背景配深色文字（不是淺色文字）。
+  void import('@capacitor/status-bar').then(({ StatusBar, Style }) => StatusBar.setStyle({ style: Style.Light })).catch(() => { /* 外掛不在就算了 */ });
   await initNativeAuth();
   await initNativeDeepLinks();
   // 狀態列安全區：買家前台（App Store 風改版後）自己處理（安全區色帶＋sticky top-[env(...)] 頂欄），殼不插手；
