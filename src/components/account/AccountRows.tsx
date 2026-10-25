@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, CircleUserRound } from 'lucide-react';
+import { useBlockedShops } from '../../lib/block/useBlockedShops';
+import { slashDate, spokenDate } from '../../lib/deletion/date';
 
 // iOS 設定風分組列表（mock .a-group）：白底圓角 12、左右各 16、列高 44；髮絲線從文字左緣起；
 // 按下換 press（按下 0ms、放開 200ms 淡回）；列尾 › 用 chevron 色
@@ -37,6 +39,40 @@ export function NavRow({ to, label, onGate, children }: { to: string; label: str
   );
 }
 
+/**
+ * 「刪除帳號」列。dueDate＝處理中申請的預計完成日（'YYYY-MM-DD'）時改成雙行「刪除申請處理中／預計 YYYY/MM/DD 前完成」；
+ * null（沒有申請、讀不到狀態）只顯示「刪除帳號」。畫面寫 2026/11/04，讀屏念口語版，避免斜線被念出來
+ */
+export function DeleteNavRow({ pending, dueDate }: { pending: boolean; dueDate: string }) {
+  const due = slashDate(dueDate);
+  return (
+    <NavRow to="/account/delete" label="刪除帳號">
+      {pending ? (
+        <span className="min-w-0 flex-1">
+          <span className="block">刪除申請處理中</span>
+          {due && (
+            <>
+              <span aria-hidden="true" className="block text-footnote text-muted">預計 {due} 前完成</span>
+              <span className="sr-only">預計 {spokenDate(dueDate)}前完成</span>
+            </>
+          )}
+        </span>
+      ) : null}
+    </NavRow>
+  );
+}
+
+/** 「已封鎖的店家」入口（登入前後都有）。封鎖清單存在這台裝置，列尾顯示家數；沒封鎖任何店就不顯示 */
+export function BlockedNavRow() {
+  const { shops } = useBlockedShops();
+  return (
+    <NavRow to="/account/blocked" label="已封鎖的店家">
+      <span className="min-w-0 flex-1">已封鎖的店家</span>
+      {shops.length > 0 && <span className="shrink-0 text-muted">{shops.length} 家</span>}
+    </NavRow>
+  );
+}
+
 /** 還沒登入：登入列、購物、開店、其他。known＝false（登入狀態還在判斷）：頭像位置放灰塊，三個入口直接是連結，由目的頁自己處理登入 */
 export function SignedOut({ known, onLogin }: { known: boolean; onLogin: (to: string | null) => void }) {
   const gate = known ? onLogin : undefined;
@@ -68,6 +104,7 @@ export function SignedOut({ known, onLogin }: { known: boolean; onLogin: (to: st
       </Group>
       <Group id="acct-other" title="其他">
         <NavRow to="/privacy" label="隱私政策" />
+        <BlockedNavRow />
       </Group>
     </>
   );

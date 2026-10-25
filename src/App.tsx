@@ -30,6 +30,9 @@ import PaymentBindResult from './pages/buyer/PaymentBindResult';
 import AccountPayout from './pages/buyer/AccountPayout';
 import PayResult from './pages/buyer/PayResult';
 import Privacy from './pages/buyer/Privacy';
+import AccountDelete from './pages/buyer/AccountDelete';
+import AccountBlocked from './pages/buyer/AccountBlocked';
+import ReviewLogin from './pages/ReviewLogin';
 import { ReviewsProvider } from './store/ReviewsContext';
 import SellerGate from './pages/seller/SellerGate';
 import SellerLayout from './pages/seller/SellerLayout';
@@ -88,6 +91,10 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
       <Route path="account/addresses/new" element={<AccountAddressForm />} />
       <Route path="account/addresses/:id" element={<AccountAddressForm />} />
       <Route path="account/phone" element={<BindPhone />} />
+      {/* 刪除帳號申請（D-8）：未登入也看得到說明，頁面自己處理登入 */}
+      <Route path="account/delete" element={<AccountDelete />} />
+      {/* 已封鎖的店家（D-9，本機清單） */}
+      <Route path="account/blocked" element={<AccountBlocked />} />
       {/* 線上付款開關關著時，這幾頁直接輸入網址也進不去（導回帳號頁） */}
       <Route path="account/payment-methods" element={<RequirePayment to="/account"><PaymentMethods /></RequirePayment>} />
       <Route path="account/payment-methods/new" element={<RequirePayment to="/account"><PaymentMethodNew /></RequirePayment>} />
@@ -114,6 +121,9 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
         <Route path="payout" element={<RequirePayment to="/seller"><SellerPayout /></RequirePayment>} />
       </Route>
     </Route>
+
+    {/* 審查登入（D-10）：只給 App 審查員，放在 BuyerLayout 外（沒有頁首與 tab bar），不在任何畫面露出 */}
+    <Route path="review-login" element={<ReviewLogin />} />
 
     <Route path="*" element={<Navigate to="/" replace />} />
   </Route>,

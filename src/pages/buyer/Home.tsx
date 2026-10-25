@@ -5,6 +5,8 @@ import { CATEGORIES } from '../../data/seed';
 import { CategoryIcon } from '../../data/categoryIcons';
 import { orderCategories } from '../../lib/home/categoryOrder';
 import { pickStory, type StoryPick } from '../../lib/home/pickStory';
+import { visibleProducts } from '../../lib/block/filter';
+import { useBlockedShops } from '../../lib/block/useBlockedShops';
 import ProductCard from '../../components/ProductCard';
 import ProductRow, { ProductRowList } from '../../components/ProductRow';
 import Photo from '../../components/Photo';
@@ -28,13 +30,16 @@ const ROWS_PER_CATEGORY = 3;
 const newestFirst = (a: Product, b: Product) => b.createdAt.localeCompare(a.createdAt);
 
 export default function Home() {
-  const { products } = useStore();
+  const { products: allProducts } = useStore();
+  const { blockedIds } = useBlockedShops();
   const [shown, setShown] = useState(PAGE);
+  // 封鎖的店家整個濾掉（貨架、列表、故事卡候選、分類排序計數都吃這份），封鎖後立即生效（R-K12、S-K14）
+  const products = useMemo(() => visibleProducts(allProducts, blockedIds), [allProducts, blockedIds]);
 
   const active = useMemo(() => products.filter(p => p.status === 'active'), [products]);
   const categories = useMemo(() => orderCategories(CATEGORIES, products), [products]);
   // 故事卡的「現在」只在商品資料變動時取一次（含靜默重讀），不在每次 render 讀時鐘
-  const now = useMemo(() => Date.now(), [products]);
+  const now = useMemo(() => Date.now(), [allProducts]);
   const story = useMemo(() => pickStory(products, CATEGORIES, now), [products, now]);
 
   const newest = useMemo(() => [...active].sort(newestFirst), [active]);
