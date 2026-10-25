@@ -19,11 +19,12 @@ const WINDOW_TEXT = '5 分鐘內有效';
 function useResendSeconds(sentAt: number | null): number {
   const [, bump] = useReducer((n: number) => n + 1, 0);
   const left = resendSecondsLeft(sentAt, Date.now());
+  const counting = left > 0;
   useEffect(() => {
-    if (left <= 0) return;
+    if (!counting) return;
     const t = setInterval(bump, 1000);
     return () => clearInterval(t);
-  }, [left > 0, sentAt]);
+  }, [counting, sentAt]);
   useEffect(() => {
     const on = () => { if (document.visibilityState === 'visible') bump(); };
     document.addEventListener('visibilitychange', on);

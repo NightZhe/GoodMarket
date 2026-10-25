@@ -28,8 +28,8 @@ export default function SheetShell({ titleId, descId, titleRef, onClose, childre
       html.style.overflow = before;
       if (previous?.isConnected) previous.focus();
     };
-    // 只在掛載與卸載時處理焦點與捲動鎖；titleRef 是穩定的 ref 物件
-  }, []);
+    // 只在掛載與卸載時處理焦點與捲動鎖；titleRef 是穩定的 ref 物件，列進依賴不會讓它重跑
+  }, [titleRef]);
 
   // Esc 與焦點陷阱掛在 document：焦點掉到 body 時（Safari 點按鈕不會讓按鈕取得焦點、按鈕被換掉）面板內的 onKeyDown 收不到
   const onCloseRef = useRef(onClose);

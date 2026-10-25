@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Ban, CircleAlert, CircleCheck, CreditCard, Hourglass, LoaderCircle, SearchX, UserRound } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
@@ -84,7 +84,7 @@ function PayView({ groupId }: { groupId: string }) {
   const screen: PayScreen | null = group ? screenOfGroup(group) : null;
   const needCards = screen === 'pay' || screen === 'failed';
   const cardsHook = useCards({ timeoutMs: CARDS_TIMEOUT_MS, paused: !needCards });
-  const cards = cardsHook.rows ?? [];
+  const cards = useMemo(() => cardsHook.rows ?? [], [cardsHook.rows]);
 
   const reload = useCallback(async (silent = false) => {
     const mine = ++seq.current;
