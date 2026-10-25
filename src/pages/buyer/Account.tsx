@@ -6,7 +6,7 @@ import { useAuth } from '../../store/AuthContext';
 import { useToast } from '../../components/Toast';
 import Banner from '../../components/import/Banner';
 import Identity from '../../components/account/Identity';
-import { Group, NavRow, ROW, ROW_IN, SignedOut } from '../../components/account/AccountRows';
+import { BlockedNavRow, DeleteNavRow, Group, NavRow, ROW, ROW_IN, SignedOut } from '../../components/account/AccountRows';
 import { clearGoto, rememberGoto, takeGoto } from '../../components/account/loginGoto';
 import { browserStores } from '../../lib/auth/pending';
 import { phoneOf } from '../../lib/auth/identity';
@@ -14,6 +14,8 @@ import { MERCHANT_STATE_TEXT, type MerchantState } from '../../lib/payment/merch
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useMerchantState } from '../../lib/payment/useMerchant';
 import { useOnline } from '../../lib/useOnline';
+import { pendingOf } from '../../lib/deletion/status';
+import { useDeletionStatus } from '../../lib/deletion/useDeletionStatus';
 
 const BADGE: Record<MerchantState, { Icon: typeof Clock; tone: string }> = {
   none: { Icon: CircleDashed, tone: 'text-ink' },
@@ -33,7 +35,9 @@ const store = () => browserStores()[0] ?? null;
 /**
  * 「我的」#/account。頁首的大標題「我的」（h1）由 BuyerLayout 放，這裡不再放 h1。
  * 沒登入也有頁面（登入入口＋購物、開店、其他）；登入後是帳號列表。登入狀態還不知道（authReady 前）時列表照樣顯示，頭像位置放灰塊。
- * 刪除帳號的申請方式只寫在隱私政策頁（2026-10-18 使用者決定拿掉帳號頁的區塊）
+ * 登入後「我的帳戶」群組最後一列是「刪除帳號」（申請制，申請頁 #/account/delete，D-8）；已有處理中的申請時改成雙行「刪除申請處理中／預計 … 前完成」。
+ * 讀不到申請狀態（離線、資料庫還沒升級、任何錯誤）就只顯示「刪除帳號」，不顯示錯誤、不顯示載入中。
+ * 「已封鎖的店家」（本機封鎖清單，D-9）在登入後的「隱私」群組與未登入的「其他」群組
  */
 export default function Account() {
   const { user, authReady } = useStore();
@@ -93,6 +97,9 @@ function SignedIn() {
   const navigate = useNavigate();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  // 只在已登入時讀；失敗一律靜默（列維持「刪除帳號」）
+  const { view: deletion } = useDeletionStatus(user?.id ?? null);
+  const pendingDeletion = pendingOf(deletion);
   // 綁定手機成功會帶著遮罩門號回到這頁：頂端橫幅（不用 toast，那句話 40 字，toast 2.6 秒讀不完），焦點移到橫幅
   const { state } = useLocation() as { state: { bound?: string } | null };
   // 只顯示一次：進來時記下，然後把導航 state 清掉，重新整理就不會再出現
@@ -147,6 +154,7 @@ function SignedIn() {
         <NavRow to="/account/profile" label="個人檔案" />
         {payEnabled && <NavRow to="/account/payment-methods" label="付款方式" />}
         <NavRow to="/account/addresses" label="地址" />
+        <DeleteNavRow pending={pendingDeletion !== null} dueDate={pendingDeletion?.due_date ?? ''} />
       </Group>
       <Group id="acct-shop" title="購物">
         <NavRow to="/orders" label="我的訂單" />
@@ -166,6 +174,7 @@ function SignedIn() {
       </Group>
       <Group id="acct-privacy" title="隱私">
         <NavRow to="/privacy" label="隱私政策" />
+        <BlockedNavRow />
       </Group>
 
       <Group footer="只會登出這台裝置。購物車、訂單和收件地址都存在帳號裡，下次登入就會回來。">

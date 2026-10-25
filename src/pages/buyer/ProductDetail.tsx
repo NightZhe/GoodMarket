@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, X } from 'lucide-react';
 import { useStore, FREE_SHIPPING_THRESHOLD, SHIPPING_FEE } from '../../store/StoreContext';
@@ -20,6 +20,11 @@ import Shelf from '../../components/Shelf';
 import LetterAvatar from '../../components/LetterAvatar';
 import QtyStepper from '../../components/QtyStepper';
 import EmptyState from '../../components/EmptyState';
+import BlockedShopPanel from '../../components/report/BlockedShopPanel';
+import ReportLink from '../../components/report/ReportLink';
+import { useBlockActions } from '../../components/report/useBlockActions';
+import { useReport } from '../../components/report/useReport';
+import { visibleProducts } from '../../lib/block/filter';
 import { useToast } from '../../components/Toast';
 import { useOnline } from '../../lib/useOnline';
 import { cheapestVariant, discountOf, money, priceRange, soldText } from '../../lib/format';
@@ -65,9 +70,22 @@ function ProductDetailView({ id }: { id: string }) {
   const signedIn = user !== null;
   useEffect(() => { if (signedIn) setSheet(null); }, [signedIn]);
 
+  // 封鎖店家（S-K11）：被封鎖店家的商品頁不渲染任何內容；取消封鎖後焦點移到商品標題
+  const [refocusTitle, setRefocusTitle] = useState(false);
+  const blockActions = useBlockActions({ onUnblocked: () => setRefocusTitle(true) });
+  const { blockedIds } = blockActions;
+  const shopBlocked = product !== undefined && blockedIds.has(product.shopId);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (refocusTitle && !shopBlocked) { titleRef.current?.focus(); setRefocusTitle(false); }
+  }, [refocusTitle, shopBlocked]);
+  const report = useReport();
+
+  // 同類商品不含被封鎖店家（R-K12）
   const related = useMemo(
-    () => products.filter(p => p.id !== id && p.status === 'active' && p.categoryId === product?.categoryId).slice(0, 10),
-    [products, id, product?.categoryId],
+    () => visibleProducts(products, blockedIds)
+      .filter(p => p.id !== id && p.status === 'active' && p.categoryId === product?.categoryId).slice(0, 10),
+    [products, blockedIds, id, product?.categoryId],
   );
 
   if (!product || product.status !== 'active') {
@@ -80,6 +98,15 @@ function ProductDetailView({ id }: { id: string }) {
   }
 
   const shop = getShop(product.shopId);
+  if (shopBlocked) {
+    const name = shop?.name ?? blockActions.shops.find(s => s.id === product.shopId)?.name ?? '這家店';
+    return (
+      <BlockedShopPanel
+        variant="page" shopName={name} titleRef={titleRef}
+        onUnblock={() => blockActions.unblockShop({ id: product.shopId, name })}
+      />
+    );
+  }
   const variant = product.variants.find(v => v.id === variantId);
   const shown = variant ?? cheapestVariant(product.variants); // 未選規格時以最低價那個為準
   const discount = discountOf(shown);
@@ -229,7 +256,7 @@ function ProductDetailView({ id }: { id: string }) {
 
         {/* 資訊：標題 → 店名 → 價格 → 運費 → 資訊條（R5：價格最粗、已售同列、運費緊貼價格、賣家露臉） */}
         <div className="min-w-0 px-5 pt-4 md:px-0 md:pt-0">
-          <h1 className="text-title3 font-bold text-ink">{product.title}</h1>
+          <h1 ref={titleRef} tabIndex={-1} className="text-title3 font-bold text-ink outline-none">{product.title}</h1>
           <p className="mt-1 text-subhead text-muted">
             {/* 行內連結的熱區撐到 44 高；負 margin 抵銷，不影響行高與版面 */}
             {shop && <><Link to={`/shop/${shop.id}`} className="-mx-2 -my-3 inline-flex min-h-11 items-center px-2 text-brand">{shop.name}</Link>・</>}
@@ -335,6 +362,13 @@ function ProductDetailView({ id }: { id: string }) {
         </>
       )}
 
+      <div className="px-5 md:px-0">
+        <ReportLink
+          label="檢舉這件商品" className="-ml-2"
+          onClick={() => report.open({ type: 'product', id: product.id, subject: product.title })}
+        />
+      </div>
+
       <ProductReviewsSection productId={product.id} />
 
       {related.length > 0 && (
@@ -403,6 +437,7 @@ function ProductDetailView({ id }: { id: string }) {
           </div>
         </div>
       )}
+      {report.sheet}
     </div>
   );
 }

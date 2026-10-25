@@ -10,6 +10,7 @@ import ReviewCard from './ReviewCard';
 import { StarsAvg } from './Stars';
 import { InlineError, ReviewSkeleton } from './states';
 import { useLightbox } from './useLightbox';
+import { useReport } from '../report/useReport';
 
 const PREVIEW = 3;
 
@@ -19,6 +20,7 @@ export default function ProductReviewsSection({ productId }: { productId: string
   const [data, setData] = useState<PublicReviewList | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const lightbox = useLightbox();
+  const report = useReport();
 
   const load = useCallback(async () => {
     setState('loading');
@@ -78,7 +80,10 @@ export default function ProductReviewsSection({ productId }: { productId: string
         {state === 'ready' && data && total > 0 && (
           <>
             <div className="divide-y divide-line">
-              {data.reviews.map(r => <ReviewCard key={r.id} review={r} clamp onOpenPhoto={(p, i, el) => lightbox.open(p, i, el)} />)}
+              {data.reviews.map(r => <ReviewCard
+                key={r.id} review={r} clamp onOpenPhoto={(p, i, el) => lightbox.open(p, i, el)}
+                onReport={rv => report.open({ type: 'review', id: rv.id, subject: `${rv.display_name} 的評價` })}
+              />)}
             </div>
             {total > PREVIEW && (
               <div className="md:hidden">
@@ -89,6 +94,7 @@ export default function ProductReviewsSection({ productId }: { productId: string
         )}
       </div>
       {lightbox.element}
+      {report.sheet}
     </section>
   );
 }

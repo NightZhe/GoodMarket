@@ -8,6 +8,8 @@ import ShopPage from './ShopPage';
 vi.mock('../../store/StoreContext', () => ({
   useStore: () => ({ products: [], shops: [], getShop: () => undefined }),
 }));
+// ShopPage 引入檢舉流程 → AuthContext（載入時會讀 window.location）；這裡是 node 環境，只驗找不到店的畫面，不需要真的登入狀態
+vi.mock('../../store/AuthContext', () => ({ useAuth: () => ({ openLogin: () => {} }) }));
 vi.mock('../../store/ReviewsContext', () => ({
   useReviews: () => ({ productStat: () => undefined, shopStat: () => undefined, summaryState: 'ready' }),
 }));
