@@ -5,7 +5,7 @@ export const BUYER_KEY = 'goodmarket_buyer';
 
 /** 隱私政策與帳號頁的聯絡信箱（使用者確認，會公開顯示） */
 export const CONTACT_EMAIL = 'zerozhe588@gmail.com';
-/** 隱私政策生效日期＝**merge 當天**（使用者 2026-10-25 拍板）：merge 前最後一個 commit 把這個值填成實際日期；修訂紀錄的最新一筆用它，舊的修訂各自有固定日期常數（Privacy.tsx），不會跟著變 */
+/** 隱私政策生效日期＝推前端那天（store-prereqs 於 2026-10-26 merge）；每次修訂政策時改成 merge 當天。修訂紀錄的最新一筆用它，舊的修訂各自有固定日期常數（Privacy.tsx），不會跟著變 */
 export const PRIVACY_EFFECTIVE = '2026/10/26';
 /** 隱私政策第一版發佈日（Google、Apple 登入），修訂紀錄最後一筆；不會再變 */
 export const PRIVACY_FIRST_PUBLISHED = '2026/10/17';
