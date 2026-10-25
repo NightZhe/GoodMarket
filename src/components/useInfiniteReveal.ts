@@ -68,9 +68,7 @@ export function useInfiniteReveal<T>(items: T[], memoryKey: string) {
     if (!observable || !el || !more) return;
     const io = new IntersectionObserver(
       entries => {
-        if (entries.some(e => e.isIntersecting)) {
-          setState(s => ({ loc: s.loc, want: nextShown(total, Math.min(s.want, total)) }));
-        }
+        if (entries.some(e => e.isIntersecting)) setState(grow(total));
       },
       { rootMargin: '100% 0px 100% 0px' },
     );
@@ -87,10 +85,13 @@ export function useInfiniteReveal<T>(items: T[], memoryKey: string) {
     showBackToTop: showBackToTop(total, shown),
     /** 沒有 IntersectionObserver 時退回「顯示更多商品」按鈕 */
     showFallback: !observable && more,
-    showMore: () => setState(s => ({ loc: s.loc, want: nextShown(total, Math.min(s.want, total)) })),
+    showMore: () => setState(grow(total)),
     backToTop: scrollPageToTop,
   };
 }
+
+/** 多畫一批：從目前畫出的件數（不超過總件數）往上加，保留所屬導覽 */
+const grow = (total: number) => (s: RevealState): RevealState => ({ loc: s.loc, want: nextShown(total, Math.min(s.want, total)) });
 
 interface Memory { shown?: number; scrollY?: number }
 

@@ -8,7 +8,7 @@ import { orderCategories } from '../../lib/home/categoryOrder';
 import ProductCard from '../../components/ProductCard';
 import EmptyState from '../../components/EmptyState';
 import { pillButton } from '../../components/pillButton';
-import { BackToTopButton, MoreButton } from '../../components/RevealFooter';
+import { RevealFooter } from '../../components/RevealFooter';
 import { useInfiniteReveal } from '../../components/useInfiniteReveal';
 import { browseRevealKey } from '../../lib/ui/revealPolicy';
 import { cheapestVariant, discountOf } from '../../lib/format';
@@ -181,9 +181,7 @@ export default function Search() {
             <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 @max-[15rem]:grid-cols-1 md:grid-cols-4 md:px-0 lg:grid-cols-5">
               {reveal.visible.map(p => <ProductCard key={p.id} product={p} />)}
             </div>
-            <div ref={reveal.sentinelRef} aria-hidden="true" />
-            {reveal.showFallback && <MoreButton onClick={reveal.showMore} />}
-            {reveal.showBackToTop && <BackToTopButton onClick={reveal.backToTop} />}
+            <RevealFooter reveal={reveal} />
           </div>
         )}
       </section>

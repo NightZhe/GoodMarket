@@ -12,7 +12,7 @@ import PricePill from '../../components/PricePill';
 import SectionHeader from '../../components/SectionHeader';
 import Shelf from '../../components/Shelf';
 import { pillButton } from '../../components/pillButton';
-import { BackToTopButton, MoreButton } from '../../components/RevealFooter';
+import { RevealFooter } from '../../components/RevealFooter';
 import { useInfiniteReveal } from '../../components/useInfiniteReveal';
 import { HOME_REVEAL_KEY } from '../../lib/ui/revealPolicy';
 import EmptyState from '../../components/EmptyState';
@@ -93,9 +93,7 @@ export default function Home() {
           {reveal.visible.map(p => <ProductCard key={p.id} product={p} />)}
         </div>
       </div>
-      <div ref={reveal.sentinelRef} aria-hidden="true" />
-      {reveal.showFallback && <MoreButton onClick={reveal.showMore} />}
-      {reveal.showBackToTop && <BackToTopButton onClick={reveal.backToTop} />}
+      <RevealFooter reveal={reveal} />
     </div>
   );
 }
