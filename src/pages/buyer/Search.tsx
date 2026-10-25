@@ -5,9 +5,14 @@ import { useStore } from '../../store/StoreContext';
 import { CATEGORIES } from '../../data/seed';
 import { CategoryIcon } from '../../data/categoryIcons';
 import { orderCategories } from '../../lib/home/categoryOrder';
+import { visibleProducts } from '../../lib/block/filter';
+import { useBlockedShops } from '../../lib/block/useBlockedShops';
 import ProductCard from '../../components/ProductCard';
 import EmptyState from '../../components/EmptyState';
 import { pillButton } from '../../components/pillButton';
+import { RevealFooter } from '../../components/RevealFooter';
+import { useInfiniteReveal } from '../../components/useInfiniteReveal';
+import { browseRevealKey } from '../../lib/ui/revealPolicy';
 import { cheapestVariant, discountOf } from '../../lib/format';
 import type { Product } from '../../types';
 
@@ -24,7 +29,10 @@ const pillCls = (on: boolean) =>
   }`;
 
 export default function Search() {
-  const { products, shops } = useStore();
+  const { products: allProducts, shops } = useStore();
+  const { blockedIds } = useBlockedShops();
+  // 被封鎖店家的商品不出現在結果、分類計數裡（R-K12）
+  const products = useMemo(() => visibleProducts(allProducts, blockedIds), [allProducts, blockedIds]);
   const [params, setParams] = useSearchParams();
   const q = params.get('q')?.trim() ?? '';
   const cat = params.get('cat') ?? '';
@@ -46,16 +54,20 @@ export default function Search() {
     setParams(next, { replace: true });
   };
 
-  const results = useMemo(() => {
+  const matches = useMemo(() => {
     const kw = q.toLowerCase();
-    const list = products.filter(p => {
+    return (p: Product) => {
       if (p.status !== 'active') return false;
       if (cat && p.categoryId !== cat) return false;
       if (free && !p.freeShipping) return false;
       if (!kw) return true;
       const shopName = shops.find(s => s.id === p.shopId)?.name ?? '';
       return `${p.title} ${p.description} ${shopName}`.toLowerCase().includes(kw);
-    });
+    };
+  }, [shops, q, cat, free]);
+
+  const results = useMemo(() => {
+    const list = products.filter(matches);
     const by: Record<Sort, (a: Product, b: Product) => number> = {
       // 綜合只看銷量（決策 A-6）：舊的「銷量 × 評分」用的是從來沒更新過的假評分，改用真實評價後不再乘評分
       relevance: (a, b) => b.sold - a.sold,
@@ -66,7 +78,16 @@ export default function Search() {
       discount: (a, b) => discountOf(cheapestVariant(b.variants)) - discountOf(cheapestVariant(a.variants)),
     };
     return list.sort(by[sort]);
-  }, [products, shops, q, cat, sort, free]);
+  }, [products, matches, sort]);
+
+  // 結果被濾光時，告訴使用者是封鎖的關係（不然封鎖後忘記，再搜那家店會以為搜尋壞了）
+  const hiddenCount = useMemo(
+    () => (blockedIds.size === 0 ? 0 : allProducts.filter(p => blockedIds.has(p.shopId) && matches(p)).length),
+    [allProducts, blockedIds, matches],
+  );
+
+  // 結果太多時分批畫；記憶 key 跟著四個篩選條件走，任一變動就回第一批
+  const reveal = useInfiniteReveal(results, browseRevealKey({ q, cat, sort, free }));
 
   const sortBtn = (value: Sort, label: string) => (
     <button
@@ -168,13 +189,20 @@ export default function Search() {
         {results.length === 0 ? (
           <EmptyState
             title={empty}
-            action={hasCondition ? <Link to="/search" className={pillButton}>看全部商品</Link> : undefined}
+            description={hiddenCount > 0 ? `有 ${hiddenCount} 件商品來自你封鎖的店家，所以沒有顯示。` : undefined}
+            action={hasCondition || hiddenCount > 0 ? (
+              <div className="flex flex-wrap justify-center gap-3">
+                {hiddenCount > 0 && <Link to="/account/blocked" className={pillButton}>管理已封鎖的店家</Link>}
+                {hasCondition && <Link to="/search" className={pillButton}>看全部商品</Link>}
+              </div>
+            ) : undefined}
           />
         ) : (
           <div className="@container">
             <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 @max-[15rem]:grid-cols-1 md:grid-cols-4 md:px-0 lg:grid-cols-5">
-              {results.map(p => <ProductCard key={p.id} product={p} />)}
+              {reveal.visible.map(p => <ProductCard key={p.id} product={p} />)}
             </div>
+            <RevealFooter reveal={reveal} />
           </div>
         )}
       </section>

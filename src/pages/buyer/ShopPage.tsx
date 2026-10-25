@@ -1,4 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { Ban } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import ProductCard from '../../components/ProductCard';
 import EmptyState from '../../components/EmptyState';
@@ -7,11 +9,16 @@ import LetterAvatar from '../../components/LetterAvatar';
 import SectionHeader from '../../components/SectionHeader';
 import { ratingText } from '../../lib/reviews/format';
 import { useReviews } from '../../store/ReviewsContext';
+import BlockedShopPanel from '../../components/report/BlockedShopPanel';
+import ReportLink from '../../components/report/ReportLink';
+import { useBlockActions } from '../../components/report/useBlockActions';
+import { useReport } from '../../components/report/useReport';
+import { textActionCls } from '../../components/account/ui';
+import type { Shop } from '../../types';
 
 export default function ShopPage() {
   const { id = '' } = useParams();
-  const { getShop, products } = useStore();
-  const { shopStat, summaryState } = useReviews();
+  const { getShop } = useStore();
   const shop = getShop(id);
   if (!shop) {
     return (
@@ -20,6 +27,27 @@ export default function ShopPage() {
       </div>
     );
   }
+  return <ShopView key={shop.id} shop={shop} />;
+}
+
+function ShopView({ shop }: { shop: Shop }) {
+  const id = shop.id;
+  const { products, myShop } = useStore();
+  const { shopStat, summaryState } = useReviews();
+  // 封鎖後焦點：觸發鈕「封鎖此店家」消失了 → 移到「你已封鎖這家店」；取消封鎖後 → 回到重新出現的「封鎖此店家」
+  const [refocus, setRefocus] = useState<'panel' | 'block' | null>(null);
+  const blockActions = useBlockActions({ onBlocked: () => setRefocus('panel'), onUnblocked: () => setRefocus('block') });
+  const blocked = blockActions.isBlocked(id);
+  const isOwnShop = myShop?.id === id;
+  const canBlock = !isOwnShop && !blocked;
+  const panelRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (refocus === 'panel' && blocked) panelRef.current?.focus();
+    else if (refocus === 'block' && !blocked) document.getElementById('shop-block-btn')?.focus();
+    else return;
+    setRefocus(null);
+  }, [refocus, blocked]);
+  const report = useReport({ onBlockShop: canBlock ? () => blockActions.ask(shop) : undefined });
   const list = products.filter(p => p.shopId === id && p.status === 'active');
   const stat = shopStat(id);
   // 沒有評價才寫「尚無」；資料還沒回來或載入失敗時寫「–」，不對有評價的店說謊
@@ -41,9 +69,19 @@ export default function ShopPage() {
           <Stat label="加入" value={new Date(shop.joinedAt).getFullYear() + ' 年'} />
         </dl>
         {shop.description && <p className="mt-4 text-subhead text-muted">{shop.description}</p>}
+        <div className="-ml-2 mt-2 flex flex-wrap items-center gap-x-2">
+          <ReportLink label="檢舉這家店" onClick={() => report.open({ type: 'shop', id, subject: shop.name })} />
+          {canBlock && (
+            <button id="shop-block-btn" type="button" onClick={() => blockActions.ask(shop)} className={`${textActionCls} gap-1.5 text-brand`}>
+              <Ban size={16} aria-hidden="true" />封鎖此店家
+            </button>
+          )}
+        </div>
       </section>
       <SectionHeader title="所有商品" className="mx-5 mt-8 mb-3 md:mx-0" />
-      {list.length === 0 ? (
+      {blocked ? (
+        <BlockedShopPanel variant="shop" titleRef={panelRef} onUnblock={() => blockActions.unblockShop(shop)} />
+      ) : list.length === 0 ? (
         <EmptyState title="這家店還沒有上架商品" />
       ) : (
         <div className="@container">
@@ -52,6 +90,8 @@ export default function ShopPage() {
           </div>
         </div>
       )}
+      {report.sheet}
+      {blockActions.dialog}
     </div>
   );
 }

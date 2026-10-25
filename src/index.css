@@ -91,6 +91,10 @@ button:disabled { cursor: not-allowed; }
   .material-grouped { background: #f2f2f7; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 
+/* 頁面（文件）捲軸全站隱藏：只藏視覺，仍可捲動。內層捲動容器（橫滑列等）用 .no-scrollbar 各自處理 */
+html { scrollbar-width: none; }
+html::-webkit-scrollbar { display: none; }
+
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
 

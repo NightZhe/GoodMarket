@@ -66,6 +66,9 @@ bundle id／application id `io.github.nightzhe.goodmarket`。App 的更新流程
 `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`；Gradle 會自動補 SDK，不需 Android Studio）。
 App 內 Google／Apple 登入走系統瀏覽器視圖＋自訂 scheme 回跳（`src/lib/native/`；Supabase Redirect URLs 已加 `io.github.nightzhe.goodmarket://auth`），原生外掛只在 App 內動態載入，網頁 bundle 不受影響。
 殼專用樣式 `src/native.css` 只在 `html.native` 生效：買家前台改版後自己處理安全區，殼只補賣家中心（`header.sticky.top-0`）與賣家登入頁。
+**審查員登入深連結**（PR #11，2026-10-26 合併）：`io.github.nightzhe.goodmarket://review-login` 冷啟動直達 `#/review-login`（`src/lib/native/deeplink.ts`，一般 `://<路由>` 都接、`://auth` 留給登入回跳）。
+**WebView hostname 是 `nightzhe.github.io`**（`capacitor.config.ts` `server.hostname`）：Capacitor 預設 localhost 不在 Cloudflare Turnstile 允許網域（110200），改成正式站網域後 App 內簡訊登入與審查員登入的安全驗證才載得起來；Android 模擬器 Turnstile 回 600010（疑似機器人）要真機驗。
+審查備註草稿 `.work/app-shell/review-notes.md`。
 **尚未上架**，第一版還要做（見 `decisions.md` D-7～D-11）：原生 Sign in with Apple（Supabase Apple provider 的 Client IDs 要把 bundle id 加在 Services ID 後面）、分享面板、觸覺回饋、App icon／啟動畫面、
 **帳號刪除 App 內入口（Apple 5.1.1(v) 硬門檻，10/18 拿掉的區塊要加回，可人工處理但不能只叫人寄信）**、檢舉／封鎖（Apple 1.2，待拍板）、審查用賣家示範帳號（待拍板）、App Privacy／Data safety 填寫。
 使用者側前置（Google Play 帳號、App ID、Play 簽章、商店圖文）見 `prereqs-user.md`。
