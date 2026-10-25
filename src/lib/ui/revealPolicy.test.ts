@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOME_REVEAL_KEY, REVEAL_BATCH, browseRevealKey, hasMore, initialShown, nextShown, showBackToTop } from './revealPolicy';
+import { HOME_REVEAL_KEY, REVEAL_BATCH, browseRevealKey, hasMore, initialShown, nextShown, showBackToTop, syncReveal } from './revealPolicy';
 
 describe('每批大小', () => {
   it('24 件：手機 2 欄、桌機 4／6 欄都整除', () => {
@@ -98,5 +98,21 @@ describe('記憶 key', () => {
   it('首頁 key 與逛逛任何 key 都不同', () => {
     expect(HOME_REVEAL_KEY).not.toBe(browseRevealKey({}));
     expect(HOME_REVEAL_KEY).not.toBe(browseRevealKey(base));
+  });
+});
+
+describe('syncReveal：導覽（location.key）變了要不要重置件數', () => {
+  const prev = { loc: 'a', want: 96 };
+  it('導覽沒變：保留目前想畫的件數（使用者滑出來的進度）', () => {
+    expect(syncReveal(prev, 'a', 'go', 60)).toBe(prev);
+  });
+  it('前往（PUSH／REPLACE）換了導覽：回第一批，不讀記憶——就算記憶 key 沒變（逛逛再送出同樣的關鍵字）', () => {
+    expect(syncReveal(prev, 'b', 'go', 96)).toEqual({ loc: 'b', want: REVEAL_BATCH });
+  });
+  it('返回換了導覽：以記憶還原件數', () => {
+    expect(syncReveal(prev, 'b', 'back', 60)).toEqual({ loc: 'b', want: 60 });
+  });
+  it('返回但沒有記憶：第一批', () => {
+    expect(syncReveal(prev, 'b', 'back', undefined)).toEqual({ loc: 'b', want: REVEAL_BATCH });
   });
 });

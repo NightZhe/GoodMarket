@@ -20,6 +20,18 @@ export function initialShown(total: number, nav: RevealNav, remembered: number |
   return Math.min(total, want);
 }
 
+/** 無限捲動的狀態：loc＝這份狀態屬於哪一次導覽（location.key），want＝想畫幾件（不截到總件數） */
+export interface RevealState { loc: string; want: number }
+
+/**
+ * 導覽（location.key）變了才重置：返回 → 以記憶還原；前往（含逛逛再送出同樣的關鍵字、換篩選）→ 第一批。
+ * 記憶 key 只負責索引記憶，是否重置看的是導覽，所以記憶 key 沒變也會回第一批。導覽沒變就原物件回傳
+ */
+export function syncReveal(state: RevealState, loc: string, nav: RevealNav, remembered: number | undefined): RevealState {
+  if (state.loc === loc) return state;
+  return { loc, want: initialShown(Infinity, nav, remembered) };
+}
+
 /** 還有沒有下一批 */
 export function hasMore(total: number, shown: number): boolean {
   return shown < total;
