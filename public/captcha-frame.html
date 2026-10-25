@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-Hant-TW" data-mode="frame">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <!-- 只允許 Cloudflare Turnstile 的腳本與 iframe；本頁沒有其他外部資源 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'" />
+    <title>安全驗證｜好物集</title>
+    <style>
+      :root { color-scheme: light; }
+      html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+      #widget { display: block; }
+    </style>
+  </head>
+  <body>
+    <!-- App（iOS Capacitor）的登入面板把這一頁放在 iframe 裡：Turnstile 只接受 http／https 來源，WebView 自己是 capitor:// -->
+    <div id="widget"></div>
+    <script src="captcha.js" defer></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=gmOnTurnstileLoad&render=explicit" defer onerror="window.gmTurnstileScriptFailed && window.gmTurnstileScriptFailed()"></script>
+  </body>
+</html>
