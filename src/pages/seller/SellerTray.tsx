@@ -1,11 +1,12 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { GlassTray } from '../../components/glass';
 import { usePosture } from '../../lib/layout/posture';
 import { TRAY_DIMMED, TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
+import { useTrayHeightReport } from '../../lib/layout/trayReserve';
 
 /**
  * 水平姿態（直向）托盤疊在分頁膠囊正上方；側邊姿態沒有膠囊，托盤落在右半（D13）。
- * 頁面用它決定內容底部預留（--stack-clearance 或 --tray-clearance，見 trayReserve.ts）。
+ * 頁面用它決定內容底部預留（--stack-clearance 或 --tray-clearance，見 lib/layout/trayReserve.ts）。
  */
 export function useStackedTray(): boolean {
   return usePosture() === 'bottom';
@@ -18,18 +19,7 @@ export function useStackedTray(): boolean {
  */
 export function SellerTray({ label, children, onHeight }: { label: string; children: ReactNode; onHeight?: (height: number) => void }) {
   const stacked = useStackedTray();
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const reportRef = useRef(onHeight);
-  reportRef.current = onHeight;
-  useLayoutEffect(() => {
-    const tray = wrapRef.current?.firstElementChild;
-    if (!tray || !reportRef.current) return;
-    const report = () => reportRef.current?.(Math.ceil(tray.getBoundingClientRect().height));
-    report();
-    const ro = new ResizeObserver(report);
-    ro.observe(tray);
-    return () => ro.disconnect();
-  }, []);
+  const wrapRef = useTrayHeightReport(h => onHeight?.(h));
   return (
     <div ref={wrapRef} className={`md:hidden ${TRAY_DIMMED} ${stacked ? '' : TRAY_RIGHT_HALF}`}>
       <GlassTray label={label} abovePill={stacked}>{children}</GlassTray>

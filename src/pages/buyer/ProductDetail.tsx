@@ -32,6 +32,7 @@ import { reduceMotion } from '../../lib/ui/scroll';
 import type { Product } from '../../types';
 import { hapticSuccess } from '../../lib/native/haptics';
 import { isNative } from '../../lib/native/platform';
+import { trayReserveStyle } from '../../lib/layout/trayReserve';
 import { PurchaseTray } from './PurchaseTray';
 import { TWO_COLUMN_GRID, TWO_COLUMN_TOP, useTwoColumn } from './productColumns';
 
@@ -72,6 +73,7 @@ function ProductDetailView({ id }: { id: string }) {
   const [qty, setQty] = useState(restored?.qty ?? 1);
   // 'pick'：只選規格（「選擇規格」列打開），按「完成」只關面板，選擇本來就即時套用
   const [sheet, setSheet] = useState<null | 'cart' | 'buy' | 'pick'>(null);
+  const [trayHeight, setTrayHeight] = useState(0);
   const [needPick, setNeedPick] = useState(false);
   // 手機驗證不會整頁轉址：登入面板關掉後規格抽屜還開著，待辦動作（加入購物車）已經在背景完成，抽屜要跟著收起來
   const signedIn = user !== null;
@@ -374,7 +376,7 @@ function ProductDetailView({ id }: { id: string }) {
   const native = isNative();
 
   return (
-    <div ref={colsRef} className={`mx-auto pb-(--tray-clearance) md:px-4 md:pb-0 md:pt-4 ${twoColumn ? 'max-w-none' : 'max-w-6xl'}`}>
+    <div ref={colsRef} style={trayReserveStyle(false, trayHeight)} className={`mx-auto pb-(--tray-reserve) md:px-4 md:pb-0 md:pt-4 ${twoColumn ? 'max-w-none' : 'max-w-6xl'}`}>
       <AutoNoticeBanner productId={product.id} />
       {/* 已登入的人打開帶選擇的連結：不自動動作，問一次（連結是任何人都能散布的） */}
       {confirmHandoff && restored && (
@@ -434,16 +436,18 @@ function ProductDetailView({ id }: { id: string }) {
         twoColumn={twoColumn}
         soldOut={stock === 0}
         dimmed={dimmed}
+        onHeight={setTrayHeight}
         onCart={() => { if (!blocked()) setSheet('cart'); }}
         onBuy={() => { if (!blocked()) setSheet('buy'); }}
       />
 
       {sheet && (
-        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="選擇規格與數量">
+        <div className="fixed inset-0 z-50 flex items-end justify-center pl-(--inset-l) pr-(--inset-r) md:hidden" role="dialog" aria-modal="true" aria-label="選擇規格與數量">
           <div className="animate-fade absolute inset-0 bg-black/45" onClick={() => setSheet(null)} />
           {/* 曲線照 §3.7（.32,.72,0,1／280ms）；減少動態時改 150ms 淡入 */}
+          {/* 容器吃左右安全區（側邊姿態時系統欄那側＝軌欄寬）：面板與面板內的鈕不進系統欄、不被相機蓋住，外蓋也一樣（QA1 B1）。橫向右緣已由容器的 pr 讓出，fold-panel 靠右時不再加一次（landscape:mr-0）；遮罩仍蓋全螢幕。 */}
           {/* fold-panel（D13）：直向只佔下半、超過時面板內捲動；橫向只佔右半。限高全由 .fold-panel 管（components 層），這裡不能再放 max-h-*：utilities 層的值會蓋掉它的直向下半限高 */}
-          <div className="fold-panel pb-safe absolute inset-x-0 bottom-0 overflow-y-auto rounded-t-story bg-white animate-sheet">
+          <div className="fold-panel pb-safe relative landscape:mr-0 overflow-y-auto rounded-t-story bg-white animate-sheet">
             <div className="flex gap-3 border-b-[0.5px] border-separator p-4">
               <Photo src={variant?.image ?? product.images[0]} alt="" size="sm" className="size-20 shrink-0" />
               <div className="flex flex-1 flex-col justify-end">

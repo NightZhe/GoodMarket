@@ -7,7 +7,7 @@ import Switch from '../../../components/import/Switch';
 import { btnOutline, btnPrimaryLg } from '../../../components/import/ui';
 import { TrayButton } from '../../../components/glass';
 import { SellerTray, useStackedTray } from '../SellerTray';
-import { trayReserve } from '../trayReserve';
+import { trayReserve } from '../../../lib/layout/trayReserve';
 import { ALL_KINDS } from '../../../lib/shopee-import/constants';
 import type { ShopeeImportLib } from '../../../lib/import/loader';
 import { matchResume } from '../../../lib/import/resume';

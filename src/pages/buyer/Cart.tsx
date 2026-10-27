@@ -15,6 +15,7 @@ import { GlassTray, TrayButton } from '../../components/glass';
 import { money } from '../../lib/format';
 import type { CartItem } from '../../types';
 import { TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
+import { trayReserveStyle, useTrayHeightReport } from '../../lib/layout/trayReserve';
 
 const keyOf = (c: Pick<CartItem, 'productId' | 'variantId'>) => `${c.productId}|${c.variantId}`;
 
@@ -72,6 +73,8 @@ function CartView() {
   const [priceCheck] = useState(() => readPriceCheckState(location.state));
   const [selected, setSelected] = useState<Set<string>>(() => new Set(defaultSelected(cart.map(keyOf), priceCheck)));
   const [retrying, setRetrying] = useState(false);
+  const [trayHeight, setTrayHeight] = useState(0);
+  const trayRef = useTrayHeightReport(setTrayHeight);
 
   // 別台裝置改了購物車、這裡背景重讀後有變：畫面已經會更新，另外對讀屏宣告一聲（只在進頁之後發生的變動）
   const firstTick = useRef(cartUpdateTick);
@@ -185,7 +188,7 @@ function CartView() {
   const allOn = allKeys.every(k => selected.has(k));
 
   return (
-    <div className="mx-auto max-w-[600px] pb-(--tray-clearance) md:max-w-6xl md:px-4 md:pt-6 lg:pb-10">
+    <div style={trayReserveStyle(false, trayHeight)} className="mx-auto max-w-[600px] pb-(--tray-reserve) md:max-w-6xl md:px-4 md:pt-6 lg:pb-10">
       {liveRegion}
       <h1 className="hidden text-xl font-medium md:block">購物車</h1>
 
@@ -324,7 +327,7 @@ function CartView() {
       </div>
 
       {/* 手機：底部懸浮結帳托盤（C5）。桌機（lg 以上）用右側訂單摘要卡 */}
-      <div className={`lg:hidden ${TRAY_RIGHT_HALF}`}>
+      <div ref={trayRef} className={`lg:hidden ${TRAY_RIGHT_HALF}`}>
         <GlassTray label="結帳" variant="checkout">
           {/* 全選與總金額合成一格橫跨前兩欄：文字放大到放不下時它們自己換行，按鈕留在右側不被擠出托盤 */}
           <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-between gap-x-2">

@@ -128,7 +128,7 @@ button:disabled { cursor: not-allowed; }
   --pill-h: 62px;
   --tray-h: 64px;
   --pill-clearance: calc(var(--pill-h) + var(--tp-bottom) + 16px); /* 內容底部預留：膠囊高＋底距＋16（內直 120） */
-  --tray-clearance: calc(var(--tray-h) + var(--tp-bottom) + 16px); /* 托盤版（購物車等頁）122 */
+  --tray-clearance: calc(var(--tray-h) + var(--tp-bottom) + 16px); /* 托盤版（購物車等頁）122；托盤實際比 --tray-h 高（文字放大換行）時，頁面用 lib/layout/trayReserve 補上多出的高度 */
   --stack-clearance: calc(var(--tray-h) + 8px + var(--pill-h) + var(--tp-bottom) + 16px); /* 托盤疊在膠囊上（賣家新增商品直向）192 */
   --tabs-clearance: var(--pill-clearance); /* 有分頁導覽的頁，內容底部預留 */
   --inset-l: env(safe-area-inset-left); /* 內容欄左右內縮：side 姿態時系統欄那一側換成軌欄寬 */

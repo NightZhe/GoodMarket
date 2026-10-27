@@ -13,7 +13,7 @@ type Common = {
 };
 
 type Props = Common & (
-  /** 工具組（上方）：children 放 GlassButton，由上而下。順序由呼叫端決定（C1：返回 → 購物車 → 分享；賣家：只有一顆「回到買家首頁」）。永不壓縮 */
+  /** 工具組（上方，有名稱的 <nav>）：children 放 GlassButton，由上而下。順序由呼叫端決定（C1：返回 → 購物車 → 分享；賣家：只有一顆「回到買家首頁」）。永不壓縮 */
   | { children: ReactNode; tabs?: never }
   /** 分頁組（下方）：5 格（買家、賣家同一份）。層級 L0／L1／L2 依可用高度自動選，呼叫端不必管 */
   | { tabs: TabItem[]; children?: never }
@@ -27,7 +27,7 @@ const LABEL_ROOM = RAIL_CAP_W - 8;
  * 中間的空白是畫面本身。兩者各自掛在 DOM 該在的位置（工具組在頁首、分頁組在最後），VoiceOver 順序不因姿態改變。
  * 軌在系統欄同一側（data-bars 決定左右）；起點與底緣依姿態實測，數字在 index.css 的 html[data-rail]（外螢幕三姿態不同，X9）。
  * 只在側邊姿態出現；bottom 姿態自己回傳 null（改由 TabPill／各頁自己的位置負責）。
- * 工具組是 role="group"，分頁組是 <nav>；分頁組高度不夠時 L0（圖示＋標籤）→ L1（純圖示）→ L2（一顆「目前分頁」鈕，點開成 L1 浮層）。
+ * 工具組與分頁組各是一個有名稱的 <nav>（AC-15：沒有分頁組的第二層頁，控制欄也要是導覽區域）；分頁組高度不夠時 L0（圖示＋標籤）→ L1（純圖示）→ L2（一顆「目前分頁」鈕，點開成 L1 浮層）。
  */
 export function GlassCapsule(props: Props) {
   if (usePosture() === 'bottom') return null;
@@ -37,7 +37,7 @@ export function GlassCapsule(props: Props) {
 }
 
 function ToolsBody({ label, children }: { label: string; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
   // 把自己的高度報給分頁組（它要扣掉才知道自己有多少高度）
   useLayoutEffect(() => {
     const el = ref.current;
@@ -50,7 +50,7 @@ function ToolsBody({ label, children }: { label: string; children: ReactNode }) 
   }, []);
   // 只有一顆（例如首頁購物車）時外殼是 48×48 圓，不是 48×56 膠囊（X11）
   const solo = Children.toArray(children).length === 1;
-  return <div ref={ref} role="group" aria-label={label} className={`glass glass-capsule glass-capsule--tools ${solo ? 'glass-capsule--solo' : ''}`}>{children}</div>;
+  return <nav ref={ref} aria-label={label} className={`glass glass-capsule glass-capsule--tools ${solo ? 'glass-capsule--solo' : ''}`}>{children}</nav>;
 }
 
 function TabsBody({ label, tabs }: { label: string; tabs: TabItem[] }) {
