@@ -4,6 +4,9 @@ import { isNative } from '../../lib/native/platform';
 /** 兩欄的內容寬門檻（design-spec §5.2）：右欄至少約 340，才放得下資訊條三格和兩顆購買鈕。推估，T0 量到後以實測為準 */
 export const TWO_COLUMN_MIN_CONTENT = 720;
 
+/** 兩欄時的格線 class（欄界對齊折線：左欄寬＝50vw－中線帶半寬－左內縮，欄距＝中線帶）。商品頁與它的載入骨架共用，載入完不跳版 */
+export const TWO_COLUMN_GRID = 'grid-cols-[calc(50vw-var(--midline-half)-var(--inset-l))_minmax(0,1fr)] gap-x-(--midline-band) pt-5';
+
 /** 商品頁兩欄規則（Q3）：內容寬 ≥ 720 而且視窗寬 > 高。內容寬＝視窗寬扣掉左右內縮（側邊姿態含軌欄） */
 export function isTwoColumn(contentWidth: number, viewport: { width: number; height: number }): boolean {
   return contentWidth >= TWO_COLUMN_MIN_CONTENT && viewport.width > viewport.height;

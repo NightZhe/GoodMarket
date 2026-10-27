@@ -14,7 +14,7 @@ import { scrollPageToTop } from '../../lib/ui/scroll';
 import { usePosture } from '../../lib/layout/posture';
 import { CountBadge, GlassButton, GlassCapsule, TabPill, type TabItem } from '../../components/glass';
 import { PurchaseTray } from './PurchaseTray';
-import { useTwoColumn } from './productColumns';
+import { TWO_COLUMN_GRID, useTwoColumn } from './productColumns';
 
 export default function BuyerLayout() {
   const { cartCount, loading, loadError, reload } = useStore();
@@ -91,14 +91,15 @@ export default function BuyerLayout() {
 
       {header.kind === 'nav' && side && (
         header.title
-          ? <h1 className="mx-auto flex h-11 w-full max-w-6xl items-center px-5 text-headline font-semibold text-ink">{header.title}</h1>
+          // 頁面自己有 h1 時（結帳成功態的「訂單成立！」）整列藏起來，避免同頁兩個 h1；結帳頁自己的 h1 不帶 hidden，購物車桌機用的 h1 在 App 內是 display:none（帶 hidden）不算
+          ? <h1 className="mx-auto flex h-11 w-full max-w-6xl items-center px-5 text-headline font-semibold text-ink [&:has(~main_h1:not(.hidden))]:hidden">{header.title}</h1>
           : <div aria-hidden="true" className="h-3 shrink-0" />
       )}
 
       {showNavBar && header.kind === 'nav' && (
-        // 背景全幅（負 margin 拉進左右安全區再用 padding 補回），內容仍在安全區內
-        <header className={`${material} sticky top-[env(safe-area-inset-top)] z-40 -ml-(--inset-l) -mr-(--inset-r) pl-(--inset-l) pr-(--inset-r)`}>
-          <div className="mx-auto flex h-11 max-w-6xl items-center justify-between pl-2 pr-1.5 md:px-5">
+        // 背景全幅（負 margin 拉進左右安全區再用 padding 補回），內容左右留 max(8, 安全區)（design-spec §3.4）
+        <header className={`${material} sticky top-[env(safe-area-inset-top)] z-40 -ml-(--inset-l) -mr-(--inset-r) pl-[max(8px,var(--inset-l))] pr-[max(8px,var(--inset-r))] md:pl-(--inset-l) md:pr-(--inset-r)`}>
+          <div className="mx-auto flex h-11 max-w-6xl items-center justify-between md:px-5">
             <Link to={header.back.to} aria-label={`返回${header.back.label}`} className={`${PRESS_FADE} -ml-1 flex h-11 items-center pr-3 text-body text-brand`}>
               <ChevronLeft size={28} strokeWidth={2.4} aria-hidden="true" />
               {header.back.label}
@@ -387,10 +388,10 @@ function ProductSkeleton() {
     <div ref={colsRef} className={`mx-auto pb-(--tray-clearance) md:px-4 md:pb-0 md:pt-4 ${twoColumn ? 'max-w-none' : 'max-w-6xl'}`}>
       <div
         role="status"
-        className={`grid items-start md:grid-cols-[450px_1fr] md:gap-8 ${twoColumn ? 'grid-cols-[calc(50vw-var(--midline-half)-var(--inset-l))_minmax(0,1fr)] gap-x-(--midline-band) pt-5' : 'grid-cols-[minmax(0,1fr)]'}`}
+        className={`grid items-start md:grid-cols-[450px_1fr] md:gap-8 ${twoColumn ? TWO_COLUMN_GRID : 'grid-cols-[minmax(0,1fr)]'}`}
       >
         <span className="sr-only">載入中</span>
-        <div aria-hidden="true" className={`px-5 md:px-0 md:pt-0 ${twoColumn ? 'pt-5' : 'pt-1'}`}>
+        <div aria-hidden="true" className={`px-5 md:px-0 md:pt-0 ${twoColumn ? '' : 'pt-1'}`}>
           <div className="aspect-square w-75 max-w-full rounded-story bg-canvas md:w-full" />
         </div>
         <div aria-hidden="true" className={`px-5 md:px-0 md:pt-0 ${twoColumn ? '' : 'pt-4'}`}>
