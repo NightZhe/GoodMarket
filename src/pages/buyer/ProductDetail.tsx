@@ -442,8 +442,8 @@ function ProductDetailView({ id }: { id: string }) {
         <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="選擇規格與數量">
           <div className="animate-fade absolute inset-0 bg-black/45" onClick={() => setSheet(null)} />
           {/* 曲線照 §3.7（.32,.72,0,1／280ms）；減少動態時改 150ms 淡入 */}
-          {/* fold-panel（D13）：直向只佔下半、超過時面板內捲動；橫向只佔右半。直向時它的 max-height 要讓給 .fold-panel，所以這裡的 80dvh 在 ≥620 直向取消 */}
-          <div className="fold-panel pb-safe absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-story bg-white animate-sheet min-[620px]:portrait:max-h-none">
+          {/* fold-panel（D13）：直向只佔下半、超過時面板內捲動；橫向只佔右半。限高全由 .fold-panel 管（components 層），這裡不能再放 max-h-*：utilities 層的值會蓋掉它的直向下半限高 */}
+          <div className="fold-panel pb-safe absolute inset-x-0 bottom-0 overflow-y-auto rounded-t-story bg-white animate-sheet">
             <div className="flex gap-3 border-b-[0.5px] border-separator p-4">
               <Photo src={variant?.image ?? product.images[0]} alt="" size="sm" className="size-20 shrink-0" />
               <div className="flex flex-1 flex-col justify-end">

@@ -12,6 +12,8 @@ import {
 } from '../../lib/account/priceCheck';
 import type { CheckoutRejection } from '../../types';
 import { hapticError } from '../../lib/native/haptics';
+import { GlassTray, TrayButton } from '../glass';
+import { TRAY_RIGHT_HALF } from '../../pages/buyer/trayPlacement';
 
 interface Props {
   changes: CheckoutRejection[];
@@ -26,7 +28,6 @@ interface Props {
 
 const footPrimary = `${btnPrimary} ${pressCls} h-12 w-full text-base lg:h-11 lg:w-auto lg:min-w-44 lg:text-sm`;
 const footSecondary = `${btnOutline} ${pressCls} h-12 w-full text-base lg:h-11 lg:w-auto lg:min-w-32 lg:text-sm`;
-const barPrimary = `${btnPrimary} ${pressCls} h-12 w-full text-base`;
 
 /** 「原本 $X」一行（muted）＋「現在 $Y」一行（粗體 ink），標籤跟在「現在」後面 */
 function TwoLine({ seen, current, tag }: { seen: number; current: number; tag?: ReactNode }) {
@@ -102,7 +103,7 @@ export default function CheckoutRejected({ changes, fromCart, shopOrder, submitt
 
   return (
     <>
-      <div className="mx-auto max-w-lg px-3 pt-3 pb-28 md:pt-12 lg:pb-12 max-[319px]:px-0 max-[319px]:pt-0 max-[319px]:pb-0">
+      <div className="mx-auto max-w-lg px-3 pt-3 pb-(--tray-clearance) md:pt-12 lg:pb-12 max-[319px]:px-0 max-[319px]:pt-0 max-[319px]:pb-0">
         <div className="rounded-md bg-white max-[319px]:rounded-none">
           <div className="flex flex-col items-center px-5 pt-8 pb-6 text-center md:px-8 md:pt-10 max-[319px]:px-3 max-[319px]:pt-6">
             <CircleAlert size={48} strokeWidth={1.5} className="text-error-text" aria-hidden="true" />
@@ -148,11 +149,11 @@ export default function CheckoutRejected({ changes, fromCart, shopOrder, submitt
         </div>
       </div>
 
-      {/* 手機：主要按鈕固定在底部（剛才「下訂單」的位置）；188 寬（放大 200%）改回卡片內 */}
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white lg:hidden max-[319px]:hidden">
-        <div className="mx-auto max-w-lg px-4 py-3">
-          <Link to={primary.to} state={primary.state} className={barPrimary}>{primary.label}</Link>
-        </div>
+      {/* 手機：主要按鈕是底部懸浮托盤（C5，剛才「下訂單」托盤的位置）；188 寬（放大 200%）改回卡片內 */}
+      <div className={`lg:hidden max-[319px]:hidden ${TRAY_RIGHT_HALF}`}>
+        <GlassTray label="重新購買">
+          <TrayButton tone="primary" to={primary.to} state={primary.state}>{primary.label}</TrayButton>
+        </GlassTray>
       </div>
     </>
   );

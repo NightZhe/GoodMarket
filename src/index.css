@@ -193,8 +193,12 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
   }
   @media (min-width: 760px) and (orientation: landscape) {
     .fold-panel { margin-left: auto; margin-right: var(--inset-r); width: calc(50vw - var(--midline-half) - var(--inset-r)); }
-    /* 底部托盤落在右半：把內容欄左緣挪到右半的中線帶外緣，托盤自己置中在剩下的右半 */
-    .fold-tray { --inset-l: calc(50vw + var(--midline-half)); }
+    /* 底部托盤落在右半：把內容欄左緣挪到右半的中線帶外緣再內縮 20，右緣（軌欄左側）也內縮 20（design-spec §6.2：右頁 519.5→847），
+       托盤自己置中在剩下的右半。右緣不能改 --inset-r（自己引用自己會失效），所以直接推 .glass-tray 的 right；
+       最大寬再扣掉這 20，結帳托盤在內橫算出 311.5（不是 340） */
+    .fold-tray { --inset-l: calc(50vw + var(--midline-half) + 20px); }
+    .fold-tray .glass-tray { right: calc(var(--inset-r) + 20px); max-width: calc(100vw - var(--inset-l) - var(--inset-r) - 36px); }
+    .fold-tray .glass-tray--checkout { max-width: min(340px, calc(100vw - var(--inset-l) - var(--inset-r) - 36px)); }
   }
 
   /* 減少動態：實心白、不縮放（AC-14）。減少透明度：Safari／WKWebView 不一定認得這個 media feature（D10），認得就降級，不認得就靠 86% 白。

@@ -17,7 +17,7 @@ import { CardName } from '../../components/payment/CardLabel';
 import CardRadioList from '../../components/payment/CardRadioList';
 import PayGroup from '../../components/payment/PayGroup';
 import { BIND_RETURN_PATH } from './PaymentMethodNew';
-import { TRAY_RIGHT_HALF } from './trayPlacement';
+import { TRAY_DIMMED, TRAY_RIGHT_HALF } from './trayPlacement';
 import { EMPTY_DRAFT, normalizePhone, type AddressDraft } from '../../lib/account/address';
 import { saveAddress } from '../../lib/account/addresses';
 import { addressFromDraft, buyerOf, pickBookAddress } from '../../lib/account/checkoutAddress';
@@ -442,7 +442,7 @@ function CheckoutView() {
   const payingOnline = submitting && plan.onlineCount > 0;
 
   return (
-    <div aria-busy={submitting || undefined} className={`mx-auto max-w-6xl pb-(--stack-clearance) md:px-4 md:pt-6 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-4 lg:pb-10`}>
+    <div aria-busy={submitting || undefined} className={`mx-auto max-w-6xl pb-(--tray-clearance) md:px-4 md:pt-6 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-4 lg:pb-10`}>
       {/* 桌機：左內容 + 右側訂單摘要（手機用底部固定列） */}
       <div className="min-w-0 space-y-2 md:space-y-4">
       {reauthNotice && (
@@ -609,7 +609,7 @@ function CheckoutView() {
       </aside>
 
       {/* 手機：底部懸浮下單托盤（C5）。上一列放錯誤或「還在處理」，下一列是總付款（有貨到付款時多一行「其中貨到付款」）與下單鈕。桌機（lg 以上）用右側訂單摘要卡 */}
-      <div className={`lg:hidden ${TRAY_RIGHT_HALF}`}>
+      <div className={`lg:hidden ${TRAY_DIMMED} ${TRAY_RIGHT_HALF}`}>
         <GlassTray label="下單" variant="checkout">
           {submitError ? (
             <p role="alert" className="col-span-3 text-footnote text-error-text">{submitError}{ownShopError && <> <Link to="/cart" className="underline">回購物車</Link></>}</p>
