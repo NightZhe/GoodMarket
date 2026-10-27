@@ -72,9 +72,15 @@ describe('X11：工具組只有一顆時是 48×48 圓，多顆維持膠囊', ()
 });
 
 describe('X11：軌頂與系統島的淨距 ≥ 12（design-spec §3.2：狀態區底邊＋12）', () => {
-  // 內橫實測（decisions X11）：島下方灰點底約 98.3，取 98；--sys-status-end 預設 104 是膠囊底 103 取整
-  const INNER_LANDSCAPE_DOT_BOTTOM = 98;
   const MIN_GAP = 12;
+  // 各姿態「系統 UI 最下緣（含島下方灰點）」的實測值，來源 decisions 第七-3 節（小q 第二輪逐像素量測）。
+  // null＝該姿態在軌欄頂端沒有系統 UI，不適用淨距
+  const DOT_BOTTOM: ReadonlyArray<readonly [rail: string | null, label: string, dotBottom: number | null]> = [
+    [null, '內橫', 98.3],
+    ['outer-portrait', '外直', 150.7],
+    ['outer-landscape-primary', '外橫 primary（相機底）', 66],
+    ['outer-landscape-secondary', '外橫 secondary', null],
+  ];
 
   const statusEndOf = (rail: string | null): number => {
     const sel = rail === null ? ':root' : `html\\[data-rail='${rail}'\\]`;
@@ -92,17 +98,16 @@ describe('X11：軌頂與系統島的淨距 ≥ 12（design-spec §3.2：狀態�
     expect(railTopGap()).toBe(MIN_GAP);
   });
 
-  it.each([
-    [null, 104],
-    ['outer-portrait', 141],
-    ['outer-landscape-primary', 66],
-    ['outer-landscape-secondary', 0],
-  ])('data-rail=%s：狀態區底邊 %i，軌頂 ＝ 底邊＋12', (rail, end) => {
-    expect(statusEndOf(rail)).toBe(end);
-    expect(end + railTopGap()).toBe(end + MIN_GAP);
+  it.each(DOT_BOTTOM.filter(([, , dot]) => dot !== null))('%# data-rail=%s（%s）：軌頂 − 灰點底 %f ≥ 12', (rail, _label, dot) => {
+    expect(statusEndOf(rail) + railTopGap() - (dot as number)).toBeGreaterThanOrEqual(MIN_GAP);
   });
 
-  it('內橫：軌頂 116 − 灰點底 98 ≥ 12', () => {
-    expect(statusEndOf(null) + railTopGap() - INNER_LANDSCAPE_DOT_BOTTOM).toBeGreaterThanOrEqual(MIN_GAP);
+  it('外橫 secondary：欄頂沒有系統 UI，狀態區底 0、軌頂貼頂 12', () => {
+    expect(statusEndOf('outer-landscape-secondary')).toBe(0);
+    expect(statusEndOf('outer-landscape-secondary') + railTopGap()).toBe(MIN_GAP);
+  });
+
+  it('外直：狀態區底 151（含灰點）→ 軌頂 163', () => {
+    expect(statusEndOf('outer-portrait') + railTopGap()).toBe(163);
   });
 });

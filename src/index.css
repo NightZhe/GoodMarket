@@ -140,9 +140,9 @@ button:disabled { cursor: not-allowed; }
 html[data-bars='side-right'] { --rail-w: max(env(safe-area-inset-right), 68px); --inset-r: var(--rail-w); --tabs-clearance: env(safe-area-inset-bottom); }
 html[data-bars='side-left'] { --rail-w: max(env(safe-area-inset-left), 68px); --inset-l: var(--rail-w); --tabs-clearance: env(safe-area-inset-bottom); }
 /* 軌的版型（lib/layout/posture.ts 的 classifyRail 寫入）。數字是 T0 在 iPhone Duo 外螢幕的實測（decisions 第七節）：
-   外直：相機＋島＋時間佔 y 29–141 → 起點 153｜外橫 primary（欄在左）：只有相機 y 29–66 → 起點 78
+   外直：相機＋島＋時間＋島下方灰點佔 y 29–151（灰點底 150.7，七-3 更正） → 起點 163｜外橫 primary（欄在左）：只有相機 y 29–66 → 起點 78
    外橫 secondary（欄在右，X9）：相機在欄底 y 400–436、欄頂沒有系統 UI → 起點貼頂 12，底緣留 74（視窗高 466，分頁組底在 y 392，離相機 8） */
-html[data-rail='outer-portrait'] { --sys-status-end: 141px; }
+html[data-rail='outer-portrait'] { --sys-status-end: 151px; }
 html[data-rail='outer-landscape-primary'] { --sys-status-end: 66px; }
 html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bottom: 74px; }
 

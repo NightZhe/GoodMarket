@@ -52,8 +52,9 @@ describe('各姿態實測高度落在的層級（工具組與分頁組之間留 
   const room = (regionHeight: number, toolCount: number) =>
     regionHeight - (toolCount > 0 ? tools(toolCount) + RAIL_GAP : 0);
 
-  it('外直 678：起點 153、底 34 → 區間 491；店家頁（3 顆工具）扣 156 剩 335 → L0', () => {
-    expect(pickRailLevel({ available: room(678 - 153 - 34, 3), count: 5, labelsFit: true })).toBe('L0');
+  it('外直 678：起點 163（七-3）、底 34 → 區間 481；店家頁（3 顆工具）扣 156 剩 325 → L0；首頁（1 顆，48 圓）扣 60 剩 421 → L0', () => {
+    expect(pickRailLevel({ available: room(678 - 163 - 34, 3), count: 5, labelsFit: true })).toBe('L0');
+    expect(pickRailLevel({ available: room(678 - 163 - 34, 1), count: 5, labelsFit: true })).toBe('L0');
   });
 
   it('外橫 primary 466：起點 78、底 34 → 區間 354；首頁（1 顆購物車，48 圓）扣 60 剩 294 → L0', () => {
