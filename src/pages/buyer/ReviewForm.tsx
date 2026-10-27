@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CircleX, Info } from 'lucide-react';
+import { CircleX, Info } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useRefreshOnVisible, useReviews } from '../../store/ReviewsContext';
 import { useToast } from '../../components/Toast';
@@ -10,6 +10,7 @@ import { btnOutline, btnPrimary } from '../../components/import/ui';
 import { EditableItemCard, ReadonlyItemCard } from '../../components/reviews/ReviewItemCards';
 import { EmptyBlock, InlineError } from '../../components/reviews/states';
 import { useLightbox } from '../../components/reviews/useLightbox';
+import { GlassTray, TrayButton } from '../../components/glass';
 import { submitAccountReviews } from '../../lib/reviews/api';
 import LoginRequired from '../../components/auth/LoginRequired';
 import { accountLabel, nicknamePrefillFor } from '../../lib/auth/identity';
@@ -24,6 +25,7 @@ import { maskNickname, validateNickname } from '../../lib/reviews/nickname';
 import { formGate, partitionItems } from '../../lib/reviews/status';
 import type { OrderReviewStatus } from '../../lib/reviews/types';
 import { toSubmitItems, useReviewEditor } from './reviewEditor';
+import { TRAY_DIMMED, TRAY_RIGHT_HALF } from './trayPlacement';
 
 /** 評價表單 #/orders/:orderId/review：要先登入；訂單要屬於目前登入的帳號（別人的訂單一律「找不到」，不透露存在與否） */
 export default function ReviewForm() {
@@ -79,12 +81,10 @@ function ReviewFormView() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl pb-36 md:px-4 md:pb-10 md:pt-6">
+    <div className="mx-auto max-w-3xl pb-[calc(var(--tray-clearance)+2rem)] md:px-4 md:pb-10 md:pt-6">
+      {/* 返回在外框的導覽列（水平姿態）或直立軌（側邊姿態），頁內不再放返回箭頭 */}
       <header className="bg-white md:rounded-t-md">
-        <div className="flex items-center gap-1 px-2">
-          <Link to="/orders" aria-label="回到我的訂單" className="flex h-11 w-11 items-center justify-center">
-            <ArrowLeft size={22} aria-hidden="true" />
-          </Link>
+        <div className="flex min-h-11 items-center px-4">
           <h1 className="text-base font-medium md:text-lg">評價商品</h1>
         </div>
         {status && (
@@ -400,16 +400,21 @@ function FormBody({ status, editable, savedNickname }: BodyProps) {
             </div>
           </section>
 
-          <div className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white shadow-bar-top md:static md:mt-3 md:rounded-md md:border-0 md:shadow-none">
-            <div className="px-4 py-3 md:flex md:items-center md:justify-between md:gap-6 md:p-6">
-              <p role="status" className="mb-2 text-center text-xs text-muted md:mb-0 md:text-left md:text-sm">{message}</p>
-              <button
-                type="button" onClick={onSubmitClick} aria-disabled={blocker ? true : undefined}
-                className={`h-12 w-full rounded-sm text-base font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:w-56 md:shrink-0 ${blocker ? 'bg-disabled' : 'bg-brand hover:bg-brand-dark'}`}
-              >
-                送出評價
-              </button>
-            </div>
+          {/* 手機：底部懸浮送出托盤（C5）。桌機（md 以上）維持頁內送出列 */}
+          <div className={`md:hidden ${TRAY_DIMMED} ${TRAY_RIGHT_HALF}`}>
+            <GlassTray label="送出評價">
+              <p role="status" className="basis-full text-center text-footnote text-muted">{message}</p>
+              <TrayButton tone="primary" onClick={onSubmitClick} aria-disabled={blocker ? true : undefined}>送出評價</TrayButton>
+            </GlassTray>
+          </div>
+          <div className="hidden md:mt-3 md:flex md:items-center md:justify-between md:gap-6 md:rounded-md md:bg-white md:p-6">
+            <p role="status" className="text-sm text-muted">{message}</p>
+            <button
+              type="button" onClick={onSubmitClick} aria-disabled={blocker ? true : undefined}
+              className={`h-12 w-56 shrink-0 rounded-sm text-base font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${blocker ? 'bg-disabled' : 'bg-brand hover:bg-brand-dark'}`}
+            >
+              送出評價
+            </button>
           </div>
         </>
       )}
