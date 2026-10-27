@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, CircleUserRound, ClipboardList, House, Search as SearchIcon, Share, ShoppingCart, Store } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
@@ -6,13 +6,15 @@ import { useAuth } from '../../store/AuthContext';
 import { useToast } from '../../components/Toast';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useOnline } from '../../lib/useOnline';
-import { headerFor, type ShareTarget } from '../../lib/layout/headerKind';
+import { headerFor, type HeaderKind, type ShareTarget } from '../../lib/layout/headerKind';
 import { isNative } from '../../lib/native/platform';
 import { publicUrl } from '../../lib/share/publicUrl';
 import { pillButtonPrimary } from '../../components/pillButton';
 import { scrollPageToTop } from '../../lib/ui/scroll';
 import { usePosture } from '../../lib/layout/posture';
 import { CountBadge, GlassButton, GlassCapsule, TabPill, type TabItem } from '../../components/glass';
+import { PurchaseTray } from './PurchaseTray';
+import { useTwoColumn } from './productColumns';
 
 export default function BuyerLayout() {
   const { cartCount, loading, loadError, reload } = useStore();
@@ -50,6 +52,9 @@ export default function BuyerLayout() {
     || pathname === '/account/payment-methods/new' || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/');
 
   const header = headerFor(pathname);
+  // 側邊姿態（系統欄在左右側直立）：控制搬進直立軌，第二層頁不顯示頂部導覽列，改成內容頂端的行內標題（design-spec §3.3）
+  const side = usePosture() !== 'bottom';
+  const showNavBar = header.kind === 'nav' && !side;
   // 「我的」不需要商品資料（登入狀態它自己處理），商品還在載入時也直接顯示，不擋
   const needsProducts = pathname !== '/account' && !pathname.startsWith('/account/');
   // 載入骨架依路由：商品頁（導覽列帶分享鈕的那一種）＝主圖＋標題＋停用的購買列，其餘＝首頁形狀
@@ -61,9 +66,13 @@ export default function BuyerLayout() {
   const tabs = buyerTabs(pathname === '/');
 
   return (
-    <div className={`app-shell flex min-h-dvh flex-col ${grouped ? 'bg-canvas' : ''}`}>
-      {/* 唯一一直釘在頂端的東西：蓋住狀態列／動態島的材質條（桌機高度為 0） */}
-      <div aria-hidden="true" className={`${material} sticky top-0 z-40 h-[env(safe-area-inset-top)] shrink-0`} />
+    // --bar-h：釘在頂端的導覽列高度，給商品頁兩欄的 sticky 照片留位置
+    <div className={`app-shell flex min-h-dvh flex-col ${grouped ? 'bg-canvas' : ''}`} style={{ '--bar-h': showNavBar ? '44px' : '0px' } as CSSProperties}>
+      {/* 唯一一直釘在頂端的東西：蓋住狀態列／動態島的材質條（桌機高度為 0）。背景可以出去：負 margin 拉進左右安全區（H7） */}
+      <div aria-hidden="true" className={`${material} sticky top-0 z-40 -ml-(--inset-l) -mr-(--inset-r) h-[env(safe-area-inset-top)] shrink-0`} />
+
+      {/* 側邊姿態的頁面工具：返回 → 購物車 → 分享（C1）。fixed 的直立軌，DOM 放在頁首的位置（朗讀順序在內容之前） */}
+      {side && <RailTools header={header} count={cartCount} />}
 
       {header.kind === 'large' && (
         <header className="mx-auto w-full max-w-6xl">
@@ -71,7 +80,7 @@ export default function BuyerLayout() {
             <h1 className="text-large-title font-bold">{header.title}</h1>
             <div className="flex items-end gap-5">
               <DesktopLinks className="mb-2.5" />
-              {header.cart && <CartTool count={cartCount} />}
+              {header.cart && !side && <CartTool count={cartCount} />}
             </div>
           </div>
           {header.search && (pathname === '/search'
@@ -80,8 +89,15 @@ export default function BuyerLayout() {
         </header>
       )}
 
-      {header.kind === 'nav' && (
-        <header className={`${material} sticky top-[env(safe-area-inset-top)] z-40`}>
+      {header.kind === 'nav' && side && (
+        header.title
+          ? <h1 className="mx-auto flex h-11 w-full max-w-6xl items-center px-5 text-headline font-semibold text-ink">{header.title}</h1>
+          : <div aria-hidden="true" className="h-3 shrink-0" />
+      )}
+
+      {showNavBar && header.kind === 'nav' && (
+        // 背景全幅（負 margin 拉進左右安全區再用 padding 補回），內容仍在安全區內
+        <header className={`${material} sticky top-[env(safe-area-inset-top)] z-40 -ml-(--inset-l) -mr-(--inset-r) pl-(--inset-l) pr-(--inset-r)`}>
           <div className="mx-auto flex h-11 max-w-6xl items-center justify-between pl-2 pr-1.5 md:px-5">
             <Link to={header.back.to} aria-label={`返回${header.back.label}`} className={`${PRESS_FADE} -ml-1 flex h-11 items-center pr-3 text-body text-brand`}>
               <ChevronLeft size={28} strokeWidth={2.4} aria-hidden="true" />
@@ -162,24 +178,41 @@ export default function BuyerLayout() {
 const PRESS_FADE = 'transition-opacity duration-200 active:opacity-50 active:duration-0';
 
 /**
- * 首頁、逛逛的購物車（Q2）：44pt 懸浮玻璃鈕，捲動時不捲走。
- * 水平姿態固定在右上（env(top)＋4、離右緣 16，靜止時在大標題列右側）；側邊姿態搬進直立軌的工具組，與系統欄零重疊。
+ * 首頁、逛逛的購物車（Q2）：水平姿態是 44pt 懸浮玻璃鈕，捲動時不捲走，固定在右上
+ * （env(top)＋4、離右緣 16，靜止時在大標題列右側）。側邊姿態的購物車在直立軌的工具組（RailTools），不走這裡。
  * 桌機網頁（md 以上）維持原本頁首裡的 36pt 灰圓鈕。
  */
 function CartTool({ count }: { count: number }) {
-  const bars = usePosture();
-  const cart = (floating: boolean) => (
-    <GlassButton
-      to="/cart"
-      label={`購物車，${count} 件`}
-      icon={<ShoppingCart size={22} strokeWidth={1.7} />}
-      badge={count}
-      className={floating ? 'fixed right-[calc(var(--inset-r)+16px)] top-[calc(env(safe-area-inset-top)+4px)] md:hidden' : ''}
-    />
+  return (
+    <>
+      <GlassButton
+        to="/cart"
+        label={`購物車，${count} 件`}
+        icon={<ShoppingCart size={22} strokeWidth={1.7} />}
+        badge={count}
+        className="fixed right-[calc(var(--inset-r)+16px)] top-[calc(env(safe-area-inset-top)+4px)] md:hidden"
+      />
+      <CartCircle count={count} />
+    </>
   );
-  return bars === 'bottom'
-    ? <>{cart(true)}<CartCircle count={count} /></>
-    : <GlassCapsule label="頁面工具">{cart(false)}</GlassCapsule>;
+}
+
+/**
+ * 側邊姿態的頁面工具（直立軌上方那一組）：返回（第二層頁）→ 購物車 → 分享，沒有的就不出現；整組都沒有（訂單、我的）就不畫軌。
+ * 帳號子頁（plain）自己有水平導覽列，不搬進來（design-spec §5.4）。
+ */
+function RailTools({ header, count }: { header: HeaderKind; count: number }) {
+  if (header.kind === 'plain') return null;
+  const back = header.kind === 'nav' ? header.back : null;
+  const share = header.kind === 'nav' ? header.share : null;
+  if (!back && !header.cart && !share) return null;
+  return (
+    <GlassCapsule label="頁面工具">
+      {back && <GlassButton to={back.to} label={`返回${back.label}`} icon={<ChevronLeft size={24} strokeWidth={2.4} />} />}
+      {header.cart && <GlassButton to="/cart" label={`購物車，${count} 件`} icon={<ShoppingCart size={22} strokeWidth={1.7} />} badge={count} />}
+      {share && <RailShareButton target={share} />}
+    </GlassCapsule>
+  );
 }
 
 /** 桌機（md 以上）頁首的購物車圓鈕：視覺 36、熱區 44。App 內不顯示 */
@@ -209,13 +242,13 @@ function CartNavLink({ count }: { count: number }) {
  * 分享商品頁／店家頁（D-7b）。App 內走系統分享面板（原生外掛只在 App 內動態載入）；
  * 網頁版用 Web Share API，沒有（多數桌機瀏覽器）就複製網址。
  */
-function ShareButton({ target }: { target: ShareTarget }) {
+function useShare(target: ShareTarget): () => Promise<void> {
   const { products, getShop } = useStore();
   const toast = useToast();
   const title = (target.kind === 'product' ? products.find(p => p.id === target.id)?.title : getShop(target.id)?.name) ?? '好物集';
   const route = `/${target.kind}/${target.id}`;
 
-  const share = async () => {
+  return async () => {
     // App 內的 location 是 capacitor://…，分享出去別人打不開，改用正式站網址；網頁版自己就在正式站
     const url = isNative() ? publicUrl(route) : window.location.href;
     if (isNative()) {
@@ -240,12 +273,21 @@ function ShareButton({ target }: { target: ShareTarget }) {
       toast('無法複製連結，請從網址列複製', 'error');
     }
   };
+}
 
+function ShareButton({ target }: { target: ShareTarget }) {
+  const share = useShare(target);
   return (
     <button type="button" onClick={() => void share()} aria-label="分享" className={NAV_ICON_BTN}>
       <Share size={22} strokeWidth={1.7} aria-hidden="true" />
     </button>
   );
+}
+
+/** 直立軌上的分享鈕：同一個分享流程，換成軌裡的玻璃鈕 */
+function RailShareButton({ target }: { target: ShareTarget }) {
+  const share = useShare(target);
+  return <GlassButton label="分享" icon={<Share size={22} strokeWidth={1.7} />} onClick={() => void share()} />;
 }
 
 /** 桌機（md 以上）沒有 tab bar，常用入口放在頁首右側。手機不顯示 */
@@ -335,29 +377,29 @@ function HomeSkeleton() {
   );
 }
 
-/** 商品頁骨架（§3.4）：主圖灰塊＋標題 2 條灰條，購買列先出現但停用。尺寸同 ProductDetail 的第一張照片與購買列，載入完不跳版 */
+/**
+ * 商品頁骨架（§3.4）：主圖灰塊＋標題 2 條灰條，購買托盤先出現但停用。
+ * 版面規則同 ProductDetail（單欄／兩欄、托盤位置、底部預留），載入完不跳版
+ */
 function ProductSkeleton() {
+  const [colsRef, twoColumn] = useTwoColumn();
   return (
-    // 高度＝視窗扣掉安全區條與 44 的導覽列，購買列才會貼在底部（手機沒有 tab bar）
-    <div className="mx-auto flex min-h-[calc(100dvh-env(safe-area-inset-top)-44px)] max-w-6xl flex-col md:block md:min-h-0 md:px-4 md:pt-4">
-      <div role="status" className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[450px_1fr] md:gap-8">
+    <div ref={colsRef} className={`mx-auto pb-(--tray-clearance) md:px-4 md:pb-0 md:pt-4 ${twoColumn ? 'max-w-none' : 'max-w-6xl'}`}>
+      <div
+        role="status"
+        className={`grid items-start md:grid-cols-[450px_1fr] md:gap-8 ${twoColumn ? 'grid-cols-[calc(50vw-var(--midline-half)-var(--inset-l))_minmax(0,1fr)] gap-x-(--midline-band) pt-5' : 'grid-cols-[minmax(0,1fr)]'}`}
+      >
         <span className="sr-only">載入中</span>
-        <div aria-hidden="true" className="px-5 pt-1 md:px-0 md:pt-0">
+        <div aria-hidden="true" className={`px-5 md:px-0 md:pt-0 ${twoColumn ? 'pt-5' : 'pt-1'}`}>
           <div className="aspect-square w-75 max-w-full rounded-story bg-canvas md:w-full" />
         </div>
-        <div aria-hidden="true" className="px-5 pt-4 md:px-0 md:pt-0">
+        <div aria-hidden="true" className={`px-5 md:px-0 md:pt-0 ${twoColumn ? '' : 'pt-4'}`}>
           <div className="h-5 w-4/5 rounded-md bg-canvas" />
           <div className="mt-2 h-5 w-1/2 rounded-md bg-canvas" />
         </div>
       </div>
-      {/* 與 ProductDetail 的手機購買列同一組 class；按鈕停用，點了沒有反應 */}
-      <div className="material sticky bottom-0 z-40 mt-auto grid grid-cols-[repeat(auto-fit,minmax(--spacing(32),1fr))] gap-3 border-t-[0.5px] border-separator pt-2 pr-[max(--spacing(5),env(safe-area-inset-right))] pb-[calc(--spacing(2)+env(safe-area-inset-bottom))] pl-[max(--spacing(5),env(safe-area-inset-left))] md:hidden">
-        {['加入購物車', '直接購買'].map(label => (
-          <button key={label} type="button" aria-disabled="true" className="inline-flex h-12.5 items-center justify-center rounded-full bg-canvas px-4 text-headline font-semibold text-muted-2">
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* 與 ProductDetail 同一個托盤；按鈕停用，點了沒有反應 */}
+      <PurchaseTray twoColumn={twoColumn} dimmed />
     </div>
   );
 }
