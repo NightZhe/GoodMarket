@@ -15,7 +15,7 @@ interface Props {
  * 底部抽屜（手機）／置中對話框（桌機）的外殼：遮罩、面板、焦點陷阱、Esc 關閉、背景鎖捲動、關閉後把焦點還給原本的元素。
  * 登入、檢舉、結帳的地址與綁卡抽屜共用。減少動態時進場動畫由 index.css 的規則關掉。
  * 面板放在內容欄裡（容器吃 --inset-l／--inset-r，側邊姿態讓開直立軌；遮罩仍蓋全螢幕），底緣是 pb-safe，不為膠囊留位（這些頁不顯示膠囊）。
- * 半折（D13，零偵測）：面板掛 .fold-panel——寬 ≥ 620 的直向只佔下半、超過時面板內捲動；橫向（≥ 760）只佔右半、不跨中線帶；< 620 與外蓋橫向不套用。
+ * 半折（D13，零偵測）：面板掛 .fold-panel（門檻與其餘寬度的預設都在 index.css）：直向只佔下半、橫向只佔右半、不跨中線帶；外螢幕沒有折線，滿欄寬。
  * 桌機網頁（md 以上）是置中對話框，fold-panel 的規則由 md: 的類別蓋掉。
  */
 export default function SheetShell({ titleId, descId, titleRef, onClose, children }: Props) {
@@ -72,10 +72,8 @@ export default function SheetShell({ titleId, descId, titleRef, onClose, childre
         ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descId}
         className={[
           'fold-panel animate-auth-panel relative overflow-y-auto rounded-t-2xl bg-white md:max-w-md md:rounded-lg md:shadow-popover',
-          // 寬度與限高只在 fold-panel 不接手的條件下給：< 620 與直向要滿欄寬（直向的限高交給 fold-panel）、橫向的寬度與靠右交給 fold-panel（右緣已由容器的 pr 讓出，故 mr-0）
-          'max-[619px]:w-full min-[620px]:portrait:w-full max-[619px]:max-h-[90dvh] min-[620px]:landscape:max-h-[90dvh] min-[620px]:landscape:mr-0',
-          // 外蓋橫向（678×466，沒有折線）：fold-panel 的 620 門檻會把面板縮成右半的 231 寬，這個區間改回滿欄寬
-          'min-[620px]:max-[759px]:landscape:ml-0 min-[620px]:max-[759px]:landscape:w-full',
+          // 橫向右緣已由容器的 pr 讓出，fold-panel 靠右時不再加一次右邊距
+          'landscape:mr-0',
           // 桌機對話框：回到置中、滿寬（受 max-w-md 限制）、90dvh 限高
           'md:mx-0 md:w-full md:max-h-[90dvh]',
         ].join(' ')}

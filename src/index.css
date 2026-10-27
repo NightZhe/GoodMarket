@@ -112,9 +112,10 @@ button:disabled { cursor: not-allowed; }
    <html data-bars> 由 lib/layout/posture.ts 寫入：side-right／side-left＝系統欄在左右側直立（外蓋、展開橫向、書本、Split View），bottom＝其餘。
    網頁版沒有 data-bars，等同 bottom。 */
 :root {
-  /* 狀態區底邊（實測 Duo 內橫狀態膠囊底 103，加 12 留白在 --rail-top）。先固定 104；原生殼日後可寫入真值覆蓋，CSS 不必改 */
+  /* 狀態區底邊（實測 Duo 內橫狀態膠囊底 103，加 12 留白在 --rail-top）。預設 104；外螢幕三個姿態的狀態區位置不同，由 html[data-rail] 覆寫（下面） */
   --sys-status-end: 104px;
   --rail-top: calc(max(env(safe-area-inset-top), var(--sys-status-end)) + 12px);
+  --rail-bottom: max(env(safe-area-inset-bottom), 12px); /* 分頁組下緣離視窗底；外橫 secondary 要避開相機，由 html[data-rail] 覆寫 */
   --rail-cap-w: 56px; /* 直立軌膠囊寬 */
   --rail-w: 0px; /* 側邊姿態才有值（下面）：軌欄寬，內容讓出這一欄 */
   --tp-bottom: max(calc(env(safe-area-inset-bottom) + 8px), 12px); /* 膠囊與托盤下緣離視窗底 */
@@ -132,6 +133,12 @@ button:disabled { cursor: not-allowed; }
 }
 html[data-bars='side-right'] { --rail-w: max(env(safe-area-inset-right), 68px); --inset-r: var(--rail-w); --tabs-clearance: env(safe-area-inset-bottom); }
 html[data-bars='side-left'] { --rail-w: max(env(safe-area-inset-left), 68px); --inset-l: var(--rail-w); --tabs-clearance: env(safe-area-inset-bottom); }
+/* 軌的版型（lib/layout/posture.ts 的 classifyRail 寫入）。數字是 T0 在 iPhone Duo 外螢幕的實測（decisions 第七節）：
+   外直：相機＋島＋時間佔 y 29–141 → 起點 153｜外橫 primary（欄在左）：只有相機 y 29–66 → 起點 78
+   外橫 secondary（欄在右，X9）：相機在欄底 y 400–436、欄頂沒有系統 UI → 起點貼頂 12，底緣留 74（視窗高 466，分頁組底在 y 392，離相機 8） */
+html[data-rail='outer-portrait'] { --sys-status-end: 141px; }
+html[data-rail='outer-landscape-primary'] { --sys-status-end: 66px; }
+html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bottom: 74px; }
 
 /* 買家外框：內容欄吃四邊安全區，各自處理、不假設兩側相等。全幅背景（頁面底色、安全區材質條）仍畫滿，只有內容被推進來 */
 .app-shell { padding-left: var(--inset-l); padding-right: var(--inset-r); }
@@ -147,9 +154,19 @@ html[data-bars='side-left'] { --rail-w: max(env(safe-area-inset-left), 68px); --
   /* 直立軌（側邊姿態）：兩個獨立的膠囊，工具組貼上（--rail-top 起）、分頁組貼下，中間彈性空白；水平置中在軌欄裡 */
   .glass-capsule { position: fixed; z-index: 40; width: var(--rail-cap-w); border-radius: calc(var(--rail-cap-w) / 2); padding: 6px 0; display: flex; flex-direction: column; align-items: center; }
   .glass-capsule--tools { top: var(--rail-top); }
-  .glass-capsule--tabs { bottom: max(env(safe-area-inset-bottom), 12px); }
-  html[data-bars='side-right'] .glass-capsule { right: calc((var(--rail-w) - var(--rail-cap-w)) / 2); }
-  html[data-bars='side-left'] .glass-capsule { left: calc((var(--rail-w) - var(--rail-cap-w)) / 2); }
+  html[data-bars='side-right'] .glass-capsule, html[data-bars='side-right'] .glass-rail-tabs { right: calc((var(--rail-w) - var(--rail-cap-w)) / 2); }
+  html[data-bars='side-left'] .glass-capsule, html[data-bars='side-left'] .glass-rail-tabs { left: calc((var(--rail-w) - var(--rail-cap-w)) / 2); }
+
+  /* 分頁組：外層固定在 --rail-bottom 上，裡面的 <nav> 是 L0／L1 的膠囊；L2 時外層只剩一顆 56 的鈕，<nav> 變成往上展開的浮層。
+     .glass-rail-room 是隱形探針：高度＝軌的區間（--rail-top 到 --rail-bottom），元件量它來選層級，幾何數字只放在 CSS。層級切換不做動畫（AC-14） */
+  .glass-rail-tabs { position: fixed; z-index: 40; bottom: var(--rail-bottom); width: var(--rail-cap-w); }
+  .glass-rail-body { width: 100%; border-radius: calc(var(--rail-cap-w) / 2); padding: 6px 0; display: flex; flex-direction: column; align-items: center; }
+  .glass-rail-room { position: fixed; top: var(--rail-top); bottom: var(--rail-bottom); width: 0; visibility: hidden; pointer-events: none; }
+  .glass-rail-trigger { position: relative; display: flex; width: var(--rail-cap-w); height: var(--rail-cap-w); align-items: center; justify-content: center; border-radius: 9999px; transition: background-color 160ms; }
+  .glass-rail-trigger:active { background-color: var(--color-press-glass); transition-duration: 0s; }
+  /* L2 浮層：從鈕往上展開（scale .96＋淡入，200ms），收起只淡出 150ms 不縮放（§7.4）。收起時不可見、不可點（元件另設 inert） */
+  .glass-rail-pop { position: absolute; left: 0; bottom: calc(100% + 8px); transform-origin: bottom center; visibility: hidden; opacity: 0; transform: scale(.96); transition: opacity 150ms ease, visibility 0s 150ms, transform 0s 150ms; }
+  .glass-rail-pop[data-open='true'] { visibility: visible; opacity: 1; transform: none; transition: opacity 200ms ease, transform 200ms cubic-bezier(.23,1,.32,1), visibility 0s; }
   /* 軌裡的 GlassButton 不再自己有玻璃底，按下是 44 圓形灰底 */
   .glass-capsule .glass-btn { background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .glass-capsule .glass-btn:active { transform: none; background-color: var(--color-press-rail); }
@@ -166,13 +183,18 @@ html[data-bars='side-left'] { --rail-w: max(env(safe-area-inset-left), 68px); --
   .tray-btn:active { transform: scale(.97); transition-duration: 100ms; }
   .glass-tray--checkout .tray-btn { min-width: 0; flex-grow: 0; }
 
-  /* 半折（零偵測，C7、D13）：面板落在折線一側，不跨中線帶。寬度 < 620 的裝置（外螢幕、一般 iPhone）沒有折線，不套用。
-     內直／佇立：只佔下半（超過時面板內捲動）；展開橫向／書本：只佔右半。T3／T4／T8 的面板與托盤掛 fold-panel 即可 */
+  /* 半折（零偵測，C7、D13）：面板落在折線一側，不跨中線帶。沒有折線的裝置不套用：直向寬 < 620（外直、一般 iPhone），
+     橫向寬 < 760（外橫 678×466：系統欄 84 在側邊時右半只剩 231，放不下托盤與面板；內橫 951、書本都 ≥ 760）。
+     內直／佇立：只佔下半（超過時面板內捲動）；展開橫向／書本：只佔右半。T3／T4／T8 的面板與托盤掛 fold-panel／fold-tray 即可，不必知道門檻。
+     不套用時 fold-panel 是滿欄寬、限高 90dvh（utilities 層的 w-／max-h- 蓋得過它，所以預設值寫在這裡而不是呼叫端） */
+  .fold-panel { width: 100%; max-height: 90dvh; }
   @media (min-width: 620px) and (orientation: portrait) {
     .fold-panel { max-height: calc(50dvh - var(--midline-half)); overflow-y: auto; }
   }
-  @media (min-width: 620px) and (orientation: landscape) {
+  @media (min-width: 760px) and (orientation: landscape) {
     .fold-panel { margin-left: auto; margin-right: var(--inset-r); width: calc(50vw - var(--midline-half) - var(--inset-r)); }
+    /* 底部托盤落在右半：把內容欄左緣挪到右半的中線帶外緣，托盤自己置中在剩下的右半 */
+    .fold-tray { --inset-l: calc(50vw + var(--midline-half)); }
   }
 
   /* 減少動態：實心白、不縮放（AC-14）。減少透明度：Safari／WKWebView 不一定認得這個 media feature（D10），認得就降級，不認得就靠 86% 白。
@@ -182,6 +204,10 @@ html[data-bars='side-left'] { --rail-w: max(env(safe-area-inset-left), 68px); --
   }
   @media (prefers-reduced-motion: reduce) {
     .glass-btn, .glass-btn:active, .tray-btn, .tray-btn:active { transition: none; transform: none; }
+    /* L2 浮層：減少動態時開關都只淡入淡出 150ms，不縮放（§7.4） */
+    .glass-rail-pop, .glass-rail-pop[data-open='true'] { transform: none; transition: opacity 150ms ease, visibility 0s; }
+    .glass-rail-pop:not([data-open='true']) { transition: opacity 150ms ease, visibility 0s 150ms; }
+    .glass-rail-trigger { transition: none; }
   }
 }
 

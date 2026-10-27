@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { classifyBars, createPostureStore, type Insets } from './posture';
+import { classifyBars, classifyRail, createPostureStore, type Insets } from './posture';
 
 describe('classifyBars：只看左右安全區的差值，不看機型、寬度、orientation', () => {
   it('右側有系統欄（Duo 內橫實測 right 84、left 0）→ side-right', () => {
@@ -44,7 +44,7 @@ describe('createPostureStore：姿態改變才通知，沒變就不重畫', () =
     set({ left: 0, right: 84 });
     store.refresh();
     expect(store.getSnapshot()).toBe('side-right');
-    expect(apply).toHaveBeenLastCalledWith('side-right');
+    expect(apply).toHaveBeenLastCalledWith('side-right', 'default');
   });
 
   it('旋轉後 inset 沒讓姿態改變（例如內直→佇立都是 bottom）時不通知訂閱者', () => {
@@ -67,5 +67,73 @@ describe('createPostureStore：姿態改變才通知，沒變就不重畫', () =
     set({ left: 84, right: 0 });
     store.refresh();
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('classifyRail：直立軌的起點與底緣依姿態實測（decisions 第七節、X9）', () => {
+  it('外直（466×678、系統欄在右）→ outer-portrait：狀態區到 141，軌起點 ≥ 153', () => {
+    expect(classifyRail({ bars: 'side-right', orientation: 'portrait-primary', width: 466, height: 678 })).toBe('outer-portrait');
+  });
+
+  it('外橫 landscape-primary（系統欄在左）→ outer-landscape-primary：只有相機，軌起點 ≥ 78', () => {
+    expect(classifyRail({ bars: 'side-left', orientation: 'landscape-primary', width: 678, height: 466 })).toBe('outer-landscape-primary');
+  });
+
+  it('外橫 landscape-secondary 且系統欄在右 → outer-landscape-secondary（X9：相機在欄底，軌底緣留 74）', () => {
+    expect(classifyRail({ bars: 'side-right', orientation: 'landscape-secondary', width: 678, height: 466 })).toBe('outer-landscape-secondary');
+  });
+
+  it('內橫（951×669，實測 landscape-secondary、右 84）→ default：不套外螢幕規則，仍是起點 116', () => {
+    expect(classifyRail({ bars: 'side-right', orientation: 'landscape-secondary', width: 951, height: 669 })).toBe('default');
+  });
+
+  it('視窗寬 678 剛好算外螢幕，679 不算', () => {
+    expect(classifyRail({ bars: 'side-right', orientation: 'landscape-secondary', width: 678, height: 466 })).toBe('outer-landscape-secondary');
+    expect(classifyRail({ bars: 'side-right', orientation: 'landscape-secondary', width: 679, height: 466 })).toBe('default');
+  });
+
+  it('bottom 姿態沒有軌，一律 default（外直之外的窄視窗如一般 iPhone 也不誤判）', () => {
+    expect(classifyRail({ bars: 'bottom', orientation: 'portrait-primary', width: 393, height: 852 })).toBe('default');
+    expect(classifyRail({ bars: 'bottom', orientation: 'landscape-primary', width: 600, height: 400 })).toBe('default');
+  });
+
+  it('讀不到 screen.orientation 時由視窗長寬與系統欄側推：橫向右欄＝secondary、左欄＝primary、直向＝portrait', () => {
+    expect(classifyRail({ bars: 'side-right', width: 678, height: 466 })).toBe('outer-landscape-secondary');
+    expect(classifyRail({ bars: 'side-left', width: 678, height: 466 })).toBe('outer-landscape-primary');
+    expect(classifyRail({ bars: 'side-right', width: 466, height: 678 })).toBe('outer-portrait');
+  });
+
+  it('orientation 與系統欄的側對不上（primary 卻在右）→ default，不猜', () => {
+    expect(classifyRail({ bars: 'side-right', orientation: 'landscape-primary', width: 678, height: 466 })).toBe('default');
+    expect(classifyRail({ bars: 'side-left', orientation: 'landscape-secondary', width: 678, height: 466 })).toBe('default');
+  });
+
+  it('沒有視窗尺寸（舊呼叫端只給 inset）→ default', () => {
+    expect(classifyRail({ bars: 'side-right' })).toBe('default');
+  });
+});
+
+describe('createPostureStore：軌的版型也是姿態的一部分', () => {
+  it('旋轉讓版型改變（外橫 primary → secondary）時通知訂閱者並寫出去，即使 bars 的側也跟著變', () => {
+    let reading = { left: 84, right: 0, width: 678, height: 466, orientation: 'landscape-primary' };
+    const apply = vi.fn();
+    const store = createPostureStore(() => reading, apply);
+    expect(store.getRail()).toBe('outer-landscape-primary');
+    const listener = vi.fn();
+    store.subscribe(listener);
+    reading = { left: 0, right: 84, width: 678, height: 466, orientation: 'landscape-secondary' };
+    store.refresh();
+    expect(store.getRail()).toBe('outer-landscape-secondary');
+    expect(apply).toHaveBeenLastCalledWith('side-right', 'outer-landscape-secondary');
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('bars 沒變、版型也沒變就不通知', () => {
+    const reading = { left: 0, right: 84, width: 466, height: 678, orientation: 'portrait-primary' };
+    const store = createPostureStore(() => reading, vi.fn());
+    const listener = vi.fn();
+    store.subscribe(listener);
+    store.refresh();
+    expect(listener).not.toHaveBeenCalled();
   });
 });
