@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, CircleUserRound, ClipboardList, House, Search as SearchIcon, Share, ShoppingCart, Store } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
@@ -11,6 +11,8 @@ import { isNative } from '../../lib/native/platform';
 import { publicUrl } from '../../lib/share/publicUrl';
 import { pillButtonPrimary } from '../../components/pillButton';
 import { scrollPageToTop } from '../../lib/ui/scroll';
+import { usePosture } from '../../lib/layout/posture';
+import { CountBadge, GlassButton, GlassCapsule, TabPill, type TabItem } from '../../components/glass';
 
 export default function BuyerLayout() {
   const { cartCount, loading, loadError, reload } = useStore();
@@ -56,8 +58,10 @@ export default function BuyerLayout() {
   const grouped = pathname === '/account' || pathname.startsWith('/account/');
   const material = grouped ? 'material-grouped' : 'material';
 
+  const tabs = buyerTabs(pathname === '/');
+
   return (
-    <div className={`flex min-h-dvh flex-col ${grouped ? 'bg-canvas' : ''}`}>
+    <div className={`app-shell flex min-h-dvh flex-col ${grouped ? 'bg-canvas' : ''}`}>
       {/* 唯一一直釘在頂端的東西：蓋住狀態列／動態島的材質條（桌機高度為 0） */}
       <div aria-hidden="true" className={`${material} sticky top-0 z-40 h-[env(safe-area-inset-top)] shrink-0`} />
 
@@ -67,7 +71,7 @@ export default function BuyerLayout() {
             <h1 className="text-large-title font-bold">{header.title}</h1>
             <div className="flex items-end gap-5">
               <DesktopLinks className="mb-2.5" />
-              {header.cart && <CartCircle count={cartCount} />}
+              {header.cart && <CartTool count={cartCount} />}
             </div>
           </div>
           {header.search && (pathname === '/search'
@@ -106,7 +110,7 @@ export default function BuyerLayout() {
         )}
       </div>
 
-      <main className={`flex-1 ${hideTabBar ? '' : 'pb-[calc(49px+env(safe-area-inset-bottom))] md:pb-0'}`}>
+      <main className={`flex-1 ${hideTabBar ? '' : 'pb-(--tabs-clearance) md:pb-0'}`}>
         {loadError && needsProducts ? (
           <div role="alert" className="mx-auto max-w-md px-5 py-24 text-center">
             <p className="text-title3 font-bold">載入商品失敗</p>
@@ -143,15 +147,12 @@ export default function BuyerLayout() {
         </div>
       </footer>
 
+      {/* 水平姿態＝置中懸浮膠囊，側邊姿態＝右（左）側直立軌；兩個元件自己看姿態，同一時間只有一個出現。桌機網頁（md 以上）沒有分頁導覽 */}
       {!hideTabBar && (
-        <nav aria-label="主要分頁" className={`${material} pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t-[0.5px] border-separator md:hidden`}>
-          <Tab to="/" label="首頁" end onReselect={pathname === '/' ? scrollPageToTop : undefined} icon={<House size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<HouseFilled />} />
-          <Tab to="/search" label="逛逛" icon={<SearchIcon size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<SearchIcon size={26} strokeWidth={2.5} aria-hidden="true" />} />
-          <Tab to="/orders" label="訂單" icon={<ClipboardList size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<ClipboardList size={26} strokeWidth={2.5} aria-hidden="true" />} />
-          <Tab to="/seller" label="我要賣" icon={<Store size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<Store size={26} strokeWidth={1.7} aria-hidden="true" />} />
-          {/* 第 5 格一律是前往 /account 的分頁，未登入時登入入口在頁內（HIG：tab bar 用來導覽，不是放動作） */}
-          <Tab to="/account" label="我的" icon={<CircleUserRound size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<ProfileFilled />} />
-        </nav>
+        <>
+          <TabPill items={tabs} label="主要分頁" className="md:hidden" />
+          <GlassCapsule label="主要分頁" tabs={tabs} />
+        </>
       )}
     </div>
   );
@@ -160,19 +161,31 @@ export default function BuyerLayout() {
 /** 按下時淡到 50%，放開 200ms 淡回。要在 iPhone Safari 顯示 :active，需要 main.tsx 的 touchstart 監聽（R1） */
 const PRESS_FADE = 'transition-opacity duration-200 active:opacity-50 active:duration-0';
 
-function CountBadge({ count, className }: { count: number; className: string }) {
-  if (count <= 0) return null;
-  return (
-    <span aria-hidden="true" className={`absolute min-w-[18px] rounded-full bg-badge px-[5px] text-center text-[12px] font-semibold leading-[18px] text-white ring-2 ring-white ${className}`}>
-      {count > 99 ? '99+' : count}
-    </span>
+/**
+ * 首頁、逛逛的購物車（Q2）：44pt 懸浮玻璃鈕，捲動時不捲走。
+ * 水平姿態固定在右上（env(top)＋4、離右緣 16，靜止時在大標題列右側）；側邊姿態搬進直立軌的工具組，與系統欄零重疊。
+ * 桌機網頁（md 以上）維持原本頁首裡的 36pt 灰圓鈕。
+ */
+function CartTool({ count }: { count: number }) {
+  const bars = usePosture();
+  const cart = (floating: boolean) => (
+    <GlassButton
+      to="/cart"
+      label={`購物車，${count} 件`}
+      icon={<ShoppingCart size={22} strokeWidth={1.7} />}
+      badge={count}
+      className={floating ? 'fixed right-[calc(var(--inset-r)+16px)] top-[calc(env(safe-area-inset-top)+4px)] md:hidden' : ''}
+    />
   );
+  return bars === 'bottom'
+    ? <>{cart(true)}<CartCircle count={count} /></>
+    : <GlassCapsule label="頁面工具">{cart(false)}</GlassCapsule>;
 }
 
-/** 大標題列右側的購物車圓鈕：視覺 36、熱區 44 */
+/** 桌機（md 以上）頁首的購物車圓鈕：視覺 36、熱區 44。App 內不顯示 */
 function CartCircle({ count }: { count: number }) {
   return (
-    <Link to="/cart" aria-label={`購物車，${count} 件`} className="group -mb-px -mr-1 flex size-11 shrink-0 items-center justify-center">
+    <Link to="/cart" aria-label={`購物車，${count} 件`} className="group -mb-px -mr-1 hidden size-11 shrink-0 items-center justify-center md:flex">
       <span className="relative flex size-9 items-center justify-center rounded-full bg-canvas text-brand transition-colors duration-200 group-active:bg-press group-active:duration-0">
         <ShoppingCart size={20} strokeWidth={1.7} aria-hidden="true" />
         <CountBadge count={count} className="-right-1.5 -top-[3px]" />
@@ -349,31 +362,25 @@ function ProductSkeleton() {
   );
 }
 
-/** onReselect：已經在這一頁時再點一次的動作（例如首頁捲回頂端）；有給才攔截預設導覽，否則照一般連結走 */
-function Tab({ to, label, end, onReselect, icon, activeIcon }: { to: string; label: string; end?: boolean; onReselect?: () => void; icon: React.ReactNode; activeIcon: React.ReactNode }) {
-  return (
-    <NavLink
-      to={to}
-      end={end}
-      aria-label={label}
-      onClick={onReselect && (e => { e.preventDefault(); onReselect(); })}
-      className={({ isActive }) => `${PRESS_FADE} flex h-[49px] flex-col items-center gap-px pt-1.5 text-caption2 font-medium ${isActive ? 'text-brand' : 'text-muted'}`}
-    >
-      {({ isActive }) => (
-        <>
-          {isActive ? activeIcon : icon}
-          {label}
-        </>
-      )}
-    </NavLink>
-  );
+/** 買家 5 格分頁（順序與第 5 格「我的」沿用 UI 改版 D4）。onReselect：在首頁再點一次捲回頂端 */
+function buyerTabs(atHome: boolean): TabItem[] {
+  const line = { size: 24, strokeWidth: 1.7 } as const;
+  const bold = { size: 24, strokeWidth: 2.5 } as const;
+  return [
+    { to: '/', label: '首頁', end: true, onReselect: atHome ? scrollPageToTop : undefined, icon: <House {...line} />, iconActive: <HouseFilled /> },
+    { to: '/search', label: '逛逛', icon: <SearchIcon {...line} />, iconActive: <SearchIcon {...bold} /> },
+    { to: '/orders', label: '訂單', icon: <ClipboardList {...line} />, iconActive: <ClipboardList {...bold} /> },
+    { to: '/seller', label: '我要賣', icon: <Store {...line} />, iconActive: <Store {...line} /> },
+    // 第 5 格一律是前往 /account 的分頁，未登入時登入入口在頁內（HIG：tab bar 用來導覽，不是放動作）
+    { to: '/account', label: '我的', icon: <CircleUserRound {...line} />, iconActive: <ProfileFilled /> },
+  ];
 }
 
 // 實心版：lucide 沒有 fill 版，直接填色會把內部細節（門、人像）也塗成同色而消失，所以內部細節改白色。
 // 幾何與 lucide 的 House、CircleUserRound 相同，切換選中時不會跳動
 function HouseFilled() {
   return (
-    <svg width={26} height={26} viewBox="0 0 24 24" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="fill-current stroke-current">
+    <svg width={24} height={24} viewBox="0 0 24 24" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="fill-current stroke-current">
       <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" className="fill-white stroke-white" />
     </svg>
@@ -382,7 +389,7 @@ function HouseFilled() {
 
 function ProfileFilled() {
   return (
-    <svg width={26} height={26} viewBox="0 0 24 24" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="fill-current stroke-current">
+    <svg width={24} height={24} viewBox="0 0 24 24" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="fill-current stroke-current">
       <circle cx="12" cy="12" r="10" />
       <circle cx="12" cy="11" r="4" className="fill-white stroke-white" />
       <path d="M17.925 20.056a6 6 0 0 0-11.851.001" className="fill-white stroke-white" />

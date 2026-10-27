@@ -91,9 +91,10 @@ export default function Home() {
       ))}
 
       <SectionHeader title="全部商品" />
-      {/* 容器查詢要掛在父層：格子本身窄於 15rem（200% 縮放）時改單欄，價格才放得下 */}
+      {/* 欄數跟著內容寬走（H11 避免斷點）：iPhone 2、外螢幕直 2／橫 3、內螢幕直 3／橫 4、桌機 1280 6 欄。
+          容器查詢要掛在父層：格子本身窄於 15rem（200% 縮放）時改單欄，價格才放得下 */}
       <div className="@container">
-        <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-5 @max-[15rem]:grid-cols-1 md:grid-cols-4 lg:grid-cols-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-x-3 gap-y-5 px-5 @max-[15rem]:grid-cols-1">
           {reveal.visible.map(p => <ProductCard key={p.id} product={p} />)}
         </div>
       </div>
@@ -102,7 +103,7 @@ export default function Home() {
   );
 }
 
-/** 分類膠囊列（§4.2）：橫滑、11 個全列、順序依在架數。膠囊 36 高，外層 44 是熱區 */
+/** 分類膠囊列（§4.2）：橫滑、11 個全列、順序依在架數。膠囊 36 高，外層 44 是熱區。App 內任何寬度都單列橫滑（md: 在 App 內不生效），只有桌機網頁換行 */
 function CategoryChips({ categories }: { categories: Category[] }) {
   return (
     <nav
@@ -135,7 +136,7 @@ function StoryCard({ story }: { story: StoryPick }) {
       className="mx-5 mt-5 block overflow-hidden rounded-story shadow-story transition-transform duration-160 ease-[cubic-bezier(.23,1,.32,1)] active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
     >
       <div aria-hidden="true">
-        <Photo src={story.image} alt="" size="lg" className="aspect-[4/3] rounded-none md:aspect-[16/5]">
+        <Photo src={story.image} alt="" size="lg" className="aspect-[4/3] max-h-[50dvh] w-full rounded-none md:aspect-[16/5]">
           {/* 壓暗層：底 62%→40% 處 55%→頂 0，白字最差對比 4.74 */}
           <div className="absolute inset-x-0 bottom-0 h-[70%] bg-[linear-gradient(to_top,rgb(0_0_0/.62)_0%,rgb(0_0_0/.55)_40%,rgb(0_0_0/0)_100%)]" />
           <div className="absolute inset-x-4 bottom-3.5 text-white">
