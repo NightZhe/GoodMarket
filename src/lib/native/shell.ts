@@ -23,8 +23,8 @@ export async function initNativeShell(): Promise<void> {
   void import('@capacitor/status-bar').then(({ StatusBar, Style }) => StatusBar.setStyle({ style: Style.Light })).catch(() => { /* 外掛不在就算了 */ });
   await initNativeAuth();
   await initNativeDeepLinks();
-  // 狀態列安全區：買家前台（App Store 風改版後）自己處理（安全區色帶＋sticky top-[env(...)] 頂欄），殼不插手；
-  // 只有還沒改版的賣家側要補：賣家中心的 header.sticky top-0 由 native.css 讓它長高，賣家登入頁（沒有黏頂頂欄）把 body 往下推。
+  // 狀態列安全區：買家前台（安全區色帶＋sticky top-[env(...)] 頂欄）與賣家中心（SellerLayout 頂欄自己長高、吃四邊安全區）都自己處理，殼不插手；
+  // 殼只補沒有黏頂頂欄的賣家頁（賣家登入頁）：把 body 往下推。
   // 用 MutationObserver 看 DOM（路由切換是 pushState，不會發 hashchange）；不用 CSS :has()（WKWebView 上實測沒有命中，原因未查明）。
   const sellerRoute = () => /^#\/seller(\/|$)/.test(window.location.hash);
   const syncStickyClass = () => {

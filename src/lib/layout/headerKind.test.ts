@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { headerFor } from './headerKind';
+import { headerFor, inlineTitle } from './headerKind';
 
 describe('headerFor：依路徑決定買家前台的頁首樣式', () => {
   it('分頁根頁是大標題；購物車與搜尋框只在首頁與逛逛', () => {
@@ -63,6 +63,25 @@ describe('headerFor：依路徑決定買家前台的頁首樣式', () => {
     // 這些頁自己有可見的 h1（商品名、店名、隱私政策、評價、付款結果），再加一列就重複了
     for (const p of ['/product/p001', '/product/p001/reviews', '/shop/s1', '/privacy', '/orders/o1/review', '/pay/pay_1']) {
       expect(headerFor(p)).toMatchObject({ kind: 'nav', title: null });
+    }
+  });
+});
+
+describe('inlineTitle：側邊姿態內容頂端的行內標題（頁面宣告自己有標題時不出現，避免同頁兩個 h1）', () => {
+  it('第二層頁有標題、頁面沒宣告 → 顯示', () => {
+    expect(inlineTitle(headerFor('/cart'), false)).toBe('購物車');
+    expect(inlineTitle(headerFor('/checkout'), false)).toBe('結帳');
+  });
+
+  it('頁面宣告自己有標題（結帳成功態、下單失敗、登入閘門）→ 不顯示', () => {
+    expect(inlineTitle(headerFor('/checkout'), true)).toBeNull();
+    expect(inlineTitle(headerFor('/cart'), true)).toBeNull();
+  });
+
+  it('本來就沒有行內標題的頁（商品、店家、分頁根頁、帳號子頁）→ 一律 null，不論有沒有宣告', () => {
+    for (const p of ['/product/p001', '/shop/s1', '/', '/orders', '/account/profile']) {
+      expect(inlineTitle(headerFor(p), false)).toBeNull();
+      expect(inlineTitle(headerFor(p), true)).toBeNull();
     }
   });
 });

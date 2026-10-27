@@ -64,7 +64,6 @@ export function createPostureStore(read: () => Reading, apply: (bars: Bars, rail
   const listeners = new Set<() => void>();
   return {
     getSnapshot: (): Bars => current,
-    getRail: (): RailProfile => currentRail,
     subscribe(listener: () => void): () => void {
       listeners.add(listener);
       return () => { listeners.delete(listener); };

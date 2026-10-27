@@ -44,3 +44,11 @@ export function headerFor(pathname: string): HeaderKind {
 
   return { kind: 'plain' };
 }
+
+/**
+ * 側邊姿態沒有導覽列時，內容頂端的行內標題。頁面自己有可見 h1（結帳成功態、下單失敗、登入閘門）要先宣告（useOwnsPageTitle），
+ * 這裡看到宣告就不出標題，同一頁永遠只有一個 h1。回 null＝不畫（畫一條 12pt 的留白由呼叫端處理）。
+ */
+export function inlineTitle(header: HeaderKind, pageOwnsTitle: boolean): string | null {
+  return header.kind === 'nav' && !pageOwnsTitle ? header.title : null;
+}

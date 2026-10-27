@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, CircleUserRound, ClipboardList, House, Search as SearchIcon, Share, ShoppingCart, Store } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
@@ -6,7 +6,8 @@ import { useAuth } from '../../store/AuthContext';
 import { useToast } from '../../components/Toast';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useOnline } from '../../lib/useOnline';
-import { headerFor, type HeaderKind, type ShareTarget } from '../../lib/layout/headerKind';
+import { headerFor, inlineTitle, type HeaderKind, type ShareTarget } from '../../lib/layout/headerKind';
+import { OwnTitleProvider } from '../../lib/layout/pageTitle';
 import { isNative } from '../../lib/native/platform';
 import { publicUrl } from '../../lib/share/publicUrl';
 import { pillButtonPrimary } from '../../components/pillButton';
@@ -14,9 +15,20 @@ import { scrollPageToTop } from '../../lib/ui/scroll';
 import { usePosture } from '../../lib/layout/posture';
 import { CountBadge, GlassButton, GlassCapsule, TabPill, type TabItem } from '../../components/glass';
 import { PurchaseTray } from './PurchaseTray';
-import { TWO_COLUMN_GRID, useTwoColumn } from './productColumns';
+import { TWO_COLUMN_GRID, TWO_COLUMN_TOP, useTwoColumn } from './productColumns';
 
 export default function BuyerLayout() {
+  // 頁面宣告「我自己有 h1」的登記數（lib/layout/pageTitle.ts）；>0 時外框不補行內標題
+  const [titleOwners, setTitleOwners] = useState(0);
+  const reportTitleOwner = useCallback((delta: 1 | -1) => setTitleOwners(n => n + delta), []);
+  return (
+    <OwnTitleProvider value={reportTitleOwner}>
+      <BuyerLayoutView pageOwnsTitle={titleOwners > 0} />
+    </OwnTitleProvider>
+  );
+}
+
+function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
   const { cartCount, loading, loadError, reload } = useStore();
   usePaymentConfig(); // 先讀一次線上付款開關，之後帳號頁、結帳頁不必再等
   const online = useOnline();
@@ -55,6 +67,7 @@ export default function BuyerLayout() {
   // 側邊姿態（系統欄在左右側直立）：控制搬進直立軌，第二層頁不顯示頂部導覽列，改成內容頂端的行內標題（design-spec §3.3）
   const side = usePosture() !== 'bottom';
   const showNavBar = header.kind === 'nav' && !side;
+  const inline = inlineTitle(header, pageOwnsTitle);
   // 「我的」不需要商品資料（登入狀態它自己處理），商品還在載入時也直接顯示，不擋
   const needsProducts = pathname !== '/account' && !pathname.startsWith('/account/');
   // 載入骨架依路由：商品頁（導覽列帶分享鈕的那一種）＝主圖＋標題＋停用的購買列，其餘＝首頁形狀
@@ -90,9 +103,9 @@ export default function BuyerLayout() {
       )}
 
       {header.kind === 'nav' && side && (
-        header.title
-          // 頁面自己有 h1 時（結帳成功態的「訂單成立！」）整列藏起來，避免同頁兩個 h1；結帳頁自己的 h1 不帶 hidden，購物車桌機用的 h1 在 App 內是 display:none（帶 hidden）不算
-          ? <h1 className="mx-auto flex h-11 w-full max-w-6xl items-center px-5 text-headline font-semibold text-ink [&:has(~main_h1:not(.hidden))]:hidden">{header.title}</h1>
+        // 行內標題只給頁面自己沒有可見標題的頁；頁面有自己的 h1 時要先宣告（useOwnsPageTitle），這裡就改留一條空白，同頁只會有一個 h1
+        inline
+          ? <h1 className="mx-auto flex h-11 w-full max-w-6xl items-center px-5 text-headline font-semibold text-ink">{inline}</h1>
           : <div aria-hidden="true" className="h-3 shrink-0" />
       )}
 
@@ -388,7 +401,7 @@ function ProductSkeleton() {
     <div ref={colsRef} className={`mx-auto pb-(--tray-clearance) md:px-4 md:pb-0 md:pt-4 ${twoColumn ? 'max-w-none' : 'max-w-6xl'}`}>
       <div
         role="status"
-        className={`grid items-start md:grid-cols-[450px_1fr] md:gap-8 ${twoColumn ? TWO_COLUMN_GRID : 'grid-cols-[minmax(0,1fr)]'}`}
+        className={`grid items-start md:grid-cols-[450px_1fr] md:gap-8 ${twoColumn ? `${TWO_COLUMN_GRID} ${TWO_COLUMN_TOP}` : 'grid-cols-[minmax(0,1fr)]'}`}
       >
         <span className="sr-only">載入中</span>
         <div aria-hidden="true" className={`px-5 md:px-0 md:pt-0 ${twoColumn ? '' : 'pt-1'}`}>

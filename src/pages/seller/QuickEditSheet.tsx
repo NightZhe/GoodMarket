@@ -90,13 +90,14 @@ export default function QuickEditSheet({ edit, ...args }: Props) {
 
   return createPortal(
     // 容器吃左右安全區（側邊姿態右緣＝直立軌讓開），遮罩仍蓋全螢幕。面板掛 fold-panel（D13、AC-23）：
-    // 內直／佇立只佔下半、內橫／書本只佔右半、外蓋滿欄寬；限高全交給 .fold-panel，這裡不放 max-h-*（utilities 層會蓋掉它）。
+    // 內直／佇立只佔下半、內橫／書本只佔右半（寬 min(420, 右半邊寬)，§5.4.1：min-[760px]:landscape 與 .fold-panel 的橫向門檻同一個）、外蓋滿欄寬；
+    // 限高全交給 .fold-panel，這裡不放 max-h-*（utilities 層會蓋掉它）。
     // 鍵盤開啟時 useKeyboardInset 用 inline style 把面板往上推並限高（鍵盤蓋住的本來就是下半，不必再守折線）
     <div className="fixed inset-0 z-50 flex items-end justify-center pl-(--inset-l) pr-(--inset-r)" role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={qe.onEscape}>
       <div className="animate-fade absolute inset-0 bg-black/45" onClick={onBackdrop} aria-hidden="true" />
       <div
         ref={panelRef} style={inset ?? undefined}
-        className="fold-panel animate-sheet pb-safe relative flex flex-col rounded-t-2xl bg-white landscape:mr-0 lg:mx-auto lg:landscape:mx-auto lg:max-h-[85dvh] lg:max-w-lg lg:w-full"
+        className="fold-panel animate-sheet pb-safe relative flex flex-col rounded-t-2xl bg-white landscape:mr-0 min-[760px]:landscape:max-w-105 lg:mx-auto lg:landscape:mx-auto lg:max-h-[85dvh] lg:max-w-lg lg:landscape:max-w-lg lg:w-full"
       >
         <div className="flex shrink-0 items-start gap-3 border-b border-line p-4">
           <ProductImage src={product.images[0]} alt="" size="sm" className="w-12 shrink-0 rounded-sm max-[319px]:hidden" />

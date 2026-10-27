@@ -17,7 +17,7 @@ import { CardName } from '../../components/payment/CardLabel';
 import CardRadioList from '../../components/payment/CardRadioList';
 import PayGroup from '../../components/payment/PayGroup';
 import { BIND_RETURN_PATH } from './PaymentMethodNew';
-import { TRAY_DIMMED, TRAY_RIGHT_HALF } from './trayPlacement';
+import { TRAY_DIMMED, TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
 import { EMPTY_DRAFT, normalizePhone, type AddressDraft } from '../../lib/account/address';
 import { saveAddress } from '../../lib/account/addresses';
 import { addressFromDraft, buyerOf, pickBookAddress } from '../../lib/account/checkoutAddress';
@@ -37,6 +37,7 @@ import ProductImage from '../../components/ProductImage';
 import CheckoutRejected from '../../components/checkout/CheckoutRejected';
 import EmptyState from '../../components/EmptyState';
 import { money } from '../../lib/format';
+import { useOwnsPageTitle } from '../../lib/layout/pageTitle';
 import type { CartItem, CheckoutRejection, Order } from '../../types';
 
 type LegacyPay = Exclude<Order['payment'], 'ecpay_card'>;
@@ -100,6 +101,7 @@ function CheckoutView() {
   const [payment, setPayment] = useState<LegacyPay>(state?.payment && state.payment !== 'ecpay_card' ? state.payment : 'cod');
   const [done, setDone] = useState<Order[] | null>(null);
   const [rejected, setRejected] = useState<CheckoutRejection[] | null>(null);
+  useOwnsPageTitle(done !== null); // 成功態有自己的 h1「訂單成立！」，外框不補「結帳」行內標題（下單失敗態由 CheckoutRejected 自己宣告）
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [ownShopError, setOwnShopError] = useState(false);

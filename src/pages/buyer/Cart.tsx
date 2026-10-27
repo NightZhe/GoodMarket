@@ -14,7 +14,7 @@ import { cartMarks, cartStockNote, defaultSelected, readPriceCheckState } from '
 import { GlassTray, TrayButton } from '../../components/glass';
 import { money } from '../../lib/format';
 import type { CartItem } from '../../types';
-import { TRAY_RIGHT_HALF } from './trayPlacement';
+import { TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
 
 const keyOf = (c: Pick<CartItem, 'productId' | 'variantId'>) => `${c.productId}|${c.variantId}`;
 

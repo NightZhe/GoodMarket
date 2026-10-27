@@ -1,5 +1,5 @@
 // 賣家中心導覽的純邏輯（無畫面）：哪些頁隱藏導覽、哪些頁底部有儲存托盤、5 個分頁各自的導覽目標。
-// SellerLayout 與 ProductForm 共用；圖示與版面留在元件裡。
+// 只有 SellerLayout 用（hidesNav／hasSaveTray／sellerTabRoutes）；圖示與版面留在元件裡。
 
 export type SellerTabKey = 'overview' | 'products' | 'new' | 'orders' | 'reviews';
 
@@ -29,7 +29,6 @@ export type SellerTabRoute = {
   key: SellerTabKey;
   /** 交給 NavLink 的路徑（決定誰被選中）。代選中的分頁換成目前路徑，其餘就是 goTo */
   to: string;
-  end: true;
   /** 點下去真正要去的地方。與 to 不同時，呼叫端要用 onReselect 導過去 */
   goTo: string;
 };
@@ -40,5 +39,5 @@ export type SellerTabRoute = {
  */
 export function sellerTabRoutes(pathname: string): SellerTabRoute[] {
   const proxy = proxyTab(pathname);
-  return TABS.map(t => ({ key: t.key, to: t.key === proxy ? pathname : t.to, end: true, goTo: t.to }));
+  return TABS.map(t => ({ key: t.key, to: t.key === proxy ? pathname : t.to, goTo: t.to }));
 }

@@ -1,3 +1,5 @@
+import { CELL_COMPACT, CELL_LABELED, RAIL_CAP_W, RAIL_PAD } from './railGeometry';
+
 /**
  * 直立軌分頁組的層級（design-spec §3.2.3、decisions X3）：
  *   L0＝圖示＋標籤（每格 56×50）｜L1＝純圖示（每格 56×44，標籤留在 aria-label）｜L2＝收成一顆 56×56「目前分頁」鈕，點開展開成 L1 浮層。
@@ -8,13 +10,11 @@ export type RailLevel = 'L0' | 'L1' | 'L2';
 /** 軌的工具組與分頁組之間至少留的空白 */
 export const RAIL_GAP = 12;
 
-const PAD = 12; // 膠囊上下內距各 6
-const CELL = { L0: 50, L1: 44 } as const;
-const L2_BUTTON = 56;
+const CELL = { L0: CELL_LABELED, L1: CELL_COMPACT } as const;
 
 /** 分頁組在該層級的高度 */
 export function railGroupHeight(level: RailLevel, count: number): number {
-  return level === 'L2' ? L2_BUTTON : PAD + count * CELL[level];
+  return level === 'L2' ? RAIL_CAP_W : RAIL_PAD * 2 + count * CELL[level];
 }
 
 /**

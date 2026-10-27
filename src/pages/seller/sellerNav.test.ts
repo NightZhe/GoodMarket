@@ -39,7 +39,7 @@ describe('sellerTabRoutes：5 個分頁的導覽目標與選中', () => {
 
   it('一般頁面：to 就是自己的路徑，不需要攔截', () => {
     const tabs = at('/seller/orders');
-    expect(tabs.orders).toMatchObject({ to: '/seller/orders', end: true, goTo: '/seller/orders' });
+    expect(tabs.orders).toMatchObject({ to: '/seller/orders', goTo: '/seller/orders' });
     expect(tabs.overview.goTo).toBe('/seller');
   });
 

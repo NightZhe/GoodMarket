@@ -43,7 +43,7 @@ function SellerLayoutView() {
     const ordersTab = r.key === 'orders';
     return {
       to: r.to,
-      end: r.end,
+      end: true, // 精確比對：代選中的分頁，to 已換成目前路徑（sellerNav.ts）
       label: meta.label,
       ariaLabel: ordersTab ? ordersNavLabel(toShip, pending) : undefined,
       icon: <TabIcon icon={meta.icon} strokeWidth={1.7} marked={ordersTab && pending > 0} />,
@@ -57,7 +57,7 @@ function SellerLayoutView() {
     <div className="min-h-dvh bg-[#f6f6f6]">
       {/* 頂欄：背景全寬（畫進安全區與軌欄），logo、店名、登出留在內容欄——四邊各自吃安全區，右端讓開直立軌（design-spec §5.4.1）。
           高度＝內容 56＋上緣安全區（取代 native.css 對 header.h-14 的補丁） */}
-      <header className="sticky top-0 z-40 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-3 border-b border-line bg-white pl-[max(1rem,var(--inset-l))] pr-[calc(var(--inset-r)+1rem)] pt-[env(safe-area-inset-top)] md:px-6">
+      <header className="sticky top-0 z-40 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-3 border-b border-line bg-white pl-[calc(var(--inset-l)+1rem)] pr-[calc(var(--inset-r)+1rem)] pt-[env(safe-area-inset-top)] md:px-6">
         <Link to="/seller" className="flex min-h-11 items-center gap-1.5 font-bold text-brand">
           🛍️ <span>好物集</span><span className="font-normal text-ink">賣家中心</span>
         </Link>
@@ -67,7 +67,7 @@ function SellerLayoutView() {
           </Link>
           <span className="flex min-w-0 items-center gap-2 rounded-full bg-canvas py-1 pl-1 pr-3 text-sm">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-lg">{shop.avatar}</span>
-            <span className="max-w-28 truncate">{shop.name}</span>
+            <span className="max-w-28 truncate md:max-w-none">{shop.name}</span>
           </span>
           <button onClick={() => { void signOut(); navigate('/seller'); }} aria-label="登出" title="登出" className="-mr-2 flex size-11 shrink-0 items-center justify-center text-muted hover:text-brand md:mr-0 md:size-auto md:p-2">
             <LogOut size={18} aria-hidden="true" />

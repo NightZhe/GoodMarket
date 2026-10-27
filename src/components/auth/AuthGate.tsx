@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ClipboardList, PenLine, ShoppingCart, UserRound } from 'lucide-react';
 import { useAuth } from '../../store/AuthContext';
 import { headingFor } from '../../lib/auth/headings';
+import { useOwnsPageTitle } from '../../lib/layout/pageTitle';
 import { isIOS } from '../../lib/auth/inapp';
 import Banner from '../import/Banner';
 import CodeStep from './CodeStep';
@@ -34,6 +35,7 @@ export default function AuthGate({ kind, expired = false }: { kind: GateKind; ex
   const inAppHeading = inApp ? headingFor({ trigger: null, expired: false, inApp, ios, providers }) : null;
   const step = usePhoneStep('login');
   const inCode = step.flow !== null;
+  useOwnsPageTitle(!inCode); // 閘門自己的 h1 在畫面上時，外框別再補行內標題（輸入驗證碼的步驟沒有 h1）
   const titleRef = useRef<HTMLHeadingElement>(null);
   const mounted = useRef(false);
   useEffect(() => {

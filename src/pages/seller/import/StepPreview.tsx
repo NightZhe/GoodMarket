@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
 import Banner from '../../../components/import/Banner';
 import KPI, { type KpiKind } from '../../../components/import/KPI';
 import PreviewRow, { PreviewHeader } from '../../../components/import/PreviewRow';
 import Switch from '../../../components/import/Switch';
 import { btnOutline, btnPrimaryLg } from '../../../components/import/ui';
-import { GlassTray, TrayButton } from '../../../components/glass';
-import { usePosture } from '../../../lib/layout/posture';
-import { TRAY_DIMMED, TRAY_RIGHT_HALF } from '../../buyer/trayPlacement';
+import { TrayButton } from '../../../components/glass';
+import { SellerTray, useStackedTray } from '../SellerTray';
+import { trayReserve } from '../trayReserve';
 import { ALL_KINDS } from '../../../lib/shopee-import/constants';
 import type { ShopeeImportLib } from '../../../lib/import/loader';
 import { matchResume } from '../../../lib/import/resume';
@@ -48,7 +48,9 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
   const headingRef = useFocusOnMount<HTMLHeadingElement>();
   const { getImportIndex } = useStore();
   // 水平姿態：匯入托盤疊在分頁膠囊正上方；側邊姿態沒有膠囊，托盤落在右半（D13）
-  const stacked = usePosture() === 'bottom';
+  const stacked = useStackedTray();
+  // 托盤含摘要列（可能再加「不接續」一列），比標準 64 高；底部預留用實測高度補，最後一列才不會被蓋住
+  const [trayHeight, setTrayHeight] = useState(0);
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [options, setOptions] = useState<PreviewOptions>({ skipSoldOut: false, allHidden: false });
   const [edited, setEdited] = useState<Record<string, CategoryId>>({});
@@ -215,7 +217,7 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
   const startLabel = onlyFinishRecord ? '完成這筆匯入' : resume ? `接續匯入 ${n(importable)} 件` : `開始匯入 ${n(importable)} 件`;
 
   return (
-    <section aria-labelledby="step2-title" className="space-y-4 pb-[calc(var(--tray-h)+4rem)] md:pb-20">
+    <section aria-labelledby="step2-title" style={{ '--tray-reserve': trayReserve(stacked, trayHeight) } as CSSProperties} className="space-y-4 pb-(--tray-reserve) md:pb-20">
       <div>
         {heading}
         <p className="mt-1 text-sm text-muted">
@@ -320,20 +322,18 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
       )}
 
       {/* 手機：懸浮匯入托盤（C5）。水平姿態疊在分頁膠囊正上方，側邊姿態落在右半（D13）。桌機（md 以上）維持頁底的 sticky 列 */}
-      <div className={`md:hidden ${TRAY_DIMMED} ${stacked ? '' : TRAY_RIGHT_HALF}`}>
-        <GlassTray label="匯入" abovePill={stacked}>
-          <div className="w-0 min-w-full text-center text-footnote">{summary}</div>
-          {resume && (
-            <button type="button" className="min-h-11 w-0 min-w-full text-center text-footnote text-brand underline" onClick={leaveResume}>
-              不接續，當作新的匯入
-            </button>
-          )}
-          <TrayButton tone="secondary" onClick={onBack}>上一步</TrayButton>
-          <TrayButton tone="primary" aria-disabled={noneToImport || undefined} onClick={() => { if (!noneToImport) start(); }}>
-            {startLabel}
-          </TrayButton>
-        </GlassTray>
-      </div>
+      <SellerTray label="匯入" onHeight={setTrayHeight}>
+        <div className="w-0 min-w-full text-center text-footnote">{summary}</div>
+        {resume && (
+          <button type="button" className="min-h-11 w-0 min-w-full text-center text-footnote text-brand underline" onClick={leaveResume}>
+            不接續，當作新的匯入
+          </button>
+        )}
+        <TrayButton tone="secondary" onClick={onBack}>上一步</TrayButton>
+        <TrayButton tone="primary" aria-disabled={noneToImport || undefined} onClick={() => { if (!noneToImport) start(); }}>
+          {startLabel}
+        </TrayButton>
+      </SellerTray>
 
       <div className="z-30 hidden border-t border-line bg-white px-3 py-3 shadow-bar-top md:sticky md:bottom-0 md:block md:rounded-lg md:border md:px-4">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">

@@ -12,8 +12,9 @@ import {
 } from '../../lib/account/priceCheck';
 import type { CheckoutRejection } from '../../types';
 import { hapticError } from '../../lib/native/haptics';
+import { useOwnsPageTitle } from '../../lib/layout/pageTitle';
 import { GlassTray, TrayButton } from '../glass';
-import { TRAY_RIGHT_HALF } from '../../pages/buyer/trayPlacement';
+import { TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
 
 interface Props {
   changes: CheckoutRejection[];
@@ -89,6 +90,7 @@ function ItemRow({ item, image }: { item: RejectedItem; image: string | undefine
 export default function CheckoutRejected({ changes, fromCart, shopOrder, submitted, shopName, imageOf }: Props) {
   const h1 = useRef<HTMLHeadingElement>(null);
   const idBase = useId();
+  useOwnsPageTitle(); // 有自己的 h1（下單失敗），外框不補「結帳」行內標題
   useEffect(() => {
     window.scrollTo(0, 0);
     h1.current?.focus();

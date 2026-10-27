@@ -116,7 +116,11 @@ button:disabled { cursor: not-allowed; }
   --sys-status-end: 104px;
   --rail-top: calc(max(env(safe-area-inset-top), var(--sys-status-end)) + 12px);
   --rail-bottom: max(env(safe-area-inset-bottom), 12px); /* 分頁組下緣離視窗底；外橫 secondary 要避開相機，由 html[data-rail] 覆寫 */
-  --rail-cap-w: 56px; /* 直立軌膠囊寬 */
+  /* 直立軌幾何：數字在 components/glass/railGeometry.ts 還有一份（算層級用），railGeometry.test.ts 守著兩邊一致 */
+  --rail-cap-w: 56px; /* 直立軌膠囊寬，也是 L2 鈕邊長 */
+  --rail-pad: 6px; /* 膠囊上下內距 */
+  --cell-h: 50px; /* 分頁格高：圖示＋標籤（水平膠囊、軌 L0） */
+  --cell-h-compact: 44px; /* 分頁格高：純圖示（軌 L1） */
   --rail-w: 0px; /* 側邊姿態才有值（下面）：軌欄寬，內容讓出這一欄 */
   --tp-bottom: max(calc(env(safe-area-inset-bottom) + 8px), 12px); /* 膠囊與托盤下緣離視窗底 */
   --pill-h: 62px;
@@ -152,7 +156,7 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
   .glass-btn:active { transform: scale(.97); background-color: var(--color-press-glass); transition-duration: 100ms; }
 
   /* 直立軌（側邊姿態）：兩個獨立的膠囊，工具組貼上（--rail-top 起）、分頁組貼下，中間彈性空白；水平置中在軌欄裡 */
-  .glass-capsule { position: fixed; z-index: 40; width: var(--rail-cap-w); border-radius: calc(var(--rail-cap-w) / 2); padding: 6px 0; display: flex; flex-direction: column; align-items: center; }
+  .glass-capsule { position: fixed; z-index: 40; width: var(--rail-cap-w); border-radius: calc(var(--rail-cap-w) / 2); padding: var(--rail-pad) 0; display: flex; flex-direction: column; align-items: center; }
   .glass-capsule--tools { top: var(--rail-top); }
   html[data-bars='side-right'] .glass-capsule, html[data-bars='side-right'] .glass-rail-tabs { right: calc((var(--rail-w) - var(--rail-cap-w)) / 2); }
   html[data-bars='side-left'] .glass-capsule, html[data-bars='side-left'] .glass-rail-tabs { left: calc((var(--rail-w) - var(--rail-cap-w)) / 2); }
@@ -160,7 +164,7 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
   /* 分頁組：外層固定在 --rail-bottom 上，裡面的 <nav> 是 L0／L1 的膠囊；L2 時外層只剩一顆 56 的鈕，<nav> 變成往上展開的浮層。
      .glass-rail-room 是隱形探針：高度＝軌的區間（--rail-top 到 --rail-bottom），元件量它來選層級，幾何數字只放在 CSS。層級切換不做動畫（AC-14） */
   .glass-rail-tabs { position: fixed; z-index: 40; bottom: var(--rail-bottom); width: var(--rail-cap-w); }
-  .glass-rail-body { width: 100%; border-radius: calc(var(--rail-cap-w) / 2); padding: 6px 0; display: flex; flex-direction: column; align-items: center; }
+  .glass-rail-body { width: 100%; border-radius: calc(var(--rail-cap-w) / 2); padding: var(--rail-pad) 0; display: flex; flex-direction: column; align-items: center; }
   .glass-rail-room { position: fixed; top: var(--rail-top); bottom: var(--rail-bottom); width: 0; visibility: hidden; pointer-events: none; }
   .glass-rail-trigger { position: relative; display: flex; width: var(--rail-cap-w); height: var(--rail-cap-w); align-items: center; justify-content: center; border-radius: 9999px; transition: background-color 160ms; }
   .glass-rail-trigger:active { background-color: var(--color-press-glass); transition-duration: 0s; }
@@ -199,6 +203,18 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
     .fold-tray { --inset-l: calc(50vw + var(--midline-half) + 20px); }
     .fold-tray .glass-tray { right: calc(var(--inset-r) + 20px); max-width: calc(100vw - var(--inset-l) - var(--inset-r) - 36px); }
     .fold-tray .glass-tray--checkout { max-width: min(340px, calc(100vw - var(--inset-l) - var(--inset-r) - 36px)); }
+  }
+
+  /* 確認對話框（alertdialog）的外層容器，與內層 .fold-panel 成對（SellerProducts 的刪除確認、LeaveDialog）：四邊各吃安全區（至少 24），
+     內容限定在折線一側（D13）：直向 ≥ 620 靠下（內直、佇立；一般姿態保持置中，LeaveDialog 的 items-end 是 utilities 層，蓋得過這條），
+     橫向 ≥ 760 落在右半（面板寬扣掉的是容器右內距 max(24, 軌欄)，不是軌欄本身，所以這裡重算寬度，欄在左側時也不會碰到中線帶）。
+     桌機網頁（md 以上）請在呼叫端補 md:items-center、面板補 md:mx-0 md:w-full md:max-h-none 回到置中 */
+  .fold-dialog { display: flex; align-items: center; justify-content: center; padding: max(24px, env(safe-area-inset-top)) max(24px, var(--inset-r)) max(24px, env(safe-area-inset-bottom)) max(24px, var(--inset-l)); }
+  @media (min-width: 620px) and (orientation: portrait) {
+    .fold-dialog { align-items: flex-end; }
+  }
+  @media (min-width: 760px) and (orientation: landscape) {
+    .fold-dialog > .fold-panel { margin-left: auto; margin-right: 0; width: calc(50vw - var(--midline-half) - max(24px, var(--inset-r))); }
   }
 
   /* 減少動態：實心白、不縮放（AC-14）。減少透明度：Safari／WKWebView 不一定認得這個 media feature（D10），認得就降級，不認得就靠 86% 白。

@@ -54,8 +54,8 @@ const BASE = 'relative flex flex-col items-center justify-center text-caption2 f
 /** 分頁格：膠囊與直立軌共用。選中態由 NavLink 的 aria-current="page" 帶出 */
 export function TabCell({ item, kind, labeled, compact = false }: CellProps) {
   const size = kind === 'pill'
-    ? `${labeled ? 'h-[50px] w-[60px]' : 'h-11 w-[52px]'} rounded-[25px]`
-    : `${labeled && !compact ? 'h-[50px]' : 'h-11'} w-14 rounded-[22px]`;
+    ? `${labeled ? 'h-(--cell-h) w-[60px]' : 'h-(--cell-h-compact) w-[52px]'} rounded-[25px]`
+    : `${labeled && !compact ? 'h-(--cell-h)' : 'h-(--cell-h-compact)'} w-(--rail-cap-w) rounded-[22px]`;
   return (
     <NavLink
       to={item.to}

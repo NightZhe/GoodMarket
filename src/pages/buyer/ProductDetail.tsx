@@ -33,7 +33,7 @@ import type { Product } from '../../types';
 import { hapticSuccess } from '../../lib/native/haptics';
 import { isNative } from '../../lib/native/platform';
 import { PurchaseTray } from './PurchaseTray';
-import { TWO_COLUMN_GRID, useTwoColumn } from './productColumns';
+import { TWO_COLUMN_GRID, TWO_COLUMN_TOP, useTwoColumn } from './productColumns';
 
 // 用 key 讓切換到另一個商品時，規格／數量等狀態重新開始
 export default function ProductDetail() {
@@ -405,7 +405,7 @@ function ProductDetailView({ id }: { id: string }) {
       {native ? (
         // App：兩欄時左欄照片 sticky、右欄是資訊與其餘區塊；同一份 DOM 只換 class，姿態切換不重掛（AC-10）。
         // 欄界對齊畫面正中（折線），左欄寬＝50vw－中線帶半寬－左內縮，兩欄間距正好是中線帶 48
-        <div className={twoColumn ? `grid items-start ${TWO_COLUMN_GRID}` : ''}>
+        <div className={twoColumn ? `grid items-start ${TWO_COLUMN_GRID} ${TWO_COLUMN_TOP}` : ''}>
           <div className={twoColumn ? 'sticky top-[calc(env(safe-area-inset-top)+var(--bar-h,0px)+--spacing(5))]' : ''}>{photos}</div>
           <div className="min-w-0">
             {info}

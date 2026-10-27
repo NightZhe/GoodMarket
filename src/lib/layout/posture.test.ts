@@ -118,12 +118,11 @@ describe('createPostureStore：軌的版型也是姿態的一部分', () => {
     let reading = { left: 84, right: 0, width: 678, height: 466, orientation: 'landscape-primary' };
     const apply = vi.fn();
     const store = createPostureStore(() => reading, apply);
-    expect(store.getRail()).toBe('outer-landscape-primary');
+    expect(apply).toHaveBeenLastCalledWith('side-left', 'outer-landscape-primary');
     const listener = vi.fn();
     store.subscribe(listener);
     reading = { left: 0, right: 84, width: 678, height: 466, orientation: 'landscape-secondary' };
     store.refresh();
-    expect(store.getRail()).toBe('outer-landscape-secondary');
     expect(apply).toHaveBeenLastCalledWith('side-right', 'outer-landscape-secondary');
     expect(listener).toHaveBeenCalledTimes(1);
   });

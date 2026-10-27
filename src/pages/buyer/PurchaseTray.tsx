@@ -1,5 +1,5 @@
 import { GlassTray, TrayButton } from '../../components/glass';
-import { TRAY_DIMMED } from './trayPlacement';
+import { TRAY_DIMMED } from '../../lib/layout/trayPlacement';
 
 /** 兩欄時托盤放右欄：把「內容欄左緣」挪到折線右側的中線帶外緣，托盤自己置中在剩下的右半（D13、Q3） */
 const RIGHT_COLUMN = '[--inset-l:calc(50vw+var(--midline-half))]';

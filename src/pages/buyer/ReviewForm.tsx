@@ -25,7 +25,7 @@ import { maskNickname, validateNickname } from '../../lib/reviews/nickname';
 import { formGate, partitionItems } from '../../lib/reviews/status';
 import type { OrderReviewStatus } from '../../lib/reviews/types';
 import { toSubmitItems, useReviewEditor } from './reviewEditor';
-import { TRAY_DIMMED, TRAY_RIGHT_HALF } from './trayPlacement';
+import { TRAY_DIMMED, TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
 
 /** 評價表單 #/orders/:orderId/review：要先登入；訂單要屬於目前登入的帳號（別人的訂單一律「找不到」，不透露存在與否） */
 export default function ReviewForm() {

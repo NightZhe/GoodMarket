@@ -432,9 +432,10 @@ export default function SellerProducts() {
       })()}
 
       {target && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,var(--inset-l))] pr-[max(1.5rem,var(--inset-r))] pt-[max(1.5rem,env(safe-area-inset-top))]" role="alertdialog" aria-modal="true">
+        // 容器吃四邊安全區、面板避開中線帶（.fold-dialog／.fold-panel，D13）：一般姿態置中，內直靠下半，內橫／書本落右半；桌機網頁維持置中
+        <div className="fold-dialog fixed inset-0 z-50 md:items-center" role="alertdialog" aria-modal="true">
           <div className="animate-fade absolute inset-0 bg-black/45" onClick={() => setConfirmId(null)} />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-6">
+          <div className="fold-panel relative max-w-sm rounded-lg bg-white p-6 md:mx-0 md:w-full md:max-h-none">
             <h2 className="font-bold">確定刪除這件商品？</h2>
             <p className="mt-2 line-clamp-2 text-sm text-muted">{target.title}</p>
             <p className="mt-1 text-xs text-muted">刪除後無法復原。只是暫時不賣的話，建議改用「下架」。</p>

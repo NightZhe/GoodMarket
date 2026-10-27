@@ -3,6 +3,7 @@ import { matchPath, useLocation } from 'react-router-dom';
 import { ChevronUp } from 'lucide-react';
 import { usePosture } from '../../lib/layout/posture';
 import { TabCell, useTabLabels, type TabItem } from './tabs';
+import { RAIL_CAP_W } from './railGeometry';
 import { RAIL_GAP, pickRailLevel } from './railLevel';
 import { reportRailTools, useRailToolsHeight } from './railRoom';
 
@@ -18,8 +19,8 @@ type Props = Common & (
   | { tabs: TabItem[]; children?: never }
 );
 
-/** 標籤可用寬度＝軌 56 扣左右各 4（§7.3） */
-const LABEL_ROOM = 48;
+/** 標籤可用寬度＝軌寬扣左右各 4（§7.3） */
+const LABEL_ROOM = RAIL_CAP_W - 8;
 
 /**
  * 側邊姿態的直立玻璃軌（design-spec §3.2）。一條軌＝兩個獨立膠囊：工具組（貼 --rail-top）與分頁組（貼 --rail-bottom），
@@ -77,6 +78,13 @@ function TabsBody({ label, tabs }: { label: string; tabs: TabItem[] }) {
 
   // L2 浮層的開關。記下「在哪一頁打開的」：換頁（含返回鍵）就自然視為關閉，不必用 effect 回頭關
   const [openAt, setOpenAt] = useState<string | null>(null);
+  // 離開 L2（旋轉、字級讓高度變夠）就把「打開過」清掉：否則同一頁 L2→L0→L2 時浮層會自己重新展開。
+  // 用 render 期間調整 state（React 建議的寫法），不用 effect，不多繪一格
+  const [prevLevel, setPrevLevel] = useState(level);
+  if (prevLevel !== level) {
+    setPrevLevel(level);
+    if (level !== 'L2') setOpenAt(null);
+  }
   const expanded = level === 'L2' && openAt === pathname;
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -122,7 +130,12 @@ function TabsBody({ label, tabs }: { label: string; tabs: TabItem[] }) {
         aria-label={label}
         data-open={expanded}
         inert={level === 'L2' && !expanded}
-        onClick={() => setOpenAt(null)}
+        onClick={() => {
+          if (!expanded) return;
+          // 點浮層內的分頁：浮層收起後 <nav> 會 inert，焦點若還在裡面會掉到 body，所以先交回 L2 鈕（Esc 路徑同樣做法）
+          setOpenAt(null);
+          triggerRef.current?.focus();
+        }}
         className={`glass glass-rail-body ${level === 'L2' ? 'glass-rail-pop' : ''}`}
       >
         {tabs.map(item => <TabCell key={item.to} item={item} kind="rail" labeled={labeled} compact={!labeled} />)}
