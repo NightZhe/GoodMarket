@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CELL_COMPACT, CELL_LABELED, RAIL_CAP_W, RAIL_CENTER, RAIL_PAD } from './railGeometry';
+import { CELL_COMPACT, CELL_LABELED, RAIL_CAP_W, RAIL_CENTER, RAIL_PAD, RAIL_PAD_SOLO, RAIL_TOOL_BTN } from './railGeometry';
 
 // 直立軌的幾何數字有兩個地方要用：railLevel.ts 的純函式（算層級）與 CSS／Tailwind class（畫出來）。
 // 數字只有一份：railGeometry.ts 是 JS 端的來源，index.css 的 :root 變數是 CSS 端的來源，tabs.tsx 的 class 一律讀變數。
@@ -10,6 +10,7 @@ import { CELL_COMPACT, CELL_LABELED, RAIL_CAP_W, RAIL_CENTER, RAIL_PAD } from '.
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
 const CSS = read('../../index.css');
 const TABS = read('./tabs.tsx');
+const CAPSULE = read('./GlassCapsule.tsx');
 
 const cssVar = (name: string): number => {
   const m = new RegExp(`${name}:\\s*(\\d+)px`).exec(CSS);
@@ -20,6 +21,7 @@ const cssVar = (name: string): number => {
 describe('直立軌幾何：JS 常數與 index.css 變數同一份數字', () => {
   it('內距、膠囊寬、中心線距離、兩種格高', () => {
     expect(cssVar('--rail-pad')).toBe(RAIL_PAD);
+    expect(cssVar('--rail-pad-solo')).toBe(RAIL_PAD_SOLO);
     expect(cssVar('--rail-cap-w')).toBe(RAIL_CAP_W);
     expect(cssVar('--rail-center')).toBe(RAIL_CENTER);
     expect(cssVar('--cell-h')).toBe(CELL_LABELED);
@@ -48,5 +50,59 @@ describe('直立軌幾何：JS 常數與 index.css 變數同一份數字', () =>
     expect(TABS).toContain('h-(--cell-h-compact)');
     expect(TABS).toContain('w-(--rail-cap-w)');
     expect(TABS).not.toMatch(/h-\[50px\]|h-11\b|w-14\b/);
+  });
+});
+
+describe('X11：工具組只有一顆時是 48×48 圓，多顆維持膠囊', () => {
+  it('單顆：44 的鈕上下各 2 內距，剛好 48 高（＝寬）；多顆內距仍是 6', () => {
+    expect(RAIL_TOOL_BTN + RAIL_PAD_SOLO * 2).toBe(RAIL_CAP_W);
+    expect(RAIL_PAD).toBe(6);
+  });
+
+  it('CSS：單顆修飾 class 把內距換成 --rail-pad-solo，圓角取寬的一半（高＝寬時就是正圓）', () => {
+    const rule = /\.glass-capsule--solo\s*\{[^}]*\}/.exec(CSS)?.[0] ?? '';
+    expect(rule).toContain('padding: var(--rail-pad-solo) 0');
+    expect(rule).toContain('border-radius: 50%');
+  });
+
+  it('元件：只有一個子項時才掛 glass-capsule--solo', () => {
+    expect(CAPSULE).toMatch(/Children\.toArray\(children\)\.length === 1/);
+    expect(CAPSULE).toContain('glass-capsule--solo');
+  });
+});
+
+describe('X11：軌頂與系統島的淨距 ≥ 12（design-spec §3.2：狀態區底邊＋12）', () => {
+  // 內橫實測（decisions X11）：島下方灰點底約 98.3，取 98；--sys-status-end 預設 104 是膠囊底 103 取整
+  const INNER_LANDSCAPE_DOT_BOTTOM = 98;
+  const MIN_GAP = 12;
+
+  const statusEndOf = (rail: string | null): number => {
+    const sel = rail === null ? ':root' : `html\\[data-rail='${rail}'\\]`;
+    const rule = new RegExp(`${sel}\\s*\\{[^}]*?--sys-status-end:\\s*(\\d+)px`).exec(CSS);
+    if (!rule) throw new Error(`index.css 找不到 ${rail ?? ':root'} 的 --sys-status-end`);
+    return Number(rule[1]);
+  };
+  const railTopGap = (): number => {
+    const m = /--rail-top:\s*calc\(max\(env\(safe-area-inset-top\),\s*var\(--sys-status-end\)\)\s*\+\s*(\d+)px\)/.exec(CSS);
+    if (!m) throw new Error('index.css 的 --rail-top 不是「max(安全區, --sys-status-end) + N」的形狀');
+    return Number(m[1]);
+  };
+
+  it('--rail-top ＝ max(安全區上緣, --sys-status-end) ＋ 12', () => {
+    expect(railTopGap()).toBe(MIN_GAP);
+  });
+
+  it.each([
+    [null, 104],
+    ['outer-portrait', 141],
+    ['outer-landscape-primary', 66],
+    ['outer-landscape-secondary', 0],
+  ])('data-rail=%s：狀態區底邊 %i，軌頂 ＝ 底邊＋12', (rail, end) => {
+    expect(statusEndOf(rail)).toBe(end);
+    expect(end + railTopGap()).toBe(end + MIN_GAP);
+  });
+
+  it('內橫：軌頂 116 − 灰點底 98 ≥ 12', () => {
+    expect(statusEndOf(null) + railTopGap() - INNER_LANDSCAPE_DOT_BOTTOM).toBeGreaterThanOrEqual(MIN_GAP);
   });
 });

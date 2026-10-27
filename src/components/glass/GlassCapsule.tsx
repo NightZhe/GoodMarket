@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Children, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { matchPath, useLocation } from 'react-router-dom';
 import { ChevronUp } from 'lucide-react';
 import { usePosture } from '../../lib/layout/posture';
@@ -48,7 +48,9 @@ function ToolsBody({ label, children }: { label: string; children: ReactNode }) 
     ro.observe(el);
     return () => { ro.disconnect(); reportRailTools(0); };
   }, []);
-  return <div ref={ref} role="group" aria-label={label} className="glass glass-capsule glass-capsule--tools">{children}</div>;
+  // 只有一顆（例如首頁購物車）時外殼是 48×48 圓，不是 48×56 膠囊（X11）
+  const solo = Children.toArray(children).length === 1;
+  return <div ref={ref} role="group" aria-label={label} className={`glass glass-capsule glass-capsule--tools ${solo ? 'glass-capsule--solo' : ''}`}>{children}</div>;
 }
 
 function TabsBody({ label, tabs }: { label: string; tabs: TabItem[] }) {

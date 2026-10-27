@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { RAIL_GAP, pickRailLevel, railGroupHeight } from './railLevel';
+import { RAIL_GAP, pickRailLevel, railGroupHeight, railToolsHeight } from './railLevel';
 
 describe('railGroupHeight：分頁組各層級的高度（design-spec §3.2.3）', () => {
   it('五格：L0＝6＋5×50＋6＝262、L1＝6＋5×44＋6＝232、L2＝一顆 48', () => {
     expect(railGroupHeight('L0', 5)).toBe(262);
     expect(railGroupHeight('L1', 5)).toBe(232);
     expect(railGroupHeight('L2', 5)).toBe(48);
+  });
+});
+
+describe('railToolsHeight：工具組高度（X11）', () => {
+  it('一顆＝48（圓）；兩顆以上＝6＋n×44＋6（膠囊）', () => {
+    expect(railToolsHeight(1)).toBe(48);
+    expect(railToolsHeight(2)).toBe(100);
+    expect(railToolsHeight(3)).toBe(144);
+  });
+  it('沒有工具組＝0', () => {
+    expect(railToolsHeight(0)).toBe(0);
   });
 });
 
@@ -37,7 +48,7 @@ describe('pickRailLevel：依分頁組可用高度取第一個放得下的層級
 });
 
 describe('各姿態實測高度落在的層級（工具組與分頁組之間留 RAIL_GAP）', () => {
-  const tools = (n: number) => 6 + n * 44 + 6;
+  const tools = railToolsHeight;
   const room = (regionHeight: number, toolCount: number) =>
     regionHeight - (toolCount > 0 ? tools(toolCount) + RAIL_GAP : 0);
 
@@ -45,7 +56,7 @@ describe('各姿態實測高度落在的層級（工具組與分頁組之間留 
     expect(pickRailLevel({ available: room(678 - 153 - 34, 3), count: 5, labelsFit: true })).toBe('L0');
   });
 
-  it('外橫 primary 466：起點 78、底 34 → 區間 354；首頁（1 顆購物車）扣 68 剩 286 → L0', () => {
+  it('外橫 primary 466：起點 78、底 34 → 區間 354；首頁（1 顆購物車，48 圓）扣 60 剩 294 → L0', () => {
     expect(pickRailLevel({ available: room(466 - 78 - 34, 1), count: 5, labelsFit: true })).toBe('L0');
   });
 
@@ -53,7 +64,7 @@ describe('各姿態實測高度落在的層級（工具組與分頁組之間留 
     expect(pickRailLevel({ available: room(466 - 78 - 34, 3), count: 5, labelsFit: true })).toBe('L2');
   });
 
-  it('外橫 secondary 466（X9）：起點 12、底 74 → 區間 380；首頁（1 顆）扣 68 剩 312 → L0；店家頁（3 顆）剩 224 → L2', () => {
+  it('外橫 secondary 466（X9）：起點 12、底 74 → 區間 380；首頁（1 顆，48 圓）扣 60 剩 320 → L0；店家頁（3 顆）剩 224 → L2', () => {
     expect(pickRailLevel({ available: room(466 - 12 - 74, 1), count: 5, labelsFit: true })).toBe('L0');
     expect(pickRailLevel({ available: room(466 - 12 - 74, 3), count: 5, labelsFit: true })).toBe('L2');
   });

@@ -1,4 +1,4 @@
-import { CELL_COMPACT, CELL_LABELED, RAIL_CAP_W, RAIL_PAD } from './railGeometry';
+import { CELL_COMPACT, CELL_LABELED, RAIL_CAP_W, RAIL_PAD, RAIL_PAD_SOLO, RAIL_TOOL_BTN } from './railGeometry';
 
 /**
  * 直立軌分頁組的層級（design-spec §3.2.3、decisions X3）：
@@ -15,6 +15,12 @@ const CELL = { L0: CELL_LABELED, L1: CELL_COMPACT } as const;
 /** 分頁組在該層級的高度 */
 export function railGroupHeight(level: RailLevel, count: number): number {
   return level === 'L2' ? RAIL_CAP_W : RAIL_PAD * 2 + count * CELL[level];
+}
+
+/** 工具組的高度：沒有＝0；一顆＝48 圓（X11，上下各 2）；多顆＝膠囊（上下各 6） */
+export function railToolsHeight(count: number): number {
+  if (count <= 0) return 0;
+  return (count === 1 ? RAIL_PAD_SOLO : RAIL_PAD) * 2 + count * RAIL_TOOL_BTN;
 }
 
 /**
