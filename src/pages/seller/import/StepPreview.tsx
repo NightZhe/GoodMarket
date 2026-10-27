@@ -5,6 +5,9 @@ import KPI, { type KpiKind } from '../../../components/import/KPI';
 import PreviewRow, { PreviewHeader } from '../../../components/import/PreviewRow';
 import Switch from '../../../components/import/Switch';
 import { btnOutline, btnPrimaryLg } from '../../../components/import/ui';
+import { GlassTray, TrayButton } from '../../../components/glass';
+import { usePosture } from '../../../lib/layout/posture';
+import { TRAY_DIMMED, TRAY_RIGHT_HALF } from '../../buyer/trayPlacement';
 import { ALL_KINDS } from '../../../lib/shopee-import/constants';
 import type { ShopeeImportLib } from '../../../lib/import/loader';
 import { matchResume } from '../../../lib/import/resume';
@@ -44,6 +47,8 @@ const rank = (r: Row) => (r.action === 'error' ? 0 : FILTER_MATCH.warn(r) ? 1 : 
 export default function StepPreview({ lib, analysis, announce, onBack, onStart }: Props) {
   const headingRef = useFocusOnMount<HTMLHeadingElement>();
   const { getImportIndex } = useStore();
+  // 水平姿態：匯入托盤疊在分頁膠囊正上方；側邊姿態沒有膠囊，托盤落在右半（D13）
+  const stacked = usePosture() === 'bottom';
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [options, setOptions] = useState<PreviewOptions>({ skipSoldOut: false, allHidden: false });
   const [edited, setEdited] = useState<Record<string, CategoryId>>({});
@@ -195,9 +200,22 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
     { kind: 'skip', label: '略過', value: counts.skipped },
   ];
   const filterLabel = filter ? kpis.find((k) => k.kind === filter)?.label : null;
+  const summary = noneToImport ? (
+    <p className="font-medium">沒有可以匯入的商品</p>
+  ) : onlyFinishRecord ? (
+    <p className="font-medium">上次的商品都已寫入，只差收尾</p>
+  ) : (
+    <>
+      <p className="font-medium">{resume ? '將接續匯入' : '將匯入'} {n(importable)} 件</p>
+      <p className="text-xs text-muted">
+        {resume && `上次已完成 ${n(counts.done)} 件・`}新增 {n(counts.created)}、更新 {n(counts.updated)}
+      </p>
+    </>
+  );
+  const startLabel = onlyFinishRecord ? '完成這筆匯入' : resume ? `接續匯入 ${n(importable)} 件` : `開始匯入 ${n(importable)} 件`;
 
   return (
-    <section aria-labelledby="step2-title" className="space-y-4 pb-24 md:pb-20">
+    <section aria-labelledby="step2-title" className="space-y-4 pb-[calc(var(--tray-h)+4rem)] md:pb-20">
       <div>
         {heading}
         <p className="mt-1 text-sm text-muted">
@@ -301,22 +319,25 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
         </nav>
       )}
 
-      <div className="fixed inset-x-0 bottom-[calc(3.625rem+env(safe-area-inset-bottom))] z-30 border-t border-line bg-white px-3 py-3 shadow-bar-top md:sticky md:inset-x-auto md:bottom-0 md:rounded-lg md:border md:px-4">
+      {/* 手機：懸浮匯入托盤（C5）。水平姿態疊在分頁膠囊正上方，側邊姿態落在右半（D13）。桌機（md 以上）維持頁底的 sticky 列 */}
+      <div className={`md:hidden ${TRAY_DIMMED} ${stacked ? '' : TRAY_RIGHT_HALF}`}>
+        <GlassTray label="匯入" abovePill={stacked}>
+          <div className="w-0 min-w-full text-center text-footnote">{summary}</div>
+          {resume && (
+            <button type="button" className="min-h-11 w-0 min-w-full text-center text-footnote text-brand underline" onClick={leaveResume}>
+              不接續，當作新的匯入
+            </button>
+          )}
+          <TrayButton tone="secondary" onClick={onBack}>上一步</TrayButton>
+          <TrayButton tone="primary" aria-disabled={noneToImport || undefined} onClick={() => { if (!noneToImport) start(); }}>
+            {startLabel}
+          </TrayButton>
+        </GlassTray>
+      </div>
+
+      <div className="z-30 hidden border-t border-line bg-white px-3 py-3 shadow-bar-top md:sticky md:bottom-0 md:block md:rounded-lg md:border md:px-4">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
-          <div className="text-sm">
-            {noneToImport ? (
-              <p className="font-medium">沒有可以匯入的商品</p>
-            ) : onlyFinishRecord ? (
-              <p className="font-medium">上次的商品都已寫入，只差收尾</p>
-            ) : (
-              <>
-                <p className="font-medium">{resume ? '將接續匯入' : '將匯入'} {n(importable)} 件</p>
-                <p className="text-xs text-muted">
-                  {resume && `上次已完成 ${n(counts.done)} 件・`}新增 {n(counts.created)}、更新 {n(counts.updated)}
-                </p>
-              </>
-            )}
-          </div>
+          <div className="text-sm">{summary}</div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {resume && (
               <button type="button" className="min-h-11 px-2 text-sm text-brand underline" onClick={leaveResume}>
@@ -330,7 +351,7 @@ export default function StepPreview({ lib, analysis, announce, onBack, onStart }
               type="button" aria-disabled={noneToImport} className={btnPrimaryLg}
               onClick={() => { if (!noneToImport) start(); }}
             >
-              {onlyFinishRecord ? '完成這筆匯入' : resume ? `接續匯入 ${n(importable)} 件` : `開始匯入 ${n(importable)} 件`}
+              {startLabel}
             </button>
           </div>
         </div>

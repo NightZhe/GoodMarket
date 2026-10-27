@@ -16,6 +16,7 @@ import { QuickCellButton, QuickEditBlock } from './QuickEditCell';
 import QuickEditSheet from './QuickEditSheet';
 import type { SavedInfo } from './useQuickEdit';
 import { hapticSuccess } from '../../lib/native/haptics';
+import { isNative } from '../../lib/native/platform';
 
 type Tab = 'all' | 'active' | 'soldout' | 'hidden';
 
@@ -214,9 +215,11 @@ export default function SellerProducts() {
 
   // 桌機格子與手機面板是兩套版面：視窗跨過 1024 時，沒有改動才收掉；有改動就保留（輸入不能因為縮放瀏覽器就丟）。
   // 桌機的編輯區在窄版仍可用（疊在列裡），手機面板在寬版仍可用（置中的面板）。
+  // App 內 lg: 不生效（永遠是手機面板，D4），沒有「跨過 1024 換版面」這回事（iPad、Pro Max 橫向跨過時也不該收掉面板），所以不監聽
   const statusRef = useRef(status);
   statusRef.current = status;
   useEffect(() => {
+    if (isNative()) return;
     const mq = window.matchMedia('(min-width: 1024px)');
     const onChange = () => { if (!statusRef.current.dirty && !statusRef.current.busy) closeEdit(null); };
     mq.addEventListener('change', onChange);
@@ -429,7 +432,7 @@ export default function SellerProducts() {
       })()}
 
       {target && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" role="alertdialog" aria-modal="true">
+        <div className="fixed inset-0 z-50 flex items-center justify-center pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,var(--inset-l))] pr-[max(1.5rem,var(--inset-r))] pt-[max(1.5rem,env(safe-area-inset-top))]" role="alertdialog" aria-modal="true">
           <div className="animate-fade absolute inset-0 bg-black/45" onClick={() => setConfirmId(null)} />
           <div className="relative w-full max-w-sm rounded-lg bg-white p-6">
             <h2 className="font-bold">確定刪除這件商品？</h2>

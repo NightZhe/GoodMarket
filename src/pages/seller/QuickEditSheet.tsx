@@ -49,7 +49,7 @@ interface Props extends Omit<UseQuickEditArgs, 'fields'> {
 
 /**
  * 手機（< 1024）的底部面板：每個規格一列「售價｜庫存」，價格與庫存一起改、一起存。
- * 有未儲存的修改時視窗被放大到 1024 以上，面板照常開著（置中、限寬）。
+ * 有未儲存的修改時視窗被放大到 1024 以上，面板照常開著（置中、限寬）。App 內 lg: 不生效，任何寬度都是這個面板。
  */
 export default function QuickEditSheet({ edit, ...args }: Props) {
   const { product } = args;
@@ -89,11 +89,14 @@ export default function QuickEditSheet({ edit, ...args }: Props) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={qe.onEscape}>
+    // 容器吃左右安全區（側邊姿態右緣＝直立軌讓開），遮罩仍蓋全螢幕。面板掛 fold-panel（D13、AC-23）：
+    // 內直／佇立只佔下半、內橫／書本只佔右半、外蓋滿欄寬；限高全交給 .fold-panel，這裡不放 max-h-*（utilities 層會蓋掉它）。
+    // 鍵盤開啟時 useKeyboardInset 用 inline style 把面板往上推並限高（鍵盤蓋住的本來就是下半，不必再守折線）
+    <div className="fixed inset-0 z-50 flex items-end justify-center pl-(--inset-l) pr-(--inset-r)" role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={qe.onEscape}>
       <div className="animate-fade absolute inset-0 bg-black/45" onClick={onBackdrop} aria-hidden="true" />
       <div
         ref={panelRef} style={inset ?? undefined}
-        className="animate-sheet pb-safe absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl bg-white lg:mx-auto lg:max-w-lg"
+        className="fold-panel animate-sheet pb-safe relative flex flex-col rounded-t-2xl bg-white landscape:mr-0 lg:mx-auto lg:landscape:mx-auto lg:max-h-[85dvh] lg:max-w-lg lg:w-full"
       >
         <div className="flex shrink-0 items-start gap-3 border-b border-line p-4">
           <ProductImage src={product.images[0]} alt="" size="sm" className="w-12 shrink-0 rounded-sm max-[319px]:hidden" />
