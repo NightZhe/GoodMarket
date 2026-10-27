@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, CircleAlert, Store } from 'lucide-react';
 import ProductImage from '../ProductImage';
@@ -15,6 +15,7 @@ import { hapticError } from '../../lib/native/haptics';
 import { useOwnsPageTitle } from '../../lib/layout/pageTitle';
 import { GlassTray, TrayButton } from '../glass';
 import { TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
+import { trayReserveStyle, useTrayHeightReport } from '../../lib/layout/trayReserve';
 
 interface Props {
   changes: CheckoutRejection[];
@@ -90,6 +91,8 @@ function ItemRow({ item, image }: { item: RejectedItem; image: string | undefine
 export default function CheckoutRejected({ changes, fromCart, shopOrder, submitted, shopName, imageOf }: Props) {
   const h1 = useRef<HTMLHeadingElement>(null);
   const idBase = useId();
+  const [trayHeight, setTrayHeight] = useState(0);
+  const trayRef = useTrayHeightReport(setTrayHeight);
   useOwnsPageTitle(); // 有自己的 h1（下單失敗），外框不補「結帳」行內標題
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -105,7 +108,7 @@ export default function CheckoutRejected({ changes, fromCart, shopOrder, submitt
 
   return (
     <>
-      <div className="mx-auto max-w-lg px-3 pt-3 pb-(--tray-clearance) md:pt-12 lg:pb-12 max-[319px]:px-0 max-[319px]:pt-0 max-[319px]:pb-0">
+      <div style={trayReserveStyle(false, trayHeight)} className="mx-auto max-w-lg px-3 pt-3 pb-(--tray-reserve) md:pt-12 lg:pb-12 max-[319px]:px-0 max-[319px]:pt-0 max-[319px]:pb-0">
         <div className="rounded-md bg-white max-[319px]:rounded-none">
           <div className="flex flex-col items-center px-5 pt-8 pb-6 text-center md:px-8 md:pt-10 max-[319px]:px-3 max-[319px]:pt-6">
             <CircleAlert size={48} strokeWidth={1.5} className="text-error-text" aria-hidden="true" />
@@ -152,7 +155,7 @@ export default function CheckoutRejected({ changes, fromCart, shopOrder, submitt
       </div>
 
       {/* 手機：主要按鈕是底部懸浮托盤（C5，剛才「下訂單」托盤的位置）；188 寬（放大 200%）改回卡片內 */}
-      <div className={`lg:hidden max-[319px]:hidden ${TRAY_RIGHT_HALF}`}>
+      <div ref={trayRef} className={`lg:hidden max-[319px]:hidden ${TRAY_RIGHT_HALF}`}>
         <GlassTray label="重新購買">
           <TrayButton tone="primary" to={primary.to} state={primary.state}>{primary.label}</TrayButton>
         </GlassTray>

@@ -13,6 +13,7 @@ import { publicUrl } from '../../lib/share/publicUrl';
 import { pillButtonPrimary } from '../../components/pillButton';
 import { scrollPageToTop } from '../../lib/ui/scroll';
 import { usePosture } from '../../lib/layout/posture';
+import { trayReserveStyle } from '../../lib/layout/trayReserve';
 import { CountBadge, GlassButton, GlassCapsule, TabPill, type TabItem } from '../../components/glass';
 import { PurchaseTray } from './PurchaseTray';
 import { TWO_COLUMN_GRID, TWO_COLUMN_TOP, useTwoColumn } from './productColumns';
@@ -397,8 +398,9 @@ function HomeSkeleton() {
  */
 function ProductSkeleton() {
   const [colsRef, twoColumn] = useTwoColumn();
+  const [trayHeight, setTrayHeight] = useState(0);
   return (
-    <div ref={colsRef} className={`mx-auto pb-(--tray-clearance) md:px-4 md:pb-0 md:pt-4 ${twoColumn ? 'max-w-none' : 'max-w-6xl'}`}>
+    <div ref={colsRef} style={trayReserveStyle(false, trayHeight)} className={`mx-auto pb-(--tray-reserve) md:px-4 md:pb-0 md:pt-4 ${twoColumn ? 'max-w-none' : 'max-w-6xl'}`}>
       <div
         role="status"
         className={`grid items-start md:grid-cols-[450px_1fr] md:gap-8 ${twoColumn ? `${TWO_COLUMN_GRID} ${TWO_COLUMN_TOP}` : 'grid-cols-[minmax(0,1fr)]'}`}
@@ -413,7 +415,7 @@ function ProductSkeleton() {
         </div>
       </div>
       {/* 與 ProductDetail 同一個托盤；按鈕停用，點了沒有反應 */}
-      <PurchaseTray twoColumn={twoColumn} dimmed />
+      <PurchaseTray twoColumn={twoColumn} dimmed onHeight={setTrayHeight} />
     </div>
   );
 }

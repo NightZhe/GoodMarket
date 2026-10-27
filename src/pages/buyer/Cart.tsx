@@ -29,8 +29,11 @@ export default function Cart() {
 }
 
 function CartSkeleton() {
+  // 骨架的托盤也會隨文字放大換行變高：預留跟實測高度走，載入完成換成 CartView 時內容底部不跳
+  const [trayHeight, setTrayHeight] = useState(0);
+  const trayRef = useTrayHeightReport(setTrayHeight);
   return (
-    <div aria-busy="true" className="mx-auto max-w-[600px] pb-(--tray-clearance) md:max-w-6xl md:px-4 md:pt-6">
+    <div aria-busy="true" style={trayReserveStyle(false, trayHeight)} className="mx-auto max-w-[600px] pb-(--tray-reserve) md:max-w-6xl md:px-4 md:pt-6">
       <p role="status" className="sr-only">載入中</p>
       <div className="space-y-2 md:space-y-4" aria-hidden="true">
         {[0, 1].map(i => (
@@ -48,7 +51,7 @@ function CartSkeleton() {
         ))}
       </div>
       {/* 結帳托盤照常顯示，但總額不用粗黑字：避免讓人以為購物車真的是 0 */}
-      <div className={`lg:hidden ${TRAY_RIGHT_HALF}`}>
+      <div ref={trayRef} className={`lg:hidden ${TRAY_RIGHT_HALF}`}>
         <GlassTray label="結帳" variant="checkout">
           <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-between gap-x-2" aria-hidden="true">
             <span className="flex min-h-11 items-center gap-2 text-callout text-muted-2">

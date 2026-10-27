@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { NUMBER_INPUT_MAX_LENGTH, PRICE_MAX, STOCK_MAX, variantErrors, wholeNumber } from '../../lib/products/variants';
 import { TrayButton } from '../../components/glass';
 import { SellerTray, useStackedTray } from './SellerTray';
+import { trayReserveStyle } from '../../lib/layout/trayReserve';
 import type { CategoryId, Product } from '../../types';
 
 const MAX_IMAGES = 9;
@@ -94,6 +95,7 @@ function Form({ existing, shopId, location, onSave }: {
   const [touched, setTouched] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [trayHeight, setTrayHeight] = useState(0);
 
   const num = wholeNumber;
   const errors = {
@@ -199,7 +201,7 @@ function Form({ existing, shopId, location, onSave }: {
   const input = 'w-full rounded-sm border border-line px-3 py-2.5 text-sm outline-none focus:border-ink';
 
   return (
-    <div className={`mx-auto max-w-3xl space-y-4 ${stacked ? 'pb-(--stack-clearance)' : 'pb-(--tray-clearance)'} md:pb-20`}>
+    <div style={trayReserveStyle(stacked, trayHeight)} className="mx-auto max-w-3xl space-y-4 pb-(--tray-reserve) md:pb-20">
       <h1 className="text-xl font-bold">{existing ? '編輯商品' : '新增商品'}</h1>
 
       {touched && hasError && (
@@ -323,7 +325,7 @@ function Form({ existing, shopId, location, onSave }: {
       </div>
 
       {/* 手機：底部懸浮儲存托盤（C5、X4），取消／儲存商品兩顆，寬 272 */}
-      <SellerTray label="儲存">
+      <SellerTray label="儲存" onHeight={setTrayHeight}>
         <TrayButton tone="secondary" onClick={() => navigate(-1)}>取消</TrayButton>
         <TrayButton tone="primary" aria-disabled={saving || uploading || undefined} aria-busy={saving || undefined} onClick={() => { if (!saving && !uploading) void submit('active'); }}>
           <span className="flex items-center gap-2">

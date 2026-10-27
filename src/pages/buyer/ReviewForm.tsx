@@ -26,6 +26,7 @@ import { formGate, partitionItems } from '../../lib/reviews/status';
 import type { OrderReviewStatus } from '../../lib/reviews/types';
 import { toSubmitItems, useReviewEditor } from './reviewEditor';
 import { TRAY_DIMMED, TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
+import { trayReserveStyle, useTrayHeightReport } from '../../lib/layout/trayReserve';
 
 /** 評價表單 #/orders/:orderId/review：要先登入；訂單要屬於目前登入的帳號（別人的訂單一律「找不到」，不透露存在與否） */
 export default function ReviewForm() {
@@ -41,6 +42,8 @@ function ReviewFormView() {
   const { myOrders, myOrdersState, refreshMyOrders, user } = useStore();
   const { statusState, statusOf, refreshStatus } = useReviews();
   const [retrying, setRetrying] = useState(false);
+  // 送出托盤在 FormBody 裡，高度（文字放大換行會變高）回報到這裡，外層內容底部預留才跟得上
+  const [trayHeight, setTrayHeight] = useState(0);
   const status = statusOf(orderId);
   // 暱稱預填順序：個人檔案的暱稱 → Google 名稱 → 空白。預填值只在表單建立時使用，所以先等個人檔案的暱稱讀回來
   const saved = useSavedNickname();
@@ -76,12 +79,12 @@ function ReviewFormView() {
     } else {
       content = saved.state === 'loading'
         ? <FormSkeleton />
-        : <FormBody key={orderId} status={status} editable={gate.kind === 'form'} savedNickname={saved.nickname} />;
+        : <FormBody key={orderId} status={status} editable={gate.kind === 'form'} savedNickname={saved.nickname} onTrayHeight={setTrayHeight} />;
     }
   }
 
   return (
-    <div className="mx-auto max-w-3xl pb-[calc(var(--tray-clearance)+2rem)] md:px-4 md:pb-10 md:pt-6">
+    <div style={trayReserveStyle(false, trayHeight)} className="mx-auto max-w-3xl pb-[calc(var(--tray-reserve)+2rem)] md:px-4 md:pb-10 md:pt-6">
       {/* 返回在外框的導覽列（水平姿態）或直立軌（側邊姿態），頁內不再放返回箭頭 */}
       <header className="bg-white md:rounded-t-md">
         <div className="flex min-h-11 items-center px-4">
@@ -160,9 +163,10 @@ function useOnline() {
   return online;
 }
 
-interface BodyProps { status: OrderReviewStatus; editable: boolean; savedNickname: string | null | undefined }
+interface BodyProps { status: OrderReviewStatus; editable: boolean; savedNickname: string | null | undefined; onTrayHeight: (height: number) => void }
 
-function FormBody({ status, editable, savedNickname }: BodyProps) {
+function FormBody({ status, editable, savedNickname, onTrayHeight }: BodyProps) {
+  const trayRef = useTrayHeightReport(onTrayHeight);
   const navigate = useNavigate();
   const { user } = useStore();
   const prefill = useMemo(() => resolveNicknamePrefill(savedNickname, nicknamePrefillFor(user)), [savedNickname, user]);
@@ -401,7 +405,7 @@ function FormBody({ status, editable, savedNickname }: BodyProps) {
           </section>
 
           {/* 手機：底部懸浮送出托盤（C5）。桌機（md 以上）維持頁內送出列 */}
-          <div className={`md:hidden ${TRAY_DIMMED} ${TRAY_RIGHT_HALF}`}>
+          <div ref={trayRef} className={`md:hidden ${TRAY_DIMMED} ${TRAY_RIGHT_HALF}`}>
             <GlassTray label="送出評價">
               <p role="status" className="basis-full text-center text-footnote text-muted">{message}</p>
               <TrayButton tone="primary" onClick={onSubmitClick} aria-disabled={blocker ? true : undefined}>送出評價</TrayButton>
