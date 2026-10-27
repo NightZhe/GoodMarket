@@ -41,7 +41,7 @@ export function useLabelsFit(listRef: RefObject<HTMLElement | null>, available: 
 
 type CellProps = {
   item: TabItem;
-  /** pill＝水平膠囊（60×50，選中有淡橘底）；rail＝直立軌（56×50，選中只換色） */
+  /** pill＝水平膠囊（60×50，選中有淡橘底）；rail＝直立軌（48×50，選中只換色） */
   kind: 'pill' | 'rail';
   /** 顯示標籤；false＝純圖示（標籤留在 aria-label，視覺上藏起來但仍可量寬度） */
   labeled: boolean;

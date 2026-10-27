@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { RAIL_GAP, pickRailLevel, railGroupHeight } from './railLevel';
 
 describe('railGroupHeight：分頁組各層級的高度（design-spec §3.2.3）', () => {
-  it('五格：L0＝6＋5×50＋6＝262、L1＝6＋5×44＋6＝232、L2＝一顆 56', () => {
+  it('五格：L0＝6＋5×50＋6＝262、L1＝6＋5×44＋6＝232、L2＝一顆 48', () => {
     expect(railGroupHeight('L0', 5)).toBe(262);
     expect(railGroupHeight('L1', 5)).toBe(232);
-    expect(railGroupHeight('L2', 5)).toBe(56);
+    expect(railGroupHeight('L2', 5)).toBe(48);
   });
 });
 
@@ -27,7 +27,7 @@ describe('pickRailLevel：依分頁組可用高度取第一個放得下的層級
     expect(pick(100, false)).toBe('L2');
   });
 
-  it('連 56 都放不下也留在 L2，不消失、不出現「…」', () => {
+  it('連 48 都放不下也留在 L2，不消失、不出現「…」', () => {
     expect(pick(0)).toBe('L2');
   });
 

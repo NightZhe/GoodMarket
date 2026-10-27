@@ -117,7 +117,8 @@ button:disabled { cursor: not-allowed; }
   --rail-top: calc(max(env(safe-area-inset-top), var(--sys-status-end)) + 12px);
   --rail-bottom: max(env(safe-area-inset-bottom), 12px); /* 分頁組下緣離視窗底；外橫 secondary 要避開相機，由 html[data-rail] 覆寫 */
   /* 直立軌幾何：數字在 components/glass/railGeometry.ts 還有一份（算層級用），railGeometry.test.ts 守著兩邊一致 */
-  --rail-cap-w: 56px; /* 直立軌膠囊寬，也是 L2 鈕邊長 */
+  --rail-cap-w: 48px; /* 直立軌膠囊寬，也是 L2 鈕邊長 */
+  --rail-center: 48px; /* 直立軌中心線距系統欄那側的螢幕邊（X10：對齊系統島，不用 --rail-w 的一半） */
   --rail-pad: 6px; /* 膠囊上下內距 */
   --cell-h: 50px; /* 分頁格高：圖示＋標籤（水平膠囊、軌 L0） */
   --cell-h-compact: 44px; /* 分頁格高：純圖示（軌 L1） */
@@ -155,13 +156,13 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
   .glass-btn { position: relative; transition: transform 160ms cubic-bezier(.23,1,.32,1), background-color 160ms; }
   .glass-btn:active { transform: scale(.97); background-color: var(--color-press-glass); transition-duration: 100ms; }
 
-  /* 直立軌（側邊姿態）：兩個獨立的膠囊，工具組貼上（--rail-top 起）、分頁組貼下，中間彈性空白；水平置中在軌欄裡 */
+  /* 直立軌（側邊姿態）：兩個獨立的膠囊，工具組貼上（--rail-top 起）、分頁組貼下，中間彈性空白；中心線距系統欄那側的螢幕邊 --rail-center（X10），左右姿態鏡像 */
   .glass-capsule { position: fixed; z-index: 40; width: var(--rail-cap-w); border-radius: calc(var(--rail-cap-w) / 2); padding: var(--rail-pad) 0; display: flex; flex-direction: column; align-items: center; }
   .glass-capsule--tools { top: var(--rail-top); }
-  html[data-bars='side-right'] .glass-capsule, html[data-bars='side-right'] .glass-rail-tabs { right: calc((var(--rail-w) - var(--rail-cap-w)) / 2); }
-  html[data-bars='side-left'] .glass-capsule, html[data-bars='side-left'] .glass-rail-tabs { left: calc((var(--rail-w) - var(--rail-cap-w)) / 2); }
+  html[data-bars='side-right'] .glass-capsule, html[data-bars='side-right'] .glass-rail-tabs { right: calc(var(--rail-center) - var(--rail-cap-w) / 2); }
+  html[data-bars='side-left'] .glass-capsule, html[data-bars='side-left'] .glass-rail-tabs { left: calc(var(--rail-center) - var(--rail-cap-w) / 2); }
 
-  /* 分頁組：外層固定在 --rail-bottom 上，裡面的 <nav> 是 L0／L1 的膠囊；L2 時外層只剩一顆 56 的鈕，<nav> 變成往上展開的浮層。
+  /* 分頁組：外層固定在 --rail-bottom 上，裡面的 <nav> 是 L0／L1 的膠囊；L2 時外層只剩一顆 48 的鈕，<nav> 變成往上展開的浮層。
      .glass-rail-room 是隱形探針：高度＝軌的區間（--rail-top 到 --rail-bottom），元件量它來選層級，幾何數字只放在 CSS。層級切換不做動畫（AC-14） */
   .glass-rail-tabs { position: fixed; z-index: 40; bottom: var(--rail-bottom); width: var(--rail-cap-w); }
   .glass-rail-body { width: 100%; border-radius: calc(var(--rail-cap-w) / 2); padding: var(--rail-pad) 0; display: flex; flex-direction: column; align-items: center; }
