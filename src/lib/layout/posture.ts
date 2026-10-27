@@ -15,7 +15,7 @@ export type Insets = { left: number; right: number };
 
 /**
  * 直立軌的版型（只在側邊姿態有意義）：
- *   outer-portrait：外直，狀態區到 141 → 軌起點 ≥ 153｜outer-landscape-primary：外橫、系統欄在左，只有相機 → 起點 ≥ 78
+ *   outer-portrait：外直，狀態區到 151（含島下方灰點，X11）→ 軌起點 ≥ 163｜outer-landscape-primary：外橫、系統欄在左，只有相機 → 起點 ≥ 78
  *   outer-landscape-secondary：外橫、系統欄在右，相機在欄底 y 400–436 → 起點貼頂 12、底緣留 74（X9）｜default：其餘（內橫 116、Split View…）
  */
 export type RailProfile = 'default' | 'outer-portrait' | 'outer-landscape-primary' | 'outer-landscape-secondary';
@@ -106,11 +106,30 @@ function domProbes(onChange: () => void): () => Reading {
   });
 }
 
+/** 視窗尺寸的監看來源（可注入，測試不必有 DOM） */
+export type ViewportEnv = {
+  root: Element;
+  matchMedia: (query: string) => { addEventListener: (type: 'change', listener: () => void) => void };
+  ResizeObserver: new (callback: () => void) => { observe: (target: Element) => void };
+};
+
+/**
+ * 視窗大小改變就通知。不靠 resize 事件：外橫 secondary 展開成內橫時左右安全區都是 84，探針尺寸不變，
+ * 只剩視窗寬 678 → 951 在變，而 WKWebView 展開時 resize 事件可能沒發、或發的時候 innerWidth 還是舊的（QA2 B4）。
+ * 兩個來源都是在版面實際重算之後才觸發，讀到的 innerWidth 已經是新的：
+ *   - ResizeObserver 看 <html>：視窗寬一變，它的寬一定跟著變（外直↔內直這類寬度不跨 678 的也涵蓋）
+ *   - matchMedia 的 change：跨過外螢幕寬上限（OUTER_MAX_WIDTH）那一刻
+ */
+export function watchViewport(env: ViewportEnv, onChange: () => void): void {
+  new env.ResizeObserver(onChange).observe(env.root);
+  env.matchMedia(`(min-width: ${OUTER_MAX_WIDTH + 1}px)`).addEventListener('change', onChange);
+}
+
 type PostureStore = ReturnType<typeof createPostureStore>;
 let store: PostureStore | null = null;
 
 /**
- * 啟動姿態判定（只在 App 內，可重複呼叫）：載入先判一次，之後探針尺寸改變、resize、旋轉、顯示狀態改變、pageshow 都重判。
+ * 啟動姿態判定（只在 App 內，可重複呼叫）：載入先判一次，之後探針尺寸改變、視窗大小改變（watchViewport）、resize、旋轉、顯示狀態改變、pageshow 都重判。
  * 回到前景（Capacitor resume）由 shell.ts 呼叫 refreshPosture。
  * 旋轉事件觸發當下 env() 可能還是舊值，所以下一個 frame 再讀一次。
  */
@@ -126,6 +145,7 @@ export function startPosture(): PostureStore | null {
     document.documentElement.dataset.bars = bars;
     document.documentElement.dataset.rail = rail;
   });
+  watchViewport({ root: document.documentElement, matchMedia: q => window.matchMedia(q), ResizeObserver }, refresh);
   window.addEventListener('resize', refresh);
   screen.orientation?.addEventListener('change', refresh);
   window.addEventListener('orientationchange', refresh);

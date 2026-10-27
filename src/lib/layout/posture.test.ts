@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { classifyBars, classifyRail, createPostureStore, type Insets } from './posture';
+import { classifyBars, classifyRail, createPostureStore, watchViewport, type Insets, type ViewportEnv } from './posture';
 
 describe('classifyBars：只看左右安全區的差值，不看機型、寬度、orientation', () => {
   it('右側有系統欄（Duo 內橫實測 right 84、left 0）→ side-right', () => {
@@ -133,6 +133,67 @@ describe('createPostureStore：軌的版型也是姿態的一部分', () => {
     const listener = vi.fn();
     store.subscribe(listener);
     store.refresh();
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe('展開成內橫（QA2 B4）：安全區不變、只有視窗寬 678 → 951，要靠視窗大小的監看來源重判', () => {
+  // 假環境：不發 resize／orientationchange／visibilitychange，只讓 ResizeObserver 或 matchMedia 的 change 觸發（模擬 WKWebView 展開時沒發 resize）
+  const setup = () => {
+    let reading = { left: 0, right: 84, width: 678, height: 466, orientation: 'landscape-secondary' };
+    const apply = vi.fn();
+    const store = createPostureStore(() => reading, apply);
+    const roCallbacks: Array<() => void> = [];
+    const mqlCallbacks: Array<() => void> = [];
+    const observed: unknown[] = [];
+    const queries: string[] = [];
+    const root = {} as Element;
+    const env: ViewportEnv = {
+      root,
+      matchMedia: query => {
+        queries.push(query);
+        return { addEventListener: (_type, listener) => { mqlCallbacks.push(listener); } };
+      },
+      ResizeObserver: class {
+        constructor(callback: () => void) { roCallbacks.push(callback); }
+        observe(target: Element) { observed.push(target); }
+      },
+    };
+    watchViewport(env, () => store.refresh());
+    const unfold = () => { reading = { left: 0, right: 84, width: 951, height: 669, orientation: 'landscape-secondary' }; };
+    return { store, apply, roCallbacks, mqlCallbacks, observed, queries, root, unfold };
+  };
+
+  it('起點是外橫 secondary；展開後 ResizeObserver 觸發 → 重判成 default 並通知訂閱者', () => {
+    const { store, apply, roCallbacks, unfold } = setup();
+    expect(store.getSnapshot()).toBe('side-right');
+    expect(apply).toHaveBeenLastCalledWith('side-right', 'outer-landscape-secondary');
+    const listener = vi.fn();
+    store.subscribe(listener);
+    unfold();
+    roCallbacks.forEach(cb => cb());
+    expect(apply).toHaveBeenLastCalledWith('side-right', 'default');
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('只有 matchMedia 的 change 觸發也能重判（兩個來源互相備援）', () => {
+    const { apply, mqlCallbacks, unfold } = setup();
+    unfold();
+    mqlCallbacks.forEach(cb => cb());
+    expect(apply).toHaveBeenLastCalledWith('side-right', 'default');
+  });
+
+  it('ResizeObserver 看的是 <html>，matchMedia 的門檻是外螢幕寬上限 + 1（679）', () => {
+    const { observed, queries, root } = setup();
+    expect(observed).toEqual([root]);
+    expect(queries).toEqual(['(min-width: 679px)']);
+  });
+
+  it('視窗大小事件觸發但姿態沒變（外橫內縮放等）→ 不通知', () => {
+    const { store, roCallbacks } = setup();
+    const listener = vi.fn();
+    store.subscribe(listener);
+    roCallbacks.forEach(cb => cb());
     expect(listener).not.toHaveBeenCalled();
   });
 });
