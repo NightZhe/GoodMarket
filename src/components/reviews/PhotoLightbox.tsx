@@ -15,6 +15,8 @@ interface Props {
  * 全螢幕大圖檢視器（買家與賣家共用，S-7）。
  * 手機滑動＝瀏覽器原生橫向捲動＋scroll-snap（慣性、回彈都是原生的，不自己寫手勢）；
  * 桌機用方向鍵或左右按鈕。程式觸發的捲動在「減少動態效果」下瞬間切換。
+ * 全螢幕遮罩蓋到螢幕邊，但右上關閉鈕要讓開直立軌與系統欄：頂列左右各自吃 --inset-l／--inset-r（側邊姿態時系統欄那側＝軌欄寬）。
+ * 關閉鈕貼右緣、計數貼左緣，都不在水平或垂直的中線帶（D13）內。
  */
 export default function PhotoLightbox({ paths, startIndex, returnFocusTo, onClose }: Props) {
   const total = paths.length;
@@ -86,7 +88,7 @@ export default function PhotoLightbox({ paths, startIndex, returnFocusTo, onClos
       role="dialog" aria-modal="true" aria-label="評價照片檢視" onKeyDown={onKeyDown}
       className="animate-fade fixed inset-0 z-[60] flex flex-col bg-black/90"
     >
-      <div className="flex items-center justify-between px-2 pt-[max(env(safe-area-inset-top),0.5rem)] text-white">
+      <div className="flex items-center justify-between pl-[max(0.5rem,var(--inset-l))] pr-[max(0.5rem,var(--inset-r))] pt-[max(env(safe-area-inset-top),0.5rem)] text-white">
         <span className="px-3 text-sm tabular-nums" aria-hidden="true">{index + 1} / {total}</span>
         <button
           ref={closeRef} type="button" onClick={onClose} aria-label="關閉"

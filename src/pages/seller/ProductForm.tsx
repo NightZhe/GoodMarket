@@ -9,6 +9,9 @@ import EmptyState from '../../components/EmptyState';
 import { uid } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
 import { NUMBER_INPUT_MAX_LENGTH, PRICE_MAX, STOCK_MAX, variantErrors, wholeNumber } from '../../lib/products/variants';
+import { TrayButton } from '../../components/glass';
+import { SellerTray, useStackedTray } from './SellerTray';
+import { trayReserveStyle } from '../../lib/layout/trayReserve';
 import type { CategoryId, Product } from '../../types';
 
 const MAX_IMAGES = 9;
@@ -74,6 +77,8 @@ function Form({ existing, shopId, location, onSave }: {
   const routeLocation = useLocation();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  // 水平姿態：儲存托盤疊在分頁膠囊正上方（AC-30），內容底部預留兩者；側邊姿態沒有膠囊（導覽在直立軌），托盤落在內容欄的右半（D13）
+  const stacked = useStackedTray();
 
   const [title, setTitle] = useState(existing?.title ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
@@ -90,6 +95,7 @@ function Form({ existing, shopId, location, onSave }: {
   const [touched, setTouched] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [trayHeight, setTrayHeight] = useState(0);
 
   const num = wholeNumber;
   const errors = {
@@ -195,7 +201,7 @@ function Form({ existing, shopId, location, onSave }: {
   const input = 'w-full rounded-sm border border-line px-3 py-2.5 text-sm outline-none focus:border-ink';
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 pb-20">
+    <div style={trayReserveStyle(stacked, trayHeight)} className="mx-auto max-w-3xl space-y-4 pb-(--tray-reserve) md:pb-20">
       <h1 className="text-xl font-bold">{existing ? '編輯商品' : '新增商品'}</h1>
 
       {touched && hasError && (
@@ -311,7 +317,25 @@ function Form({ existing, shopId, location, onSave }: {
         </div>
       </section>
 
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-40 flex justify-end gap-2 border-t border-line bg-white px-4 py-3 md:left-56 md:px-6">
+      {/* 手機：「儲存但不上架」是頁內的次要動作（托盤只放兩顆，X4）。桌機（md 以上）維持底部固定列的三顆 */}
+      <div className="flex justify-center md:hidden">
+        <button type="button" disabled={saving || uploading} onClick={() => void submit('hidden')} className="min-h-11 px-4 text-sm text-brand underline disabled:text-muted-2 disabled:no-underline">
+          儲存但不上架
+        </button>
+      </div>
+
+      {/* 手機：底部懸浮儲存托盤（C5、X4），取消／儲存商品兩顆，寬 272 */}
+      <SellerTray label="儲存" onHeight={setTrayHeight}>
+        <TrayButton tone="secondary" onClick={() => navigate(-1)}>取消</TrayButton>
+        <TrayButton tone="primary" aria-disabled={saving || uploading || undefined} aria-busy={saving || undefined} onClick={() => { if (!saving && !uploading) void submit('active'); }}>
+          <span className="flex items-center gap-2">
+            {saving && <Loader2 size={16} className="motion-safe:animate-spin" aria-hidden="true" />}
+            儲存商品
+          </span>
+        </TrayButton>
+      </SellerTray>
+
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-40 hidden justify-end gap-2 border-t border-line bg-white px-4 py-3 md:left-56 md:flex md:px-6">
         <button type="button" onClick={() => navigate(-1)} className="rounded-sm px-4 py-2.5 text-sm text-muted hover:bg-canvas">取消</button>
         <button type="button" disabled={saving || uploading} onClick={() => void submit('hidden')} className="rounded-sm border border-line px-4 py-2.5 text-sm hover:bg-canvas disabled:opacity-50">儲存但不上架</button>
         <button type="button" disabled={saving || uploading} onClick={() => void submit('active')} className="flex items-center gap-2 rounded-sm bg-brand px-6 py-2.5 text-sm text-white hover:bg-brand-dark disabled:bg-disabled">

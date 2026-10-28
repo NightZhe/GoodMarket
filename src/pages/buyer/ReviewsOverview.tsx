@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, LoaderCircle, MessageCircle, Star } from 'lucide-react';
+import { LoaderCircle, MessageCircle, Star } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useReviews } from '../../store/ReviewsContext';
 import EmptyState from '../../components/EmptyState';
@@ -147,10 +147,7 @@ function ReviewsOverviewView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto max-w-4xl md:px-4 md:pt-6">
-      <header className="flex items-center gap-1 bg-white px-2 pr-4 md:rounded-t-md">
-        <Link to={product ? `/product/${id}` : '/'} aria-label={product ? '回商品頁' : '回首頁'} className="flex h-11 w-11 shrink-0 items-center justify-center">
-          <ArrowLeft size={22} aria-hidden="true" />
-        </Link>
+      <header className="flex items-center gap-2 bg-white px-5 md:rounded-t-md">
         {tab === 'shop' && shop ? (
           <LetterAvatar name={shop.name} size={40} />
         ) : image ? (

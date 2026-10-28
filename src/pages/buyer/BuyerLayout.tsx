@@ -1,18 +1,35 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, CircleUserRound, ClipboardList, House, Search as SearchIcon, Share, ShoppingCart, Store } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
 import { useToast } from '../../components/Toast';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useOnline } from '../../lib/useOnline';
-import { headerFor, type ShareTarget } from '../../lib/layout/headerKind';
+import { headerFor, inlineTitle, type HeaderKind, type ShareTarget } from '../../lib/layout/headerKind';
+import { OwnTitleProvider } from '../../lib/layout/pageTitle';
 import { isNative } from '../../lib/native/platform';
 import { publicUrl } from '../../lib/share/publicUrl';
 import { pillButtonPrimary } from '../../components/pillButton';
 import { scrollPageToTop } from '../../lib/ui/scroll';
+import { usePosture } from '../../lib/layout/posture';
+import { trayReserveStyle } from '../../lib/layout/trayReserve';
+import { CountBadge, GlassButton, GlassCapsule, TabPill, type TabItem } from '../../components/glass';
+import { PurchaseTray } from './PurchaseTray';
+import { TWO_COLUMN_GRID, TWO_COLUMN_TOP, useTwoColumn } from './productColumns';
 
 export default function BuyerLayout() {
+  // 頁面宣告「我自己有 h1」的登記數（lib/layout/pageTitle.ts）；>0 時外框不補行內標題
+  const [titleOwners, setTitleOwners] = useState(0);
+  const reportTitleOwner = useCallback((delta: 1 | -1) => setTitleOwners(n => n + delta), []);
+  return (
+    <OwnTitleProvider value={reportTitleOwner}>
+      <BuyerLayoutView pageOwnsTitle={titleOwners > 0} />
+    </OwnTitleProvider>
+  );
+}
+
+function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
   const { cartCount, loading, loadError, reload } = useStore();
   usePaymentConfig(); // 先讀一次線上付款開關，之後帳號頁、結帳頁不必再等
   const online = useOnline();
@@ -48,6 +65,10 @@ export default function BuyerLayout() {
     || pathname === '/account/payment-methods/new' || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/');
 
   const header = headerFor(pathname);
+  // 側邊姿態（系統欄在左右側直立）：控制搬進直立軌，第二層頁不顯示頂部導覽列，改成內容頂端的行內標題（design-spec §3.3）
+  const side = usePosture() !== 'bottom';
+  const showNavBar = header.kind === 'nav' && !side;
+  const inline = inlineTitle(header, pageOwnsTitle);
   // 「我的」不需要商品資料（登入狀態它自己處理），商品還在載入時也直接顯示，不擋
   const needsProducts = pathname !== '/account' && !pathname.startsWith('/account/');
   // 載入骨架依路由：商品頁（導覽列帶分享鈕的那一種）＝主圖＋標題＋停用的購買列，其餘＝首頁形狀
@@ -56,10 +77,16 @@ export default function BuyerLayout() {
   const grouped = pathname === '/account' || pathname.startsWith('/account/');
   const material = grouped ? 'material-grouped' : 'material';
 
+  const tabs = buyerTabs(pathname === '/');
+
   return (
-    <div className={`flex min-h-dvh flex-col ${grouped ? 'bg-canvas' : ''}`}>
-      {/* 唯一一直釘在頂端的東西：蓋住狀態列／動態島的材質條（桌機高度為 0） */}
-      <div aria-hidden="true" className={`${material} sticky top-0 z-40 h-[env(safe-area-inset-top)] shrink-0`} />
+    // --bar-h：釘在頂端的導覽列高度，給商品頁兩欄的 sticky 照片留位置
+    <div className={`app-shell flex min-h-dvh flex-col ${grouped ? 'bg-canvas' : ''}`} style={{ '--bar-h': showNavBar ? '44px' : '0px' } as CSSProperties}>
+      {/* 唯一一直釘在頂端的東西：蓋住狀態列／動態島的材質條（桌機高度為 0）。背景可以出去：負 margin 拉進左右安全區（H7） */}
+      <div aria-hidden="true" className={`${material} sticky top-0 z-40 -ml-(--inset-l) -mr-(--inset-r) h-[env(safe-area-inset-top)] shrink-0`} />
+
+      {/* 側邊姿態的頁面工具：返回 → 購物車 → 分享（C1）。fixed 的直立軌，DOM 放在頁首的位置（朗讀順序在內容之前） */}
+      {side && <RailTools header={header} count={cartCount} />}
 
       {header.kind === 'large' && (
         <header className="mx-auto w-full max-w-6xl">
@@ -67,7 +94,7 @@ export default function BuyerLayout() {
             <h1 className="text-large-title font-bold">{header.title}</h1>
             <div className="flex items-end gap-5">
               <DesktopLinks className="mb-2.5" />
-              {header.cart && <CartCircle count={cartCount} />}
+              {header.cart && !side && <CartTool count={cartCount} />}
             </div>
           </div>
           {header.search && (pathname === '/search'
@@ -76,9 +103,17 @@ export default function BuyerLayout() {
         </header>
       )}
 
-      {header.kind === 'nav' && (
-        <header className={`${material} sticky top-[env(safe-area-inset-top)] z-40`}>
-          <div className="mx-auto flex h-11 max-w-6xl items-center justify-between pl-2 pr-1.5 md:px-5">
+      {header.kind === 'nav' && side && (
+        // 行內標題只給頁面自己沒有可見標題的頁；頁面有自己的 h1 時要先宣告（useOwnsPageTitle），這裡就改留一條空白，同頁只會有一個 h1
+        inline
+          ? <h1 className="mx-auto flex h-11 w-full max-w-6xl items-center px-5 text-headline font-semibold text-ink">{inline}</h1>
+          : <div aria-hidden="true" className="h-3 shrink-0" />
+      )}
+
+      {showNavBar && header.kind === 'nav' && (
+        // 背景全幅（負 margin 拉進左右安全區再用 padding 補回），內容左右留 max(8, 安全區)（design-spec §3.4）
+        <header className={`${material} sticky top-[env(safe-area-inset-top)] z-40 -ml-(--inset-l) -mr-(--inset-r) pl-[max(8px,var(--inset-l))] pr-[max(8px,var(--inset-r))] md:pl-(--inset-l) md:pr-(--inset-r)`}>
+          <div className="mx-auto flex h-11 max-w-6xl items-center justify-between md:px-5">
             <Link to={header.back.to} aria-label={`返回${header.back.label}`} className={`${PRESS_FADE} -ml-1 flex h-11 items-center pr-3 text-body text-brand`}>
               <ChevronLeft size={28} strokeWidth={2.4} aria-hidden="true" />
               {header.back.label}
@@ -106,7 +141,7 @@ export default function BuyerLayout() {
         )}
       </div>
 
-      <main className={`flex-1 ${hideTabBar ? '' : 'pb-[calc(49px+env(safe-area-inset-bottom))] md:pb-0'}`}>
+      <main className={`flex-1 ${hideTabBar ? '' : 'pb-(--tabs-clearance) md:pb-0'}`}>
         {loadError && needsProducts ? (
           <div role="alert" className="mx-auto max-w-md px-5 py-24 text-center">
             <p className="text-title3 font-bold">載入商品失敗</p>
@@ -143,15 +178,12 @@ export default function BuyerLayout() {
         </div>
       </footer>
 
+      {/* 水平姿態＝置中懸浮膠囊，側邊姿態＝右（左）側直立軌；兩個元件自己看姿態，同一時間只有一個出現。桌機網頁（md 以上）沒有分頁導覽 */}
       {!hideTabBar && (
-        <nav aria-label="主要分頁" className={`${material} pb-safe fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t-[0.5px] border-separator md:hidden`}>
-          <Tab to="/" label="首頁" end onReselect={pathname === '/' ? scrollPageToTop : undefined} icon={<House size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<HouseFilled />} />
-          <Tab to="/search" label="逛逛" icon={<SearchIcon size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<SearchIcon size={26} strokeWidth={2.5} aria-hidden="true" />} />
-          <Tab to="/orders" label="訂單" icon={<ClipboardList size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<ClipboardList size={26} strokeWidth={2.5} aria-hidden="true" />} />
-          <Tab to="/seller" label="我要賣" icon={<Store size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<Store size={26} strokeWidth={1.7} aria-hidden="true" />} />
-          {/* 第 5 格一律是前往 /account 的分頁，未登入時登入入口在頁內（HIG：tab bar 用來導覽，不是放動作） */}
-          <Tab to="/account" label="我的" icon={<CircleUserRound size={26} strokeWidth={1.7} aria-hidden="true" />} activeIcon={<ProfileFilled />} />
-        </nav>
+        <>
+          <TabPill items={tabs} label="主要分頁" className="md:hidden" />
+          <GlassCapsule label="主要分頁" tabs={tabs} />
+        </>
       )}
     </div>
   );
@@ -160,19 +192,48 @@ export default function BuyerLayout() {
 /** 按下時淡到 50%，放開 200ms 淡回。要在 iPhone Safari 顯示 :active，需要 main.tsx 的 touchstart 監聽（R1） */
 const PRESS_FADE = 'transition-opacity duration-200 active:opacity-50 active:duration-0';
 
-function CountBadge({ count, className }: { count: number; className: string }) {
-  if (count <= 0) return null;
+/**
+ * 首頁、逛逛的購物車（Q2）：水平姿態是 44pt 懸浮玻璃鈕，捲動時不捲走，固定在右上
+ * （env(top)＋4、離右緣 16，靜止時在大標題列右側）。側邊姿態的購物車在直立軌的工具組（RailTools），不走這裡。
+ * 桌機網頁（md 以上）維持原本頁首裡的 36pt 灰圓鈕。
+ */
+function CartTool({ count }: { count: number }) {
   return (
-    <span aria-hidden="true" className={`absolute min-w-[18px] rounded-full bg-badge px-[5px] text-center text-[12px] font-semibold leading-[18px] text-white ring-2 ring-white ${className}`}>
-      {count > 99 ? '99+' : count}
-    </span>
+    <>
+      <GlassButton
+        to="/cart"
+        label={`購物車，${count} 件`}
+        icon={<ShoppingCart size={22} strokeWidth={1.7} />}
+        badge={count}
+        className="fixed right-[calc(var(--inset-r)+16px)] top-[calc(env(safe-area-inset-top)+4px)] md:hidden"
+      />
+      <CartCircle count={count} />
+    </>
   );
 }
 
-/** 大標題列右側的購物車圓鈕：視覺 36、熱區 44 */
+/**
+ * 側邊姿態的頁面工具（直立軌上方那一組）：返回（第二層頁）→ 購物車 → 分享，沒有的就不出現；整組都沒有（訂單、我的）就不畫軌。
+ * 帳號子頁（plain）自己有水平導覽列，不搬進來（design-spec §5.4）。
+ */
+function RailTools({ header, count }: { header: HeaderKind; count: number }) {
+  if (header.kind === 'plain') return null;
+  const back = header.kind === 'nav' ? header.back : null;
+  const share = header.kind === 'nav' ? header.share : null;
+  if (!back && !header.cart && !share) return null;
+  return (
+    <GlassCapsule label="頁面工具">
+      {back && <GlassButton to={back.to} label={`返回${back.label}`} icon={<ChevronLeft size={24} strokeWidth={2.4} />} />}
+      {header.cart && <GlassButton to="/cart" label={`購物車，${count} 件`} icon={<ShoppingCart size={22} strokeWidth={1.7} />} badge={count} />}
+      {share && <RailShareButton target={share} />}
+    </GlassCapsule>
+  );
+}
+
+/** 桌機（md 以上）頁首的購物車圓鈕：視覺 36、熱區 44。App 內不顯示 */
 function CartCircle({ count }: { count: number }) {
   return (
-    <Link to="/cart" aria-label={`購物車，${count} 件`} className="group -mb-px -mr-1 flex size-11 shrink-0 items-center justify-center">
+    <Link to="/cart" aria-label={`購物車，${count} 件`} className="group -mb-px -mr-1 hidden size-11 shrink-0 items-center justify-center md:flex">
       <span className="relative flex size-9 items-center justify-center rounded-full bg-canvas text-brand transition-colors duration-200 group-active:bg-press group-active:duration-0">
         <ShoppingCart size={20} strokeWidth={1.7} aria-hidden="true" />
         <CountBadge count={count} className="-right-1.5 -top-[3px]" />
@@ -196,13 +257,13 @@ function CartNavLink({ count }: { count: number }) {
  * 分享商品頁／店家頁（D-7b）。App 內走系統分享面板（原生外掛只在 App 內動態載入）；
  * 網頁版用 Web Share API，沒有（多數桌機瀏覽器）就複製網址。
  */
-function ShareButton({ target }: { target: ShareTarget }) {
+function useShare(target: ShareTarget): () => Promise<void> {
   const { products, getShop } = useStore();
   const toast = useToast();
   const title = (target.kind === 'product' ? products.find(p => p.id === target.id)?.title : getShop(target.id)?.name) ?? '好物集';
   const route = `/${target.kind}/${target.id}`;
 
-  const share = async () => {
+  return async () => {
     // App 內的 location 是 capacitor://…，分享出去別人打不開，改用正式站網址；網頁版自己就在正式站
     const url = isNative() ? publicUrl(route) : window.location.href;
     if (isNative()) {
@@ -227,12 +288,21 @@ function ShareButton({ target }: { target: ShareTarget }) {
       toast('無法複製連結，請從網址列複製', 'error');
     }
   };
+}
 
+function ShareButton({ target }: { target: ShareTarget }) {
+  const share = useShare(target);
   return (
     <button type="button" onClick={() => void share()} aria-label="分享" className={NAV_ICON_BTN}>
       <Share size={22} strokeWidth={1.7} aria-hidden="true" />
     </button>
   );
+}
+
+/** 直立軌上的分享鈕：同一個分享流程，換成軌裡的玻璃鈕 */
+function RailShareButton({ target }: { target: ShareTarget }) {
+  const share = useShare(target);
+  return <GlassButton label="分享" icon={<Share size={22} strokeWidth={1.7} />} onClick={() => void share()} />;
 }
 
 /** 桌機（md 以上）沒有 tab bar，常用入口放在頁首右側。手機不顯示 */
@@ -322,58 +392,53 @@ function HomeSkeleton() {
   );
 }
 
-/** 商品頁骨架（§3.4）：主圖灰塊＋標題 2 條灰條，購買列先出現但停用。尺寸同 ProductDetail 的第一張照片與購買列，載入完不跳版 */
+/**
+ * 商品頁骨架（§3.4）：主圖灰塊＋標題 2 條灰條，購買托盤先出現但停用。
+ * 版面規則同 ProductDetail（單欄／兩欄、托盤位置、底部預留），載入完不跳版
+ */
 function ProductSkeleton() {
+  const [colsRef, twoColumn] = useTwoColumn();
+  const [trayHeight, setTrayHeight] = useState(0);
   return (
-    // 高度＝視窗扣掉安全區條與 44 的導覽列，購買列才會貼在底部（手機沒有 tab bar）
-    <div className="mx-auto flex min-h-[calc(100dvh-env(safe-area-inset-top)-44px)] max-w-6xl flex-col md:block md:min-h-0 md:px-4 md:pt-4">
-      <div role="status" className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[450px_1fr] md:gap-8">
+    <div ref={colsRef} style={trayReserveStyle(false, trayHeight)} className={`mx-auto pb-(--tray-reserve) md:px-4 md:pb-0 md:pt-4 ${twoColumn ? 'max-w-none' : 'max-w-6xl'}`}>
+      <div
+        role="status"
+        className={`grid items-start md:grid-cols-[450px_1fr] md:gap-8 ${twoColumn ? `${TWO_COLUMN_GRID} ${TWO_COLUMN_TOP}` : 'grid-cols-[minmax(0,1fr)]'}`}
+      >
         <span className="sr-only">載入中</span>
-        <div aria-hidden="true" className="px-5 pt-1 md:px-0 md:pt-0">
+        <div aria-hidden="true" className={`px-5 md:px-0 md:pt-0 ${twoColumn ? '' : 'pt-1'}`}>
           <div className="aspect-square w-75 max-w-full rounded-story bg-canvas md:w-full" />
         </div>
-        <div aria-hidden="true" className="px-5 pt-4 md:px-0 md:pt-0">
+        <div aria-hidden="true" className={`px-5 md:px-0 md:pt-0 ${twoColumn ? '' : 'pt-4'}`}>
           <div className="h-5 w-4/5 rounded-md bg-canvas" />
           <div className="mt-2 h-5 w-1/2 rounded-md bg-canvas" />
         </div>
       </div>
-      {/* 與 ProductDetail 的手機購買列同一組 class；按鈕停用，點了沒有反應 */}
-      <div className="material sticky bottom-0 z-40 mt-auto grid grid-cols-[repeat(auto-fit,minmax(--spacing(32),1fr))] gap-3 border-t-[0.5px] border-separator pt-2 pr-[max(--spacing(5),env(safe-area-inset-right))] pb-[calc(--spacing(2)+env(safe-area-inset-bottom))] pl-[max(--spacing(5),env(safe-area-inset-left))] md:hidden">
-        {['加入購物車', '直接購買'].map(label => (
-          <button key={label} type="button" aria-disabled="true" className="inline-flex h-12.5 items-center justify-center rounded-full bg-canvas px-4 text-headline font-semibold text-muted-2">
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* 與 ProductDetail 同一個托盤；按鈕停用，點了沒有反應 */}
+      <PurchaseTray twoColumn={twoColumn} dimmed onHeight={setTrayHeight} />
     </div>
   );
 }
 
-/** onReselect：已經在這一頁時再點一次的動作（例如首頁捲回頂端）；有給才攔截預設導覽，否則照一般連結走 */
-function Tab({ to, label, end, onReselect, icon, activeIcon }: { to: string; label: string; end?: boolean; onReselect?: () => void; icon: React.ReactNode; activeIcon: React.ReactNode }) {
-  return (
-    <NavLink
-      to={to}
-      end={end}
-      aria-label={label}
-      onClick={onReselect && (e => { e.preventDefault(); onReselect(); })}
-      className={({ isActive }) => `${PRESS_FADE} flex h-[49px] flex-col items-center gap-px pt-1.5 text-caption2 font-medium ${isActive ? 'text-brand' : 'text-muted'}`}
-    >
-      {({ isActive }) => (
-        <>
-          {isActive ? activeIcon : icon}
-          {label}
-        </>
-      )}
-    </NavLink>
-  );
+/** 買家 5 格分頁（順序與第 5 格「我的」沿用 UI 改版 D4）。onReselect：在首頁再點一次捲回頂端 */
+function buyerTabs(atHome: boolean): TabItem[] {
+  const line = { size: 24, strokeWidth: 1.7 } as const;
+  const bold = { size: 24, strokeWidth: 2.5 } as const;
+  return [
+    { to: '/', label: '首頁', end: true, onReselect: atHome ? scrollPageToTop : undefined, icon: <House {...line} />, iconActive: <HouseFilled /> },
+    { to: '/search', label: '逛逛', icon: <SearchIcon {...line} />, iconActive: <SearchIcon {...bold} /> },
+    { to: '/orders', label: '訂單', icon: <ClipboardList {...line} />, iconActive: <ClipboardList {...bold} /> },
+    { to: '/seller', label: '我要賣', icon: <Store {...line} />, iconActive: <Store {...line} /> },
+    // 第 5 格一律是前往 /account 的分頁，未登入時登入入口在頁內（HIG：tab bar 用來導覽，不是放動作）
+    { to: '/account', label: '我的', icon: <CircleUserRound {...line} />, iconActive: <ProfileFilled /> },
+  ];
 }
 
 // 實心版：lucide 沒有 fill 版，直接填色會把內部細節（門、人像）也塗成同色而消失，所以內部細節改白色。
 // 幾何與 lucide 的 House、CircleUserRound 相同，切換選中時不會跳動
 function HouseFilled() {
   return (
-    <svg width={26} height={26} viewBox="0 0 24 24" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="fill-current stroke-current">
+    <svg width={24} height={24} viewBox="0 0 24 24" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="fill-current stroke-current">
       <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" className="fill-white stroke-white" />
     </svg>
@@ -382,7 +447,7 @@ function HouseFilled() {
 
 function ProfileFilled() {
   return (
-    <svg width={26} height={26} viewBox="0 0 24 24" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="fill-current stroke-current">
+    <svg width={24} height={24} viewBox="0 0 24 24" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="fill-current stroke-current">
       <circle cx="12" cy="12" r="10" />
       <circle cx="12" cy="11" r="4" className="fill-white stroke-white" />
       <path d="M17.925 20.056a6 6 0 0 0-11.851.001" className="fill-white stroke-white" />

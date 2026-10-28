@@ -18,7 +18,7 @@
 結帳改從地址簿選，地址簿空時填表並預設「存到我的地址」；裝置上的舊收件資料 `goodmarket_buyer` 新前端啟動時清掉；資料表 `profiles`／`addresses`／`tw_districts` 寫入只走 RPC，
 行政區清單由 `scripts/gen-tw-districts.mts` 從中華郵政 3 碼檔產生，`src/data/tw-districts.json` 與資料庫同源）。隱私政策生效日改為 2026/10/18。
 **刪帳號工具已更新**（會一併刪地址與個人檔案；舊版備份在 `account-payment-methods/tools/pre-A-T4-account-tool/`）。
-**線上付款（綠界特約合作平台商，`account-payment-methods/`）**：前後端程式已合併並推上線（2026-10-20），但**功能開關預設關**、正式站**尚未套** `20261019200000_ecpay_payments.sql`、**尚未部署** `supabase/functions/payment-*`，買家看不到任何付款入口（前端對缺少 `get_payment_config` 的資料庫一律視為關）。設計：買家平台層綁卡（卡號只在綠界 SDK，本站存 BindCardID 於 service-role 專用表）、多店一次付款＝每店各授權一筆、全部成功才請款、任一失敗放棄已授權；賣家在綠界成為本站底下的特約商店，本站只存編號與狀態；LINE Pay 本版不做；本站不經手錢（D3＝B）。
+**線上付款（綠界特約合作平台商，`account-payment-methods/`）**：前後端程式已合併並推上線（2026-10-20）。**2026-10-28 正式站已套** `20261019200000_ecpay_payments`、`20261020120000_account_delete_cards`、`20261020130000_refunds`、`20261020140000_payout_reconcile`（verify 皆 all_ok），**付款開關已開**（使用者指示，金流商確認綠界；紀錄 `prod-apply-log.md`）；對帳開關仍關。**尚未設 secrets、尚未部署** `supabase/functions/payment-*`／`payout-reconcile`、無綠界平台商資格：買家「新增信用卡」會失敗；沒有任何店 active，結帳仍只有貨到付款；賣家可在收款帳戶頁送出特約商店編號（pending_review）。設計：買家平台層綁卡（卡號只在綠界 SDK，本站存 BindCardID 於 service-role 專用表）、多店一次付款＝每店各授權一筆、全部成功才請款、任一失敗放棄已授權；賣家在綠界成為本站底下的特約商店，本站只存編號與狀態；LINE Pay 本版不做；本站不經手錢（D3＝B）。
 上線前置（使用者）：以公司申請綠界平台商與綁卡白名單、拿 HashKey／IV、確認綁卡用特店與最低金額；之後照 `prod-runbook-pb.md`：套 migration → 設 Edge Function secrets → 部署函式 → 後台啟用 pg_cron／pg_net 排程 → 開開關 → 實刷。待補規格：退款、刪帳號同步向綠界刪卡、撥款對帳。
 → 這三份已由另一 session 做成 **PR #2**（分支 `feat/payment-go-live-prereqs`，2026-10-21，待使用者確認文案後合併；merge 只部署前端、開關仍關）。
 個人中心／金流線的完整交接在 `.work/account-payment-methods/handoff-2026-10-23.md`。
@@ -81,7 +81,7 @@ Xcode 的 Apple ID 階段過期時上傳會回 DVTPortalServiceErrorDomain 1100�
 **帳號刪除 App 內入口（Apple 5.1.1(v) 硬門檻，10/18 拿掉的區塊要加回，可人工處理但不能只叫人寄信）**、檢舉／封鎖（Apple 1.2，待拍板）、審查用賣家示範帳號（待拍板）、App Privacy／Data safety 填寫。
 使用者側前置（Google Play 帳號、App ID、Play 簽章、商店圖文）見 `prereqs-user.md`。
 
-下一個該做的：付款（P-B／P-C，等 PAYUNi 拍板）。
+下一個該做的：付款上線收尾（金流商＝綠界；等綠界平台商資格與金鑰 → `prod-runbook-pb.md` §5 secrets → §6 部署函式與排程 → 實刷）。
 
 維運提醒：
 - **Apple 登入 client secret 2027-04-15 到期**，2027-04-01 前用 Supabase 文件頁工具＋原 `.p8` 重做並更新後台。

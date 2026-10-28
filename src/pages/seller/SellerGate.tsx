@@ -38,9 +38,10 @@ function Splash() {
   );
 }
 
+// 登入與開店頁：背景漸層畫滿，內容吃左右安全區（側邊姿態右緣＝系統欄與直立軌的欄寬）與底緣，不被 iPhone Duo 的系統欄蓋住（design-spec §3.1）
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-brand via-[#f46b35] to-[#ff9a5a]">
+    <div className="pb-safe min-h-dvh bg-gradient-to-br from-brand via-[#f46b35] to-[#ff9a5a] pl-(--inset-l) pr-(--inset-r)">
       <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 text-white">
         <Link to="/" className="flex items-center gap-1.5 text-xl font-bold">
           🛍️ 好物集 <span className="text-base font-normal opacity-90">賣家中心</span>

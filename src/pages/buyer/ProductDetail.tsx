@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, X } from 'lucide-react';
 import { useStore, FREE_SHIPPING_THRESHOLD, SHIPPING_FEE } from '../../store/StoreContext';
@@ -31,6 +31,10 @@ import { cheapestVariant, discountOf, money, priceRange, soldText } from '../../
 import { reduceMotion } from '../../lib/ui/scroll';
 import type { Product } from '../../types';
 import { hapticSuccess } from '../../lib/native/haptics';
+import { isNative } from '../../lib/native/platform';
+import { trayReserveStyle } from '../../lib/layout/trayReserve';
+import { PurchaseTray } from './PurchaseTray';
+import { TWO_COLUMN_GRID, TWO_COLUMN_TOP, useTwoColumn } from './productColumns';
 
 // 用 key 讓切換到另一個商品時，規格／數量等狀態重新開始
 export default function ProductDetail() {
@@ -46,6 +50,9 @@ function ProductDetailView({ id }: { id: string }) {
   const online = useOnline();
   const { productStat, summaryState } = useReviews();
   const product = getProduct(id);
+  // 內橫、書本等寬畫面（內容寬 ≥ 720 且橫向）分兩欄，分界對齊折線（Q3）；slide＝兩欄時照片頁碼「1 / 3」
+  const [colsRef, twoColumn] = useTwoColumn();
+  const [slide, setSlide] = useState(0);
 
   // 第一張照片只有兩種來源：圖庫或規格圖。使用者選了規格才換成規格圖；
   // 程式預選單一規格不算使用者動作，所以預設是圖庫。
@@ -66,6 +73,7 @@ function ProductDetailView({ id }: { id: string }) {
   const [qty, setQty] = useState(restored?.qty ?? 1);
   // 'pick'：只選規格（「選擇規格」列打開），按「完成」只關面板，選擇本來就即時套用
   const [sheet, setSheet] = useState<null | 'cart' | 'buy' | 'pick'>(null);
+  const [trayHeight, setTrayHeight] = useState(0);
   const [needPick, setNeedPick] = useState(false);
   // 手機驗證不會整頁轉址：登入面板關掉後規格抽屜還開著，待辦動作（加入購物車）已經在背景完成，抽屜要跟著收起來
   const signedIn = user !== null;
@@ -185,158 +193,139 @@ function ProductDetailView({ id }: { id: string }) {
     />
   );
 
-  return (
-    <div className="mx-auto max-w-6xl md:px-4 md:pt-4">
-      <AutoNoticeBanner productId={product.id} />
-      {/* 已登入的人打開帶選擇的連結：不自動動作，問一次（連結是任何人都能散布的） */}
-      {confirmHandoff && restored && (
-        <div className="px-5 pt-2 md:px-0">
-          <Banner
-            kind="info" role="status"
-            title={confirmHandoff.kind === 'add_to_cart' ? '要加入購物車嗎？' : '要前往結帳嗎？'}
-            actions={
-              <>
-                <button type="button" className={btnPrimary} onClick={() => { const m = confirmHandoff.kind === 'add_to_cart' ? 'cart' : 'buy'; clearHandoff(); act(m, restored); }}>
-                  {confirmHandoff.kind === 'add_to_cart' ? '加入購物車' : '直接購買'}
-                </button>
-                <button type="button" className={btnOutline} onClick={clearHandoff}>不用了</button>
-              </>
-            }
-          >
-            這個連結帶了選擇：{product.variants.find(v => v.id === restored.variantId)?.name}　數量 {restored.qty}。確認後才會執行。
-          </Banner>
-        </div>
+  // 照片頁碼：兩欄時照片一次一張，捲動停住後算出目前是第幾張
+  const onSlideScroll = (e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const [a, b] = [el.children[0], el.children[1]] as Array<HTMLElement | undefined>;
+    if (a && b) setSlide(Math.round(el.scrollLeft / (b.offsetLeft - a.offsetLeft)));
+  };
+
+  // 照片：手機橫滑露出下一張；桌機全部攤開（大圖＋兩欄），不用另做縮圖切換
+  const photos = (
+    <div className="min-w-0">
+      <div
+        role="region"
+        aria-label={`商品照片，共 ${slides.length} 張`}
+        onScroll={twoColumn ? onSlideScroll : undefined}
+        className={`no-scrollbar flex snap-x snap-mandatory scroll-px-5 gap-2.5 overflow-x-auto px-5 md:grid md:grid-cols-2 md:overflow-visible md:px-0 md:pt-0 ${twoColumn ? '' : 'pt-1'}`}
+      >
+        {slides.map((src, i) => {
+          const isVariant = i === 0 && Boolean(variantImage);
+          return (
+            <div
+              key={isVariant ? 'variant' : i}
+              className={`relative shrink-0 snap-start md:w-auto md:first:col-span-2 ${twoColumn ? 'w-full' : 'w-75'}`}
+            >
+              <Photo
+                src={src}
+                alt={isVariant && variant ? `${product.title}（${variant.name}），第 1 張` : `${product.title}，第 ${i + 1} 張`}
+                size="lg"
+                className="aspect-square rounded-story"
+                onError={isVariant ? () => setShowVariantImage(false) : undefined}
+              />
+              {isVariant && variant && (
+                <span aria-hidden="true" className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-full bg-ink/75 px-2.5 py-1 text-footnote text-white">
+                  <span className="shrink-0 font-semibold">規格圖</span>
+                  <span className="truncate">{variant.name}</span>
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* 兩欄時一次一張：頁碼讓人知道還有幾張（照片本身的朗讀名稱已經有「第 n 張」，頁碼只給眼睛看） */}
+      {twoColumn && slides.length > 1 && (
+        <p aria-hidden="true" className="mt-2 text-center text-footnote text-muted">{Math.min(slide, slides.length - 1) + 1} / {slides.length}</p>
       )}
-      {/* 登入回來被擋的那則提示（上方 AutoNoticeBanner）已經說明是自己的店，顯示期間不再疊一個常駐說明；按「知道了」後才換成常駐的 */}
-      {ownShop && !(autoNotice?.productId === product.id && autoNotice.reason === 'own_shop') && (
-        <div className="px-5 pt-2 md:px-0">
-          <Banner kind="info" title="這是你自己商店的商品">賣家不能購買自己商店的商品。</Banner>
-        </div>
-      )}
-      <nav className="hidden items-center gap-1 py-2 text-subhead text-muted md:flex">
-        <Link to="/" className="text-brand">好物集</Link>
-        <ChevronRight size={14} aria-hidden="true" />
-        <Link to={`/search?cat=${product.categoryId}`} className="text-brand">{category?.name}</Link>
-        <ChevronRight size={14} aria-hidden="true" />
-        <span className="truncate">{product.title}</span>
-      </nav>
+      <p role="status" className="sr-only">{variantImage && variant ? `已切換為規格圖：${variant.name}` : ''}</p>
+    </div>
+  );
 
-      <section className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[450px_1fr] md:gap-8">
-        {/* 照片：手機橫滑露出下一張；桌機全部攤開（大圖＋兩欄），不用另做縮圖切換 */}
-        <div className="min-w-0">
-          <div
-            role="region"
-            aria-label={`商品照片，共 ${slides.length} 張`}
-            className="no-scrollbar flex snap-x snap-mandatory scroll-px-5 gap-2.5 overflow-x-auto px-5 pt-1 md:grid md:grid-cols-2 md:overflow-visible md:px-0 md:pt-0"
-          >
-            {slides.map((src, i) => {
-              const isVariant = i === 0 && Boolean(variantImage);
-              return (
-                <div
-                  key={isVariant ? 'variant' : i}
-                  className="relative w-75 shrink-0 snap-start md:w-auto md:first:col-span-2"
-                >
-                  <Photo
-                    src={src}
-                    alt={isVariant && variant ? `${product.title}（${variant.name}），第 1 張` : `${product.title}，第 ${i + 1} 張`}
-                    size="lg"
-                    className="aspect-square rounded-story"
-                    onError={isVariant ? () => setShowVariantImage(false) : undefined}
-                  />
-                  {isVariant && variant && (
-                    <span aria-hidden="true" className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-full bg-ink/75 px-2.5 py-1 text-footnote text-white">
-                      <span className="shrink-0 font-semibold">規格圖</span>
-                      <span className="truncate">{variant.name}</span>
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <p role="status" className="sr-only">{variantImage && variant ? `已切換為規格圖：${variant.name}` : ''}</p>
-        </div>
+  // 資訊：標題 → 店名 → 價格 → 運費 → 資訊條（R5：價格最粗、已售同列、運費緊貼價格、賣家露臉）
+  const info = (
+    <div className={`min-w-0 px-5 md:px-0 md:pt-0 ${twoColumn ? '' : 'pt-4'}`}>
+      <h1 ref={titleRef} tabIndex={-1} className="text-title3 font-bold text-ink outline-none">{product.title}</h1>
+      <p className="mt-1 text-subhead text-muted">
+        {/* 行內連結的熱區撐到 44 高；負 margin 抵銷，不影響行高與版面 */}
+        {shop && <><Link to={`/shop/${shop.id}`} className="-mx-2 -my-3 inline-flex min-h-11 items-center px-2 text-brand">{shop.name}</Link>・</>}
+        {product.location}出貨
+      </p>
 
-        {/* 資訊：標題 → 店名 → 價格 → 運費 → 資訊條（R5：價格最粗、已售同列、運費緊貼價格、賣家露臉） */}
-        <div className="min-w-0 px-5 pt-4 md:px-0 md:pt-0">
-          <h1 ref={titleRef} tabIndex={-1} className="text-title3 font-bold text-ink outline-none">{product.title}</h1>
-          <p className="mt-1 text-subhead text-muted">
-            {/* 行內連結的熱區撐到 44 高；負 margin 抵銷，不影響行高與版面 */}
-            {shop && <><Link to={`/shop/${shop.id}`} className="-mx-2 -my-3 inline-flex min-h-11 items-center px-2 text-brand">{shop.name}</Link>・</>}
-            {product.location}出貨
-          </p>
+      {/* 原價跟著規格走：選了規格看該規格的，沒選就看最低價那個 */}
+      <div className="mt-3 flex flex-wrap items-baseline gap-x-2">
+        <span className="text-title1 font-bold text-ink">
+          {variant ? money(variant.price) : priceRange(product.variants.map(v => v.price))}
+        </span>
+        {shown?.originalPrice && discount > 0 && (
+          <s className="text-subhead text-muted">{money(shown.originalPrice)}</s>
+        )}
+        {product.sold > 0 && (
+          <span className="ml-auto whitespace-nowrap text-subhead text-muted">已售 {soldText(product.sold)}</span>
+        )}
+      </div>
+      <p className="text-footnote text-muted">
+        {product.freeShipping ? '免運費' : `運費 ${money(SHIPPING_FEE)}・同店滿 ${money(FREE_SHIPPING_THRESHOLD)} 免運`}
+      </p>
 
-          {/* 原價跟著規格走：選了規格看該規格的，沒選就看最低價那個 */}
-          <div className="mt-3 flex flex-wrap items-baseline gap-x-2">
-            <span className="text-title1 font-bold text-ink">
-              {variant ? money(variant.price) : priceRange(product.variants.map(v => v.price))}
-            </span>
-            {shown?.originalPrice && discount > 0 && (
-              <s className="text-subhead text-muted">{money(shown.originalPrice)}</s>
-            )}
-            {product.sold > 0 && (
-              <span className="ml-auto whitespace-nowrap text-subhead text-muted">已售 {soldText(product.sold)}</span>
-            )}
-          </div>
-          <p className="text-footnote text-muted">
-            {product.freeShipping ? '免運費' : `運費 ${money(SHIPPING_FEE)}・同店滿 ${money(FREE_SHIPPING_THRESHOLD)} 免運`}
-          </p>
-
-          <dl className="mt-4 grid grid-cols-3 border-y-[0.5px] border-separator py-1.5 text-center text-muted [&>div+div]:border-l-[0.5px] [&>div+div]:border-separator">
-            <div className="relative min-w-0 px-1 py-1">
-              <dt className="text-caption2 font-semibold">評價</dt>
-              <dd className="mt-1">
-                {/* 整格可點（after 撐滿，格高 ≥44）。評價資料還沒回來或載入失敗時只顯示「—」：不能對有評價的商品說「沒有評價」 */}
-                <button
-                  type="button"
-                  onClick={goReviews}
-                  aria-label={stat ? `評價 ${ratingText(stat.avg)} 分，${stat.count} 則` : summaryState === 'ready' ? '還沒有評價' : '評價'}
-                  className="flex w-full flex-col items-center transition-opacity duration-200 after:absolute after:inset-0 active:opacity-50 active:duration-0"
-                >
-                  <span className="text-title3 font-bold">{stat ? ratingText(stat.avg) : '—'}</span>
-                  {stat && <span className="text-caption2 font-semibold">{stat.count} 則</span>}
-                </button>
-              </dd>
-            </div>
-            <div className="min-w-0 px-1 py-1">
-              <dt className="text-caption2 font-semibold">規格</dt>
-              <dd className="mt-1 text-title3 font-bold">{product.variants.length} 種</dd>
-            </div>
-            <div className="min-w-0 px-1 py-1">
-              <dt className="text-caption2 font-semibold">出貨地</dt>
-              <dd className="mt-1 break-words text-title3 font-bold">{product.location}</dd>
-            </div>
-          </dl>
-
-          <div className="mt-6 hidden md:block">{picker}</div>
-          <div className="mt-8 hidden gap-3 md:flex">
+      <dl className="mt-4 grid grid-cols-3 border-y-[0.5px] border-separator py-1.5 text-center text-muted [&>div+div]:border-l-[0.5px] [&>div+div]:border-separator">
+        <div className="relative min-w-0 px-1 py-1">
+          <dt className="text-caption2 font-semibold">評價</dt>
+          <dd className="mt-1">
+            {/* 整格可點（after 撐滿，格高 ≥44）。評價資料還沒回來或載入失敗時只顯示「—」：不能對有評價的商品說「沒有評價」 */}
             <button
               type="button"
-              onClick={() => { if (!blocked()) act('cart'); }}
-              disabled={stock === 0}
-              aria-disabled={dimmed || undefined}
-              className={`${PILL} h-12 min-w-44 px-6 ${dimmed ? 'bg-canvas text-muted-2' : `bg-canvas text-brand ${PRESS} active:bg-press`} ${SOLD_OUT}`}
+              onClick={goReviews}
+              aria-label={stat ? `評價 ${ratingText(stat.avg)} 分，${stat.count} 則` : summaryState === 'ready' ? '還沒有評價' : '評價'}
+              className="flex w-full flex-col items-center transition-opacity duration-200 after:absolute after:inset-0 active:opacity-50 active:duration-0"
             >
-              加入購物車
+              <span className="text-title3 font-bold">{stat ? ratingText(stat.avg) : '—'}</span>
+              {stat && <span className="text-caption2 font-semibold">{stat.count} 則</span>}
             </button>
-            <button
-              type="button"
-              onClick={() => { if (!blocked()) act('buy'); }}
-              disabled={stock === 0}
-              aria-disabled={dimmed || undefined}
-              className={`${PILL} h-12 min-w-44 px-6 ${dimmed ? 'bg-canvas text-muted-2' : `bg-brand text-white ${PRESS} hover:bg-brand-dark active:bg-brand-dark`} ${SOLD_OUT}`}
-            >
-              {stock === 0 ? '已售完' : '直接購買'}
-            </button>
-          </div>
+          </dd>
         </div>
-      </section>
+        <div className="min-w-0 px-1 py-1">
+          <dt className="text-caption2 font-semibold">規格</dt>
+          <dd className="mt-1 text-title3 font-bold">{product.variants.length} 種</dd>
+        </div>
+        <div className="min-w-0 px-1 py-1">
+          <dt className="text-caption2 font-semibold">出貨地</dt>
+          <dd className="mt-1 break-words text-title3 font-bold">{product.location}</dd>
+        </div>
+      </dl>
 
+      <div className="mt-6 hidden md:block">{picker}</div>
+      <div className="mt-8 hidden gap-3 md:flex">
+        <button
+          type="button"
+          onClick={() => { if (!blocked()) act('cart'); }}
+          disabled={stock === 0}
+          aria-disabled={dimmed || undefined}
+          className={`${PILL} h-12 min-w-44 px-6 ${dimmed ? 'bg-canvas text-muted-2' : `bg-canvas text-brand ${PRESS} active:bg-press`} ${SOLD_OUT}`}
+        >
+          加入購物車
+        </button>
+        <button
+          type="button"
+          onClick={() => { if (!blocked()) act('buy'); }}
+          disabled={stock === 0}
+          aria-disabled={dimmed || undefined}
+          className={`${PILL} h-12 min-w-44 px-6 ${dimmed ? 'bg-canvas text-muted-2' : `bg-brand text-white ${PRESS} hover:bg-brand-dark active:bg-brand-dark`} ${SOLD_OUT}`}
+        >
+          {stock === 0 ? '已售完' : '直接購買'}
+        </button>
+      </div>
+    </div>
+  );
+
+  // 資訊以下的所有區塊：單欄時接在照片與資訊之後，兩欄時整串都在右欄
+  const rest = (
+    <>
       {/* 「選擇規格」列：手機才有（桌機規格直接攤在價格下方） */}
       <button
         type="button"
         onClick={() => setSheet('pick')}
         aria-haspopup="dialog"
-        className="flex min-h-11 w-full items-center gap-2 border-b-[0.5px] border-separator px-5 py-2 text-left text-body transition-colors duration-200 active:bg-press active:duration-0 md:hidden"
+        className={`flex min-h-11 items-center gap-2 border-b-[0.5px] border-separator py-2 text-left text-body transition-colors duration-200 active:bg-press active:duration-0 md:hidden ${twoColumn ? 'mx-5 w-[calc(100%-2.5rem)]' : 'w-full px-5'}`}
       >
         <span className="shrink-0 text-ink">選擇規格</span>
         <span className="min-w-0 flex-1 break-words text-right text-muted">{variant ? variant.name : `${product.variants.length} 種規格`}</span>
@@ -381,35 +370,84 @@ function ProductDetailView({ id }: { id: string }) {
           </Shelf>
         </>
       )}
+    </>
+  );
 
-      {/* 手機購買列：sticky 而不是 fixed，本身佔版面，放大後換成上下兩排也不會蓋住最後的內容。
-          自動欄寬：放得下兩顆就並排等寬，放不下（頁面縮放 200%）就上下排 */}
-      <div className="material sticky bottom-0 z-40 mt-8 grid grid-cols-[repeat(auto-fit,minmax(--spacing(32),1fr))] gap-3 border-t-[0.5px] border-separator pt-2 pr-[max(--spacing(5),env(safe-area-inset-right))] pb-[calc(--spacing(2)+env(safe-area-inset-bottom))] pl-[max(--spacing(5),env(safe-area-inset-left))] md:hidden">
-        <button
-          type="button"
-          onClick={() => { if (!blocked()) setSheet('cart'); }}
-          disabled={stock === 0}
-          aria-disabled={dimmed || undefined}
-          className={`${PILL} h-12.5 px-4 ${dimmed ? 'bg-canvas text-muted-2' : `bg-canvas text-brand ${PRESS} active:bg-press`} ${SOLD_OUT}`}
-        >
-          加入購物車
-        </button>
-        <button
-          type="button"
-          onClick={() => { if (!blocked()) setSheet('buy'); }}
-          disabled={stock === 0}
-          aria-disabled={dimmed || undefined}
-          className={`${PILL} h-12.5 px-4 ${dimmed ? 'bg-canvas text-muted-2' : `bg-brand text-white ${PRESS} active:bg-brand-dark`} ${SOLD_OUT}`}
-        >
-          {stock === 0 ? '已售完' : '直接購買'}
-        </button>
-      </div>
+  const native = isNative();
+
+  return (
+    <div ref={colsRef} style={trayReserveStyle(false, trayHeight)} className={`mx-auto pb-(--tray-reserve) md:px-4 md:pb-0 md:pt-4 ${twoColumn ? 'max-w-none' : 'max-w-6xl'}`}>
+      <AutoNoticeBanner productId={product.id} />
+      {/* 已登入的人打開帶選擇的連結：不自動動作，問一次（連結是任何人都能散布的） */}
+      {confirmHandoff && restored && (
+        <div className="px-5 pt-2 md:px-0">
+          <Banner
+            kind="info" role="status"
+            title={confirmHandoff.kind === 'add_to_cart' ? '要加入購物車嗎？' : '要前往結帳嗎？'}
+            actions={
+              <>
+                <button type="button" className={btnPrimary} onClick={() => { const m = confirmHandoff.kind === 'add_to_cart' ? 'cart' : 'buy'; clearHandoff(); act(m, restored); }}>
+                  {confirmHandoff.kind === 'add_to_cart' ? '加入購物車' : '直接購買'}
+                </button>
+                <button type="button" className={btnOutline} onClick={clearHandoff}>不用了</button>
+              </>
+            }
+          >
+            這個連結帶了選擇：{product.variants.find(v => v.id === restored.variantId)?.name}　數量 {restored.qty}。確認後才會執行。
+          </Banner>
+        </div>
+      )}
+      {/* 登入回來被擋的那則提示（上方 AutoNoticeBanner）已經說明是自己的店，顯示期間不再疊一個常駐說明；按「知道了」後才換成常駐的 */}
+      {ownShop && !(autoNotice?.productId === product.id && autoNotice.reason === 'own_shop') && (
+        <div className="px-5 pt-2 md:px-0">
+          <Banner kind="info" title="這是你自己商店的商品">賣家不能購買自己商店的商品。</Banner>
+        </div>
+      )}
+
+      {native ? (
+        // App：兩欄時左欄照片 sticky、右欄是資訊與其餘區塊；同一份 DOM 只換 class，姿態切換不重掛（AC-10）。
+        // 欄界對齊畫面正中（折線），左欄寬＝50vw－中線帶半寬－左內縮，兩欄間距正好是中線帶 48
+        <div className={twoColumn ? `grid items-start ${TWO_COLUMN_GRID} ${TWO_COLUMN_TOP}` : ''}>
+          <div className={twoColumn ? 'sticky top-[calc(env(safe-area-inset-top)+var(--bar-h,0px)+--spacing(5))]' : ''}>{photos}</div>
+          <div className="min-w-0">
+            {info}
+            {rest}
+          </div>
+        </div>
+      ) : (
+        <>
+          <nav className="hidden items-center gap-1 py-2 text-subhead text-muted md:flex">
+            <Link to="/" className="text-brand">好物集</Link>
+            <ChevronRight size={14} aria-hidden="true" />
+            <Link to={`/search?cat=${product.categoryId}`} className="text-brand">{category?.name}</Link>
+            <ChevronRight size={14} aria-hidden="true" />
+            <span className="truncate">{product.title}</span>
+          </nav>
+          <section className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[450px_1fr] md:gap-8">
+            {photos}
+            {info}
+          </section>
+          {rest}
+        </>
+      )}
+
+      {/* 購買托盤：固定在底部、捲動不消失（D6、C5）；兩欄時落在右欄。桌機網頁（md 以上）用右欄裡的購買鈕，這裡不出現 */}
+      <PurchaseTray
+        twoColumn={twoColumn}
+        soldOut={stock === 0}
+        dimmed={dimmed}
+        onHeight={setTrayHeight}
+        onCart={() => { if (!blocked()) setSheet('cart'); }}
+        onBuy={() => { if (!blocked()) setSheet('buy'); }}
+      />
 
       {sheet && (
-        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="選擇規格與數量">
+        <div className="fixed inset-0 z-50 flex items-end justify-center pl-(--inset-l) pr-(--inset-r) md:hidden" role="dialog" aria-modal="true" aria-label="選擇規格與數量">
           <div className="animate-fade absolute inset-0 bg-black/45" onClick={() => setSheet(null)} />
           {/* 曲線照 §3.7（.32,.72,0,1／280ms）；減少動態時改 150ms 淡入 */}
-          <div className="pb-safe absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-story bg-white animate-sheet">
+          {/* 容器吃左右安全區（側邊姿態時系統欄那側＝軌欄寬）：面板與面板內的鈕不進系統欄、不被相機蓋住，外蓋也一樣（QA1 B1）。橫向右緣已由容器的 pr 讓出，fold-panel 靠右時不再加一次（landscape:mr-0）；遮罩仍蓋全螢幕。 */}
+          {/* fold-panel（D13）：直向只佔下半、超過時面板內捲動；橫向只佔右半。限高全由 .fold-panel 管（components 層），這裡不能再放 max-h-*：utilities 層的值會蓋掉它的直向下半限高 */}
+          <div className="fold-panel pb-safe relative landscape:mr-0 overflow-y-auto rounded-t-story bg-white animate-sheet">
             <div className="flex gap-3 border-b-[0.5px] border-separator p-4">
               <Photo src={variant?.image ?? product.images[0]} alt="" size="sm" className="size-20 shrink-0" />
               <div className="flex flex-1 flex-col justify-end">
@@ -426,16 +464,19 @@ function ProductDetailView({ id }: { id: string }) {
               </button>
             </div>
             <div className="p-4">{picker}</div>
-            <button
-              type="button"
-              onClick={() => {
-                if (sheet === 'pick') setSheet(null);
-                else if (!blocked() && act(sheet)) setSheet(null);
-              }}
-              className={`${PILL} m-4 mt-2 h-12.5 w-[calc(100%-2rem)] bg-brand text-white ${PRESS} active:bg-brand-dark`}
-            >
-              {sheet === 'pick' ? '完成' : sheet === 'cart' ? '加入購物車' : '直接購買'}
-            </button>
+            {/* 面板被限高而內捲動時，確認鈕仍貼在面板底部、免捲動可見（AC-23） */}
+            <div className="sticky bottom-0 bg-white">
+              <button
+                type="button"
+                onClick={() => {
+                  if (sheet === 'pick') setSheet(null);
+                  else if (!blocked() && act(sheet)) setSheet(null);
+                }}
+                className={`${PILL} m-4 mt-2 h-12.5 w-[calc(100%-2rem)] bg-brand text-white ${PRESS} active:bg-brand-dark`}
+              >
+                {sheet === 'pick' ? '完成' : sheet === 'cart' ? '加入購物車' : '直接購買'}
+              </button>
+            </div>
           </div>
         </div>
       )}
