@@ -17,6 +17,7 @@ import type { Product } from '../../types';
 import { QuickCellButton, QuickEditBlock } from './QuickEditCell';
 import QuickEditSheet from './QuickEditSheet';
 import { RetryButton } from './logisticsParts';
+import { RetryLiveRegion, useRetryFeedback } from './useRetryFeedback';
 import { productsListView } from './listView';
 import type { SavedInfo } from './useQuickEdit';
 import { hapticSuccess } from '../../lib/native/haptics';
@@ -82,7 +83,6 @@ export default function SellerProducts() {
   const location = useLocation();
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const headingRef = useRef<HTMLHeadingElement>(null);
 
   // 快改：同一時間只有一個編輯區（一格，或手機的面板）
   const [active, setActive] = useState<{ productId: string; kind: EditKind } | null>(null);
@@ -90,7 +90,6 @@ export default function SellerProducts() {
   const [nag, setNag] = useState(0);
   const [flash, setFlash] = useState<{ productId: string; kind: EditKind } | null>(null);
   const [notice, setNotice] = useState<{ productId: string; kind: EditKind; text: string; tone: 'warn' | 'success' } | null>(null);
-  const [announce, setAnnounce] = useState({ id: 0, text: '' });
   const [focusBack, setFocusBack] = useState<{ productId: string; kind: EditKind; index: number; gone: boolean } | null>(null);
 
   const tab = parseTab(params.get('tab'));
@@ -143,23 +142,14 @@ export default function SellerProducts() {
   // 帶著目前的列表網址去編輯／新增頁，存檔後才回得到原本那一頁（見 ProductForm 的 returnTo）
   const toForm = { from: `${location.pathname}${location.search}` };
 
-  const say = (text: string) => setAnnounce(prev => ({ id: prev.id + 1, text }));
-
   // 讀不到時的橫幅標題（離線只在「沒有資料」那一態換成離線說法；有舊資料時列表還在，不說「連上網路後才能看到」）
   const failTitle = view === 'stale' ? '商品清單可能不是最新的' : online ? '讀不到商品資料' : '目前沒有網路';
+  // 重試做完：成功→橫幅消失，焦點移到標題並清掉念過的錯誤；失敗→橫幅還在，再念一次標題
+  const { headingRef, announce, say, finishRetry } = useRetryFeedback(Boolean(loadError), failTitle);
   const retry = useCallback(async () => {
     setRetrying(true);
-    try { await reload(); } finally { setRetrying(false); }
-  }, [reload]);
-  // 重試做完：成功→橫幅消失，焦點移到標題（按鈕不見了，焦點不能掉到 body）；失敗→橫幅還在，再念一次標題
-  const retried = useRef(false);
-  useEffect(() => {
-    if (retrying) { retried.current = true; return; }
-    if (!retried.current) return;
-    retried.current = false;
-    if (loadError) setAnnounce(prev => ({ id: prev.id + 1, text: failTitle }));
-    else headingRef.current?.focus();
-  }, [retrying, loadError, failTitle]);
+    try { await reload(); } finally { setRetrying(false); finishRetry(); }
+  }, [reload, finishRetry]);
   const failBanner = view === 'stale' ? (
     <Banner kind="warning" role="status" title={failTitle} actions={<RetryButton onRetry={retry} />}>剛才重新讀取沒有成功，請檢查網路後再試一次。</Banner>
   ) : online ? (
@@ -271,7 +261,7 @@ export default function SellerProducts() {
     }
     (el ?? headingRef.current)?.focus();
     setFocusBack(null);
-  }, [focusBack, rows]);
+  }, [focusBack, rows, headingRef]);
 
   // 有還沒儲存的修改時離開（換頁、換分頁籤、改關鍵字、翻頁、點側欄、點錯誤訊息裡的編輯頁連結）先確認
   // 送出中不擋：存檔成功時列表資料會比編輯區收起早一個渲染更新，頁碼修正等網址改動不該被誤擋
@@ -448,9 +438,7 @@ export default function SellerProducts() {
         {view !== 'loading' && view !== 'error' && <Pagination page={page} totalPages={totalPages} size={size} total={list.length} onPage={goPage} onSize={goSize} />}
       </div>
 
-      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        <span key={announce.id}>{announce.text}</span>
-      </div>
+      <RetryLiveRegion announce={announce} />
 
       {blocker.state === 'blocked' && (() => {
         const dialog = (

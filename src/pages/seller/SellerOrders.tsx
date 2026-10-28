@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Banknote, CalendarClock, CircleAlert, CircleCheck, CircleDashed, ChevronDown, Clock, CreditCard, Info, Loader2, MapPin, Phone, Receipt, Truck, User } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useRefreshOnVisible } from '../../store/ReviewsContext';
@@ -7,6 +7,7 @@ import LeaveDialog from '../../components/import/LeaveDialog';
 import Banner from '../../components/import/Banner';
 import { btnOutline } from '../../components/import/ui';
 import { RetryButton } from './logisticsParts';
+import { RetryLiveRegion, useRetryFeedback } from './useRetryFeedback';
 import { ordersListView } from './listView';
 import { SellerBadgeView, StatusBlockView } from '../../components/payment/RefundBlocks';
 import { AcceptCancelDialog, RejectCancelDialog, SellerCancelDialog } from '../../components/payment/RefundDialogs';
@@ -245,22 +246,13 @@ export default function SellerOrders() {
   const [dialog, setDialog] = useState<SellerDialog | null>(null);
   // 還沒讀到訂單前不能說「沒有訂單」：載入中、讀不到各有自己的畫面（shopOrders 初值是 []，光看它分不出來）
   const view = ordersListView(shopOrdersState);
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const [announce, setAnnounce] = useState({ id: 0, text: '' });
   const failTitle = online ? '讀不到訂單' : '目前沒有網路';
-  // 重試做完：成功→橫幅消失，焦點移到標題（按鈕不見了，焦點不能掉到 body）；失敗→橫幅還在，再念一次標題
-  const [retryDone, setRetryDone] = useState(0);
+  // 重試做完：成功→橫幅消失，焦點移到標題並清掉念過的錯誤；失敗→橫幅還在，再念一次標題
+  const { headingRef, announce, finishRetry } = useRetryFeedback(view === 'error', failTitle);
   const retry = useCallback(async () => {
     await refreshShopOrders();
-    setRetryDone(n => n + 1);
-  }, [refreshShopOrders]);
-  const handledRetry = useRef(0);
-  useEffect(() => {
-    if (handledRetry.current === retryDone) return;
-    handledRetry.current = retryDone;
-    if (view === 'error') setAnnounce(prev => ({ id: prev.id + 1, text: failTitle }));
-    else headingRef.current?.focus();
-  }, [retryDone, view, failTitle]);
+    finishRetry();
+  }, [refreshShopOrders, finishRetry]);
   // 操作失敗（多半是畫面資料過期，例如買家剛完成或取消了這張單）：顯示錯誤訊息，並重讀成實際狀態
   // 重讀不等結果：斷線時重讀本身也會卡住，按鈕不能因此一直停在處理中。
   const onActionError = async (e: unknown) => {
@@ -527,9 +519,7 @@ export default function SellerOrders() {
         </ul>
       )}
 
-      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        <span key={announce.id}>{announce.text}</span>
-      </div>
+      <RetryLiveRegion announce={announce} />
 
       {dialog?.kind === 'accept' && (() => {
         const q = refunds.rows.get(dialog.order.id)?.cancel_request;

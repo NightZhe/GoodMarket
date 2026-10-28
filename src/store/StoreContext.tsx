@@ -15,7 +15,7 @@ import type {
 } from '../types';
 import { useAccountCart, type CartState } from './useAccountCart';
 import { settleReload } from './reloadPolicy';
-import { nextShopOrdersState, type ShopOrdersEvent } from './shopOrdersState';
+import { afterStaleRead, nextShopOrdersState, type ShopOrdersEvent } from './shopOrdersState';
 import { useAccountOrders, type OrdersState } from './useAccountOrders';
 import type { AccountErrorKind } from '../lib/account/errors';
 import { ImportCallError, toCallError } from '../lib/import/errors';
@@ -341,14 +341,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const refreshShopOrders = useCallback(async () => {
     if (!myShop) return;
     moveShopOrders('start');
-    for (;;) {
+    for (let rereads = 0; ; rereads++) {
       const seq = shopOrdersSeq.current;
       const { data, error } = await supabase.from('orders').select(SHOP_ORDER_COLUMNS)
         .eq('shop_id', myShop.id).order('created_at', { ascending: false });
       if (error || !data) { moveShopOrders('fail'); return; }
       if (seq !== shopOrdersSeq.current) {
-        // 結果被寫入搶先而丟掉：還沒讀到過時不能讓畫面永遠停在載入態，重讀一次；已讀到過就維持現況（序號保護不變）
-        if (shopOrdersStateRef.current === 'ready') return;
+        // 結果被寫入搶先而丟掉：已讀到過就維持現況（序號保護不變）；還沒讀到過不能讓畫面永遠停在載入態，
+        // 所以重讀，但最多 SHOP_ORDERS_MAX_REREADS 次——寫入一直在推進序號時不能無限重讀，超過就當讀不到，交給「重試」
+        const action = afterStaleRead(shopOrdersStateRef.current, rereads);
+        if (action === 'keep') return;
+        if (action === 'fail') { moveShopOrders('fail'); return; }
         continue;
       }
       const next = (data as unknown as ShopOrderRow[]).map(toOrder);

@@ -45,6 +45,8 @@ export function FieldError({ id, children }: { id: string; children?: string }) 
 /**
  * iOS 導覽列：44pt、材質底、貼頂；左「‹ 上一層名稱」brand 17pt，標題 17／600 置中。
  * 返回是確定的 Link（不用 history.back）。backText＝上一層的名稱（預設「我的」）；backLabel 是讀屏念的完整說法，要包含 backText。
+ * 左右欄用 minmax(0,1fr) 讓欄寬可縮，Link 加 max-w-full（nowrap 文字的 min-content 會撐開欄位）：
+ * 窄螢幕＋大字時返回字被截成「…」而不是疊到標題上（完整名稱在 aria-label）；正常字級下版面不變。
  * -mx-4 抵掉 SubPage 的左右內距，讓材質底填滿容器寬。onBack／titleRef 給有自己離開流程與焦點管理的頁（綁定手機）
  */
 export function SubHeader({ to, backLabel, backText = '我的', title, onBack, titleRef }: {
@@ -52,13 +54,13 @@ export function SubHeader({ to, backLabel, backText = '我的', title, onBack, t
 }) {
   return (
     <header className="material-grouped sticky top-0 z-30 -mx-4 mb-2 border-b-[0.5px] border-separator">
-      <div className="grid h-11 grid-cols-[1fr_auto_1fr] items-center">
+      <div className="grid h-11 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center">
         <Link
           to={to} onClick={onBack} aria-label={backLabel}
-          className="flex h-11 min-w-11 items-center justify-self-start pl-1 pr-3 text-body text-brand active:text-brand-dark"
+          className="flex h-11 min-w-11 max-w-full items-center justify-self-start pl-1 pr-3 text-body text-brand active:text-brand-dark"
         >
           <ChevronLeft size={28} strokeWidth={2.4} className="shrink-0" aria-hidden="true" />
-          <span className="whitespace-nowrap">{backText}</span>
+          <span className="min-w-0 truncate">{backText}</span>
         </Link>
         <h1 ref={titleRef} tabIndex={titleRef ? -1 : undefined} className="max-w-[55vw] min-w-0 truncate text-headline font-semibold outline-none">{title}</h1>
       </div>

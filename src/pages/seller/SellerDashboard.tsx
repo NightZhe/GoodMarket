@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, PlusCircle, Smartphone, TriangleAlert } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
@@ -18,6 +18,7 @@ import { LogisticsEntryRow, ReturnPrompt } from '../../components/logistics/Retu
 import { useReturnSettings } from '../../lib/logistics/useReturnSettings';
 import { shouldShowEntryRow, shouldShowReturnPrompt } from '../../lib/logistics/returnPrompt';
 import { RetryButton, SETTINGS_READ_TIMEOUT_MS } from './logisticsParts';
+import { RetryLiveRegion, useRetryFeedback } from './useRetryFeedback';
 
 const FAIL_TITLE = '有些資料暫時讀不到';
 
@@ -41,10 +42,8 @@ export default function SellerDashboard() {
   const productsFailed = Boolean(loadError) || productsRetrying;
   const ordersFailed = shopOrdersState === 'error';
   const anyFailed = productsFailed || ordersFailed;
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const [announce, setAnnounce] = useState({ id: 0, text: '' });
-  // 只重讀讀不到的那幾項。做完：成功→橫幅消失，焦點移到標題；失敗→橫幅還在，再念一次標題
-  const [retryDone, setRetryDone] = useState(0);
+  // 只重讀讀不到的那幾項。做完：成功→橫幅消失，焦點移到標題並清掉念過的錯誤；失敗→橫幅還在，再念一次標題
+  const { headingRef, announce, finishRetry } = useRetryFeedback(anyFailed, FAIL_TITLE);
   const retry = useCallback(async () => {
     const jobs: Promise<unknown>[] = [];
     if (productsFailed) {
@@ -53,15 +52,8 @@ export default function SellerDashboard() {
     }
     if (ordersFailed) jobs.push(refreshShopOrders());
     await Promise.all(jobs);
-    setRetryDone(n => n + 1);
-  }, [productsFailed, ordersFailed, reload, refreshShopOrders]);
-  const handledRetry = useRef(0);
-  useEffect(() => {
-    if (handledRetry.current === retryDone) return;
-    handledRetry.current = retryDone;
-    if (anyFailed) setAnnounce(prev => ({ id: prev.id + 1, text: FAIL_TITLE }));
-    else headingRef.current?.focus();
-  }, [retryDone, anyFailed]);
+    finishRetry();
+  }, [productsFailed, ordersFailed, reload, refreshShopOrders, finishRetry]);
   const unavailable = (label: string) => `${label}，無法取得數量`;
 
   // 近 7 天營收
@@ -231,9 +223,7 @@ export default function SellerDashboard() {
         </section>
       )}
 
-      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        <span key={announce.id}>{announce.text}</span>
-      </div>
+      <RetryLiveRegion announce={announce} />
 
       {/* 還沒有門號才顯示；放在最下面，綁定是自願的，不該每次進後台都被提醒 */}
       {user && !phoneOf(user) && provider && providers.phone && (
