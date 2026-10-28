@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, PlusCircle, Smartphone, TriangleAlert } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
 import { useLoginProvider } from '../../components/auth/useLoginProvider';
+import Banner from '../../components/import/Banner';
 import { btnOutline, focusRing } from '../../components/import/ui';
 import { phoneOf, providerLabel } from '../../lib/auth/identity';
 import ProductImage from '../../components/ProductImage';
@@ -16,10 +17,12 @@ import PayoutCard from '../../components/payment/PayoutCard';
 import { LogisticsEntryRow, ReturnPrompt } from '../../components/logistics/ReturnPrompt';
 import { useReturnSettings } from '../../lib/logistics/useReturnSettings';
 import { shouldShowEntryRow, shouldShowReturnPrompt } from '../../lib/logistics/returnPrompt';
-import { SETTINGS_READ_TIMEOUT_MS } from './logisticsParts';
+import { RetryButton, SETTINGS_READ_TIMEOUT_MS } from './logisticsParts';
+
+const FAIL_TITLE = '有些資料暫時讀不到';
 
 export default function SellerDashboard() {
-  const { myShop, products, shopOrders, user } = useStore();
+  const { myShop, products, shopOrders, shopOrdersState, loadError, reload, refreshShopOrders, user } = useStore();
   const provider = useLoginProvider(user);
   const { providers } = useAuth();
   const shop = myShop!;
@@ -32,6 +35,34 @@ export default function SellerDashboard() {
   const toShip = shopOrders.filter(o => o.status === 'to_ship').length;
   const active = mine.filter(p => p.status === 'active').length;
   const lowStock = mine.filter(p => p.variants.some(v => v.stock <= 5));
+
+  // 讀不到的數字顯示「–」，不能當成 0。商品重試一開始 store 就把 loadError 清成 null，所以要自己記住「商品正在重試」才不會閃回 0
+  const [productsRetrying, setProductsRetrying] = useState(false);
+  const productsFailed = Boolean(loadError) || productsRetrying;
+  const ordersFailed = shopOrdersState === 'error';
+  const anyFailed = productsFailed || ordersFailed;
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const [announce, setAnnounce] = useState({ id: 0, text: '' });
+  // 只重讀讀不到的那幾項。做完：成功→橫幅消失，焦點移到標題；失敗→橫幅還在，再念一次標題
+  const [retryDone, setRetryDone] = useState(0);
+  const retry = useCallback(async () => {
+    const jobs: Promise<unknown>[] = [];
+    if (productsFailed) {
+      setProductsRetrying(true);
+      jobs.push(reload().finally(() => setProductsRetrying(false)));
+    }
+    if (ordersFailed) jobs.push(refreshShopOrders());
+    await Promise.all(jobs);
+    setRetryDone(n => n + 1);
+  }, [productsFailed, ordersFailed, reload, refreshShopOrders]);
+  const handledRetry = useRef(0);
+  useEffect(() => {
+    if (handledRetry.current === retryDone) return;
+    handledRetry.current = retryDone;
+    if (anyFailed) setAnnounce(prev => ({ id: prev.id + 1, text: FAIL_TITLE }));
+    else headingRef.current?.focus();
+  }, [retryDone, anyFailed]);
+  const unavailable = (label: string) => `${label}，無法取得數量`;
 
   // 近 7 天營收
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -66,13 +97,19 @@ export default function SellerDashboard() {
     <div className="mx-auto max-w-5xl space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="break-words text-xl font-bold md:text-2xl">嗨，{shop.name} 👋</h1>
+          <h1 ref={headingRef} tabIndex={-1} className="break-words text-xl font-bold outline-none md:text-2xl">嗨，{shop.name} 👋</h1>
           <p className="text-sm text-muted">這是你的賣場今天的狀況</p>
         </div>
         <Link to="/seller/products/new" className="flex items-center gap-1.5 rounded-sm bg-brand px-4 py-2.5 text-sm text-white hover:bg-brand-dark">
           <PlusCircle size={16} /> 新增商品
         </Link>
       </div>
+
+      {anyFailed && (
+        <Banner kind="error" title={FAIL_TITLE} actions={<RetryButton onRetry={retry} />}>
+          標示「–」的數字目前無法取得，請檢查網路後再試一次。
+        </Banner>
+      )}
 
       <PayoutCard />
 
@@ -97,10 +134,10 @@ export default function SellerDashboard() {
             @container 量的是這個包裝（比內容寬少 main 的 24 與待辦卡的 32），所以門檻寫 344。桌機網頁 md: 照舊 */}
         <div className="@container mt-3">
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md bg-line @min-[344px]:grid-cols-5 md:grid-cols-5">
-            <Todo to="/seller/orders" n={toShip} label="待出貨" highlight={toShip > 0} />
-            <Todo to="/seller/orders" n={shopOrders.filter(o => o.status === 'shipping').length} label="運送中" />
-            <Todo to="/seller/products" n={active} label="上架中商品" />
-            <Todo to="/seller/products" n={lowStock.length} label="庫存偏低" highlight={lowStock.length > 0} />
+            <Todo to="/seller/orders" n={ordersFailed ? null : toShip} label="待出貨" highlight={toShip > 0} ariaLabel={ordersFailed ? unavailable('待出貨') : undefined} />
+            <Todo to="/seller/orders" n={ordersFailed ? null : shopOrders.filter(o => o.status === 'shipping').length} label="運送中" ariaLabel={ordersFailed ? unavailable('運送中') : undefined} />
+            <Todo to="/seller/products" n={productsFailed ? null : active} label="上架中商品" ariaLabel={productsFailed ? unavailable('上架中商品') : undefined} />
+            <Todo to="/seller/products" n={productsFailed ? null : lowStock.length} label="庫存偏低" highlight={lowStock.length > 0} ariaLabel={productsFailed ? unavailable('庫存偏低') : undefined} />
             <Todo
               to="/seller/reviews?tab=unreplied" n={unreplied.n} label="待回覆評價" highlight={(unreplied.n ?? 0) > 0}
               className="col-span-2 @min-[344px]:col-span-1 md:col-span-1"
@@ -120,6 +157,13 @@ export default function SellerDashboard() {
               <h2 className="font-medium">營收</h2>
               <span className="text-xs text-muted">不含已取消訂單</span>
             </div>
+            {ordersFailed ? (
+              <>
+                <p className="mt-2 text-3xl font-semibold text-muted max-[319px]:text-2xl"><span aria-hidden="true">–</span><span className="sr-only">營收，無法取得</span></p>
+                <div className="mt-5 py-10 text-center text-sm text-muted">讀不到訂單資料</div>
+              </>
+            ) : (
+              <>
             <p className="mt-2 break-words text-3xl font-semibold text-brand max-[319px]:text-2xl">{money(revenue)}</p>
             <p className="text-xs text-muted">共 {valid.length} 筆訂單</p>
             {/* 窄螢幕（320、手機 200% 字級）7 根長條放不下時，只讓圖表自己橫向捲，不撐開整頁 */}
@@ -134,11 +178,15 @@ export default function SellerDashboard() {
                 ))}
               </div>
             </div>
+              </>
+            )}
           </section>
 
           <section className="rounded-lg bg-white p-4 md:p-5">
             <h2 className="font-medium">熱銷商品</h2>
-            {top.length === 0 ? (
+            {productsFailed ? (
+              <div className="py-10 text-center text-sm text-muted">讀不到商品資料</div>
+            ) : top.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted">
                 還沒有商品，<Link to="/seller/products/new" className="text-brand">上架第一件 →</Link>
               </div>
@@ -160,7 +208,7 @@ export default function SellerDashboard() {
         </div>
       </div>
 
-      {lowStock.length > 0 && (
+      {!productsFailed && lowStock.length > 0 && (
         <section className="rounded-lg border border-warning-border bg-warning-bg p-4 md:p-5">
           <h2 className="flex items-center gap-1.5 font-medium text-warning-text"><AlertTriangle size={18} /> 庫存提醒</h2>
           <ul className="mt-2 divide-y divide-warning-border text-sm md:divide-y-0">
@@ -182,6 +230,10 @@ export default function SellerDashboard() {
           </ul>
         </section>
       )}
+
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        <span key={announce.id}>{announce.text}</span>
+      </div>
 
       {/* 還沒有門號才顯示；放在最下面，綁定是自願的，不該每次進後台都被提醒 */}
       {user && !phoneOf(user) && provider && providers.phone && (
