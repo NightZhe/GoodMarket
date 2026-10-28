@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Ellipsis } from 'lucide-react';
 import { GlassButton } from './GlassButton';
 import { groupWidth, shouldCollapse } from './glassGroupFit';
+import { popoverAt, syncPopover } from './popoverState';
 import { useElementWidth } from './useElementWidth';
 
 export type GlassGroupItem = {
@@ -50,10 +51,14 @@ export function GlassGroup({ label, items, collapseLabel = '更多', forceCollap
   const collapsed = shouldCollapse(room, width, forceCollapse);
 
   const { pathname } = useLocation();
-  // 記下「在哪一頁打開的」：換頁就自然視為關閉，不必用 effect 回頭關（同 GlassCapsule 的 L2 浮層）
-  const [openAt, setOpenAt] = useState<string | null>(null);
-  const open = collapsed && openAt === pathname;
-  const close = () => setOpenAt(null);
+  // 換頁就關，而且真的清掉（popoverState.ts）：只記「在哪一頁打開的」會在回到同一頁時自己重開。
+  // 用 render 期間調整 state（React 建議的寫法），不用 effect，不多繪一格
+  const [pop, setPop] = useState(() => popoverAt(pathname));
+  const synced = syncPopover(pop, pathname);
+  if (synced !== pop) setPop(synced);
+  const open = collapsed && synced.open;
+  const setOpen = (next: boolean) => setPop({ open: next, path: pathname });
+  const close = () => setOpen(false);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -66,18 +71,25 @@ export function GlassGroup({ label, items, collapseLabel = '更多', forceCollap
     focusFirst: () => (collapsedRef.current ? triggerRef.current : wrapRef.current?.querySelector<HTMLElement>('a,button'))?.focus(),
   }), []);
 
-  // 離開收合（旋轉、取消縮放）就清掉「打開過」，否則回到窄寬時浮層會自己重新展開
-  useEffect(() => { if (!collapsed) setOpenAt(null); }, [collapsed]);
+  // 離開收合（旋轉、取消縮放）就清掉「打開過」，否則回到窄寬時浮層會自己重新展開；
+  // 浮層開著時變寬，焦點原本在浮層裡（會被拿掉），改交給群組第一顆（B2）
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (collapsed) return;
+    setPop(p => (p.open ? popoverAt(p.path) : p));
+    if (wasOpen.current) wrapRef.current?.querySelector<HTMLElement>('a,button')?.focus();
+  }, [collapsed]);
+  useEffect(() => { wasOpen.current = open; }, [open]);
 
   useEffect(() => {
     if (!open) return;
     popRef.current?.querySelector<HTMLElement>('a,button')?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      setOpenAt(null);
+      setPop(p => popoverAt(p.path));
       triggerRef.current?.focus();
     };
-    const onHidden = () => { if (document.visibilityState === 'hidden') setOpenAt(null); };
+    const onHidden = () => { if (document.visibilityState === 'hidden') setPop(p => popoverAt(p.path)); };
     document.addEventListener('keydown', onKey);
     document.addEventListener('visibilitychange', onHidden);
     return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onHidden); };
@@ -89,7 +101,7 @@ export function GlassGroup({ label, items, collapseLabel = '更多', forceCollap
         <div className="pointer-events-auto relative">
           <button
             ref={triggerRef} type="button" aria-label={collapseLabel} aria-expanded={open} aria-controls={popId} aria-haspopup="true"
-            onClick={() => setOpenAt(open ? null : pathname)}
+            onClick={() => setOpen(!open)}
             className={`glass glass-btn z-40 flex size-11 items-center justify-center rounded-full text-brand ${open ? 'bg-press-glass' : ''}`}
           >
             <Ellipsis size={22} strokeWidth={1.7} aria-hidden="true" />

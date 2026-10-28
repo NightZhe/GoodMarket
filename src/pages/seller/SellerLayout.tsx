@@ -11,7 +11,7 @@ import { useSplitLayout } from '../../lib/layout/splitLayout';
 import { usePosture } from '../../lib/layout/posture';
 import { SELLER_LAYOUT_MARK } from '../../lib/native/shellInset';
 import { GlassButton, GlassCapsule, TabPill } from '../../components/glass';
-import { SUB_HEADER_LAYOUT, hasOwnBackHeader, hasSaveTray, hidesNav, isChatThreadPath, showsHomeButton } from './sellerNav';
+import { SUB_HEADER_LAYOUT, hasOwnBackHeader, hasSaveTray, hidesNav, isChatThreadPath, showsHomeButton, subPageOwnsPadding } from './sellerNav';
 import { buildSellerTabs } from './sellerTabs';
 import SellerTopBar from './SellerTopBar';
 
@@ -96,7 +96,7 @@ function SellerLayoutView() {
         </aside>
 
         {/* 底部預留：有分頁導覽的頁＝膠囊高＋底距（側邊姿態只留系統底緣）；新增／編輯商品頁由 ProductForm 自己依托盤預留；物流表單頁不顯示導覽 */}
-        <main className={`min-w-0 flex-1 ${chatThreadFull ? 'p-0' : `px-3 md:px-6 ${bandTall ? 'pt-0 md:pt-15' : 'pt-15'} ${hideNav || hasSaveTray(pathname) ? 'pb-6' : 'pb-[max(var(--tabs-clearance),1.5rem)] md:pb-6'}`}`}>
+        <main className={`min-w-0 flex-1 ${chatThreadFull ? 'p-0' : `${bandTall && subPageOwnsPadding(pathname) ? 'px-0' : 'px-3'} md:px-6 ${bandTall ? 'pt-0 md:pt-15' : 'pt-15'} ${hideNav || hasSaveTray(pathname) ? 'pb-6' : 'pb-[max(var(--tabs-clearance),1.5rem)] md:pb-6'}`}`}>
           <Outlet />
         </main>
       </div>

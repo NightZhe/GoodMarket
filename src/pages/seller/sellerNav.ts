@@ -84,3 +84,6 @@ const MORE_BUTTON = 44;
  */
 export const homeButtonCompact = (rowWidth: number, homeFullWidth: number): boolean =>
   rowWidth < homeFullWidth + HOME_GAP + MORE_BUTTON;
+
+/** SubPage 自己有左右 16 內距的賣家子頁（收款帳戶）：SubHeader 的 -mx-4 抵掉的是它自己的內距，main 在手機就不能再留 12，否則灰色色帶兩側會露出白縫。物流兩張表單沒有 SubPage 外層，維持原樣 */
+export const subPageOwnsPadding = (pathname: string): boolean => /^\/seller\/payout\/?$/.test(pathname);

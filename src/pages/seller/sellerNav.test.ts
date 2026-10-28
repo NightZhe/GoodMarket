@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasOwnBackHeader, hasSaveTray, hidesNav, homeButtonCompact, isChatThreadPath, sellerTabRoutes, showsHomeButton } from './sellerNav';
+import { hasOwnBackHeader, hasSaveTray, hidesNav, homeButtonCompact, isChatThreadPath, sellerTabRoutes, showsHomeButton, subPageOwnsPadding } from './sellerNav';
 import { needsShellInset } from '../../lib/native/shellInset';
 
 describe('hidesNav：哪些賣家頁不出現分頁導覽（膠囊與直立軌）', () => {
@@ -145,5 +145,13 @@ describe('shouldShellInset：App 殼只補沒有賣家外框的賣家頁（AC-H9
   it('非賣家路由一律不推（買家前台自己處理）', () => {
     expect(needsShellInset('#/account', false)).toBe(false);
     expect(needsShellInset('#/sellerx', false)).toBe(false);
+  });
+});
+
+describe('subPageOwnsPadding：收款帳戶頁 main 不留左右內距（B4）', () => {
+  it('只有收款帳戶頁', () => {
+    expect(subPageOwnsPadding('/seller/payout')).toBe(true);
+    expect(subPageOwnsPadding('/seller/logistics/address')).toBe(false);
+    expect(subPageOwnsPadding('/seller/orders')).toBe(false);
   });
 });

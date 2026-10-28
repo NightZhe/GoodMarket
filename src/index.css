@@ -215,7 +215,7 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
   .glass-group .glass-btn:active { transform: none; background-color: var(--color-press-rail); }
   .glass-group-sep { display: flex; align-items: center; justify-content: center; width: 2px; height: 44px; }
   .glass-group-sep::before { content: ''; width: 0.5px; height: 22px; background: var(--color-separator); }
-  .glass-group-pop { position: absolute; right: 0; top: calc(100% + 8px); width: min(240px, calc(100vw - 16px)); padding: 6px; border-radius: 20px; background: rgb(255 255 255 / 0.96); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: var(--shadow-popover), 0 0 0 0.5px rgb(0 0 0 / 0.06); transform-origin: top right; visibility: hidden; opacity: 0; transform: scale(.96); transition: opacity 150ms ease, visibility 0s 150ms, transform 0s 150ms; }
+  .glass-group-pop { position: absolute; right: 0; top: calc(100% + 8px); width: min(240px, calc(100vw - var(--inset-r) - 24px)); padding: 6px; border-radius: 20px; background: rgb(255 255 255 / 0.96); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: var(--shadow-popover), 0 0 0 0.5px rgb(0 0 0 / 0.06); transform-origin: top right; visibility: hidden; opacity: 0; transform: scale(.96); transition: opacity 150ms ease, visibility 0s 150ms, transform 0s 150ms; }
   .glass-group-pop[data-open='true'] { visibility: visible; opacity: 1; transform: none; transition: opacity 200ms ease, transform 200ms cubic-bezier(.23,1,.32,1), visibility 0s; }
 
   /* 確認對話框（alertdialog）的外層容器，與內層 .fold-panel 成對（SellerProducts 的刪除確認、LeaveDialog）：四邊各吃安全區（至少 24），
