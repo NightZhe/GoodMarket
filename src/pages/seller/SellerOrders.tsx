@@ -1,11 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Banknote, CalendarClock, CircleAlert, CircleCheck, CircleDashed, ChevronDown, Clock, CreditCard, Info, MapPin, Phone, Receipt, Truck, User } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Banknote, CalendarClock, CircleAlert, CircleCheck, CircleDashed, ChevronDown, Clock, CreditCard, Info, Loader2, MapPin, Phone, Receipt, Truck, User } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useRefreshOnVisible } from '../../store/ReviewsContext';
 import { orderActionErrorMessage } from '../../lib/orders/errors';
 import LeaveDialog from '../../components/import/LeaveDialog';
 import Banner from '../../components/import/Banner';
 import { btnOutline } from '../../components/import/ui';
+import { RetryButton } from './logisticsParts';
+import { ordersListView } from './listView';
 import { SellerBadgeView, StatusBlockView } from '../../components/payment/RefundBlocks';
 import { AcceptCancelDialog, RejectCancelDialog, SellerCancelDialog } from '../../components/payment/RefundDialogs';
 import { useCancelSummary } from '../../store/CancelSummaryContext';
@@ -220,7 +222,7 @@ function ShipForm({ onSubmit, onCancel }: {
 }
 
 export default function SellerOrders() {
-  const { myShop, shopOrders, updateOrderStatus, addOrderEvent, refreshShopOrders } = useStore();
+  const { myShop, shopOrders, shopOrdersState, updateOrderStatus, addOrderEvent, refreshShopOrders } = useStore();
   const toast = useToast();
   const { enabled: payEnabled } = usePaymentConfig();
   const merchantState = useMerchantState(payEnabled);
@@ -241,6 +243,24 @@ export default function SellerOrders() {
   const reloadPayouts = payouts.reload;
   const reloadSummary = cancelSummary.reload;
   const [dialog, setDialog] = useState<SellerDialog | null>(null);
+  // 還沒讀到訂單前不能說「沒有訂單」：載入中、讀不到各有自己的畫面（shopOrders 初值是 []，光看它分不出來）
+  const view = ordersListView(shopOrdersState);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const [announce, setAnnounce] = useState({ id: 0, text: '' });
+  const failTitle = online ? '讀不到訂單' : '目前沒有網路';
+  // 重試做完：成功→橫幅消失，焦點移到標題（按鈕不見了，焦點不能掉到 body）；失敗→橫幅還在，再念一次標題
+  const [retryDone, setRetryDone] = useState(0);
+  const retry = useCallback(async () => {
+    await refreshShopOrders();
+    setRetryDone(n => n + 1);
+  }, [refreshShopOrders]);
+  const handledRetry = useRef(0);
+  useEffect(() => {
+    if (handledRetry.current === retryDone) return;
+    handledRetry.current = retryDone;
+    if (view === 'error') setAnnounce(prev => ({ id: prev.id + 1, text: failTitle }));
+    else headingRef.current?.focus();
+  }, [retryDone, view, failTitle]);
   // 操作失敗（多半是畫面資料過期，例如買家剛完成或取消了這張單）：顯示錯誤訊息，並重讀成實際狀態
   // 重讀不等結果：斷線時重讀本身也會卡住，按鈕不能因此一直停在處理中。
   const onActionError = async (e: unknown) => {
@@ -289,7 +309,7 @@ export default function SellerOrders() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <h1 className="text-xl font-bold">訂單管理</h1>
+      <h1 ref={headingRef} tabIndex={-1} className="text-xl font-bold outline-none">訂單管理</h1>
       {payEnabled && merchantState === 'active' && (
         <p className="mt-2 flex items-start gap-1.5 text-sm text-muted">
           <Info size={16} className="mt-0.5 shrink-0 text-info-text" aria-hidden="true" />線上付款的訂單，買家付款成功後才會出現在這裡。
@@ -299,12 +319,12 @@ export default function SellerOrders() {
         {tabs.map(t => (
           <button key={t} id={`seller-orders-tab-${t}`} onClick={() => setTab(t)}
             className={`shrink-0 border-b-2 px-4 py-3 text-sm ${tab === t ? 'border-brand text-brand' : 'border-transparent'}`}>
-            {t === 'all' ? '全部' : STATUS_LABEL[t]} <span className="text-muted">({mine.filter(o => t === 'all' || o.status === t).length})</span>
+            {t === 'all' ? '全部' : STATUS_LABEL[t]}{view === 'ready' && <span className="text-muted"> ({mine.filter(o => t === 'all' || o.status === t).length})</span>}
           </button>
         ))}
       </div>
 
-      {refunds.status === 'error' && (
+      {view === 'ready' && refunds.status === 'error' && (
         <div className="mt-3">
           <Banner
             kind="warning" role="status" title="取消申請與退款狀態暫時讀不到"
@@ -315,7 +335,19 @@ export default function SellerOrders() {
         </div>
       )}
 
-      {list.length === 0 ? (
+      {view === 'loading' ? (
+        <div className="flex items-center justify-center gap-2 rounded-b-lg bg-white py-16 text-sm text-muted" role="status">
+          <Loader2 size={18} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> 載入中…
+        </div>
+      ) : view === 'error' ? (
+        <div className="mt-3">
+          {online ? (
+            <Banner kind="error" title={failTitle} actions={<RetryButton onRetry={retry} />}>請檢查網路後再試一次。</Banner>
+          ) : (
+            <Banner kind="warning" role="status" title={failTitle} actions={<RetryButton onRetry={retry} />}>連上網路後才能看到訂單。</Banner>
+          )}
+        </div>
+      ) : list.length === 0 ? (
         <div className="rounded-b-lg bg-white py-16 text-center text-sm text-muted">
           {tab === 'to_ship' ? '目前沒有待出貨的訂單 🎉' : '沒有訂單'}
         </div>
@@ -494,6 +526,10 @@ export default function SellerOrders() {
           })}
         </ul>
       )}
+
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        <span key={announce.id}>{announce.text}</span>
+      </div>
 
       {dialog?.kind === 'accept' && (() => {
         const q = refunds.rows.get(dialog.order.id)?.cancel_request;

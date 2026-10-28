@@ -1,3 +1,5 @@
+import type { OrdersState } from '../../store/useAccountOrders';
+
 // 賣家列表頁「列表區這一刻該顯示哪一態」的判斷（純函式，好測）。核心原則：讀不到不能畫成「沒有資料」。
 
 /** loading＝載入態；error＝讀不到且沒有資料（取代空態）；stale＝讀不到但畫面有上次的資料；normal＝其餘（含真的沒有商品的空態） */
@@ -12,4 +14,12 @@ export function productsListView(i: { loading: boolean; failed: boolean; hasProd
   if (i.loading) return 'loading';
   if (!i.failed) return 'normal';
   return i.hasProducts ? 'stale' : 'error';
+}
+
+export type OrdersListView = 'loading' | 'error' | 'ready';
+
+/** 訂單管理：idle（還沒開始讀）與 loading 都畫成載入態；ready 才輪到列表或「沒有訂單」 */
+export function ordersListView(state: OrdersState): OrdersListView {
+  if (state === 'error') return 'error';
+  return state === 'ready' ? 'ready' : 'loading';
 }

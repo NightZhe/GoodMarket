@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { productsListView } from './listView';
+import { ordersListView, productsListView } from './listView';
 
 // 我的商品列表區「這一刻該顯示哪一態」（規格 6.1、6.6）。failed ＝ 讀取失敗，或正在重試上一次的失敗。
 const base = { loading: false, failed: false, hasProducts: true };
@@ -26,5 +26,17 @@ describe('productsListView：我的商品列表區', () => {
   it('沒有失敗：正常（含真的 0 件商品的空態，由頁面自己依商品數決定）', () => {
     expect(productsListView(base)).toBe('normal');
     expect(productsListView({ ...base, hasProducts: false })).toBe('normal');
+  });
+});
+
+describe('ordersListView：訂單管理列表區（規格 6.2）', () => {
+  it('還沒讀到訂單（idle、loading）都是載入態，不得先說「沒有訂單」', () => {
+    expect(ordersListView('idle')).toBe('loading');
+    expect(ordersListView('loading')).toBe('loading');
+  });
+
+  it('讀不到：錯誤態；讀到了（含 0 筆）：交給頁面畫列表或空態', () => {
+    expect(ordersListView('error')).toBe('error');
+    expect(ordersListView('ready')).toBe('ready');
   });
 });
