@@ -15,6 +15,7 @@ import type {
 } from '../types';
 import { useAccountCart, type CartState } from './useAccountCart';
 import { settleReload } from './reloadPolicy';
+import { afterStaleRead, nextShopOrdersState, type ShopOrdersEvent } from './shopOrdersState';
 import { useAccountOrders, type OrdersState } from './useAccountOrders';
 import type { AccountErrorKind } from '../lib/account/errors';
 import { ImportCallError, toCallError } from '../lib/import/errors';
@@ -196,6 +197,8 @@ interface Store {
   syncProductSnapshot: (productId: string, variants: Product['variants'], status: Product['status']) => void;
   deleteProduct: (id: string) => Promise<void>;
   shopOrders: Order[];
+  /** 賣家訂單讀到哪了（語意同 myOrdersState）。shopOrders 初值是 []，光看它分不出「讀到 0 筆」「還在讀」「讀不到」 */
+  shopOrdersState: OrdersState;
   refreshShopOrders: () => Promise<void>;
   updateOrderStatus: (id: string, status: OrderStatus, shipping?: { carrier: string; trackingNo: string }) => Promise<void>;
   /** 賣家手動更新物流節點。「買家已取貨」會讓資料庫把運送中的訂單轉成已完成，所以完成後以資料庫重讀的整張訂單為準 */
@@ -226,6 +229,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 主動登出時為 true：SIGNED_OUT 事件才知道是「使用者要登出」還是「登入過期」
   const explicitSignOut = useRef(false);
   const [shopOrders, setShopOrders] = useState<Order[]>([]);
+  const [shopOrdersState, setShopOrdersState] = useState<OrdersState>('idle');
+  // 迴圈裡要讀「現在」的狀態，不能讀閉包裡的舊值
+  const shopOrdersStateRef = useRef<OrdersState>('idle');
+  const moveShopOrders = useCallback((event: ShopOrdersEvent) => {
+    const next = nextShopOrdersState(shopOrdersStateRef.current, event);
+    shopOrdersStateRef.current = next;
+    setShopOrdersState(next);
+  }, []);
 
   // 上線前遺留在裝置上的舊購物車、訂單憑證、評價草稿（D16、D17＝B）：載入時清掉
   useEffect(() => {
@@ -292,6 +303,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // 登入後載入自己的商店；登出就清掉
   const user = session?.user ?? null;
   useEffect(() => {
+    moveShopOrders('reset'); // 登出、換帳號：訂單讀取狀態回 idle，下一家店從 loading 開始
     if (!userId) {
       setMyShop(null);
       setShopOrders([]);
@@ -305,7 +317,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setShopLoadedFor(userId);
     });
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, moveShopOrders]);
   const shopReady = authReady && (!userId || shopLoadedFor === userId);
 
   // 伺服器說「沒登入」但畫面上還有人登入著：登入已經失效。當作過期，不是登出（資料保留）
@@ -328,14 +340,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const shopOrdersSeq = useRef(0);
   const refreshShopOrders = useCallback(async () => {
     if (!myShop) return;
-    const seq = shopOrdersSeq.current;
-    const { data, error } = await supabase.from('orders').select(SHOP_ORDER_COLUMNS)
-      .eq('shop_id', myShop.id).order('created_at', { ascending: false });
-    if (error || !data || seq !== shopOrdersSeq.current) return;
-    const next = (data as unknown as ShopOrderRow[]).map(toOrder);
-    // 內容沒變就保留原本的陣列，回到前景的靜默重讀不會觸發任何重繪
-    setShopOrders(prev => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
-  }, [myShop]);
+    moveShopOrders('start');
+    for (let rereads = 0; ; rereads++) {
+      const seq = shopOrdersSeq.current;
+      const { data, error } = await supabase.from('orders').select(SHOP_ORDER_COLUMNS)
+        .eq('shop_id', myShop.id).order('created_at', { ascending: false });
+      if (error || !data) { moveShopOrders('fail'); return; }
+      if (seq !== shopOrdersSeq.current) {
+        // 結果被寫入搶先而丟掉：已讀到過就維持現況（序號保護不變）；還沒讀到過不能讓畫面永遠停在載入態，
+        // 所以重讀，但最多 SHOP_ORDERS_MAX_REREADS 次——寫入一直在推進序號時不能無限重讀，超過就當讀不到，交給「重試」
+        const action = afterStaleRead(shopOrdersStateRef.current, rereads);
+        if (action === 'keep') return;
+        if (action === 'fail') { moveShopOrders('fail'); return; }
+        continue;
+      }
+      const next = (data as unknown as ShopOrderRow[]).map(toOrder);
+      // 內容沒變就保留原本的陣列，回到前景的靜默重讀不會觸發任何重繪
+      setShopOrders(prev => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+      moveShopOrders('ok');
+      return;
+    }
+  }, [myShop, moveShopOrders]);
 
   useEffect(() => { void refreshShopOrders(); }, [refreshShopOrders]);
 
@@ -565,14 +590,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart, addToCart, setCartQty, removeFromCart, retryCartSync,
     checkout, myOrders, myOrdersState, myOrdersIssue, refreshMyOrders, cancelMyOrder, completeMyOrder,
     user, authReady, sessionExpired, shopReady, myShop, signOut, signOutBuyer, createShop,
-    saveProduct, setProductStatus, quickEditProduct, syncProductSnapshot, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
+    saveProduct, setProductStatus, quickEditProduct, syncProductSnapshot, deleteProduct, shopOrders, shopOrdersState, refreshShopOrders, updateOrderStatus, addOrderEvent,
     getImportIndex, importApi, uploadImportImage,
   }), [
     shops, products, loading, loadError, reload, cart, cartState, cartIssue, cartSyncFailed, cartUpdateTick, refreshCart,
     addToCart, setCartQty, removeFromCart, retryCartSync,
     checkout, myOrders, myOrdersState, myOrdersIssue, refreshMyOrders, cancelMyOrder, completeMyOrder,
     user, authReady, sessionExpired, shopReady, myShop, signOut, signOutBuyer, createShop,
-    saveProduct, setProductStatus, quickEditProduct, syncProductSnapshot, deleteProduct, shopOrders, refreshShopOrders, updateOrderStatus, addOrderEvent,
+    saveProduct, setProductStatus, quickEditProduct, syncProductSnapshot, deleteProduct, shopOrders, shopOrdersState, refreshShopOrders, updateOrderStatus, addOrderEvent,
     getImportIndex, importApi, uploadImportImage,
   ]);
 

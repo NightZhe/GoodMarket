@@ -31,8 +31,11 @@ const tsText = (iso: string) => {
   return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-/** 收款帳戶：帳號頁（#/account/payout）與賣家中心（#/seller/payout）共用同一頁，只有返回連結不同（設計 11） */
-export default function PayoutAccountPage({ backTo, backLabel }: { backTo: string; backLabel: string }) {
+/**
+ * 收款帳戶：帳號頁（#/account/payout）與賣家中心（#/seller/payout）共用同一頁，只有返回連結不同（設計 11）。
+ * backText＝返回鈕看得到的字，沒傳就是 SubHeader 的預設「我的」；backLabel 要包含它（WCAG 2.5.3）
+ */
+export default function PayoutAccountPage({ backTo, backLabel, backText }: { backTo: string; backLabel: string; backText?: string }) {
   const { myShop, shopReady } = useStore();
   const online = useOnline();
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
@@ -60,7 +63,7 @@ export default function PayoutAccountPage({ backTo, backLabel }: { backTo: strin
     return () => window.removeEventListener('pageshow', onShow);
   }, [myShop, reload]);
 
-  const header = <SubHeader to={backTo} backLabel={backLabel} title="收款帳戶" />;
+  const header = <SubHeader to={backTo} backLabel={backLabel} backText={backText} title="收款帳戶" />;
 
   if (!shopReady) return <SubPage>{header}<div aria-busy="true" role="status" className="mt-2 bg-white p-6 rounded-card"><span className="sr-only">載入中</span><Bone className="h-12 w-12" /></div></SubPage>;
 
