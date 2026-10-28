@@ -19,6 +19,8 @@ export interface ListModel {
   staleFailed: boolean;
   now: Date;
   rowTo: (row: Row) => string;
+  /** 賣家桌機雙欄：右邊開著的對話 id，該列顯示為選中 */
+  selectedId?: string | null;
 }
 
 export interface ListHandlers {
@@ -108,7 +110,7 @@ export default function ChatListView({ m, h }: { m: ListModel; h: ListHandlers }
         </div>
       )}
       <ul>
-        {m.rows.map(r => <ConversationRow key={r.conversation_id} row={r} to={m.rowTo(r)} now={m.now} onLongPress={h.onLongPress} />)}
+        {m.rows.map(r => <ConversationRow key={r.conversation_id} row={r} to={m.rowTo(r)} now={m.now} onLongPress={h.onLongPress} selected={m.selectedId === r.conversation_id} />)}
       </ul>
       {(m.hasMore || m.loadingMore) && <LoadMore loading={m.loadingMore} failed={m.moreFailed} onLoad={h.onLoadMore} />}
     </>

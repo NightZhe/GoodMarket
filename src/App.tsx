@@ -44,6 +44,7 @@ import SellerProducts from './pages/seller/SellerProducts';
 import ProductForm from './pages/seller/ProductForm';
 import SellerOrders from './pages/seller/SellerOrders';
 import SellerReviews from './pages/seller/SellerReviews';
+import SellerChatShell, { SellerChatNew, SellerChatThread } from './pages/seller/SellerChat';
 import SellerPayout from './pages/seller/SellerPayout';
 import SellerLogistics from './pages/seller/SellerLogistics';
 import SellerLogisticsStoreForm from './pages/seller/SellerLogisticsStoreForm';
@@ -120,6 +121,11 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
         <Route path="products/import" element={<Suspense fallback={<PageLoading />}><ImportWizard /></Suspense>} />
         <Route path="products/:id/edit" element={<ProductForm />} />
         <Route path="orders" element={<SellerOrders />} />
+        {/* 聊聊（賣家端）：chat 是版面路由（手機兩頁、桌機雙欄）。chat/new（從訂單進）排在 :conversationId 前面，不會被當成對話 id */}
+        <Route path="chat" element={<SellerChatShell />}>
+          <Route path="new" element={<SellerChatNew />} />
+          <Route path=":conversationId" element={<SellerChatThread />} />
+        </Route>
         <Route path="reviews" element={<SellerReviews />} />
         <Route path="logistics" element={<SellerLogistics />} />
         <Route path="logistics/stores/new" element={<SellerLogisticsStoreForm />} />

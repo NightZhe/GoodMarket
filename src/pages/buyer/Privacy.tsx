@@ -4,6 +4,9 @@ import { ExternalLink } from 'lucide-react';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { CONTACT_EMAIL, DELETION_WINDOW, PRIVACY_EFFECTIVE, PRIVACY_FIRST_PUBLISHED } from '../../lib/site';
 
+/** 刪除帳號改為申請制、新增內容審核與檢舉的修訂日（store-prereqs，2026-10-26 推上）：已發生的修訂，不會再變。
+ *  聊聊上線那筆（2026/10/29）接手 PRIVACY_EFFECTIVE，這筆依合併規則改成固定日期 */
+const PRIVACY_DELETE_REQUEST = '2026/10/26';
 /** 帳號頁 P-A（個人檔案、地址簿）上線日：已發生的修訂，不會再變 */
 const PRIVACY_P_A = '2026/10/18';
 /** 賣家『物流設定』（退貨收件資料的揭露）上線日：已發生的修訂，不會再變。
@@ -120,7 +123,7 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
           >
             申請刪除帳號
           </Link>
-          。我們會在申請後 {DELETION_WINDOW}人工處理；處理完成前你可以隨時取消。還有待出貨或運送中的訂單時，要等訂單完成或取消後才能申請。有開店的帳號，店、商品與店內的訂單會一併刪除。刪除完成後，再用同一個登入方式登入會是全新的空帳號。
+          。我們會在申請後 {DELETION_WINDOW}人工處理；處理完成前你可以隨時取消。還有待出貨或運送中的訂單時，要等訂單完成或取消後才能申請。有開店的帳號，店、商品與店內的訂單會一併刪除。刪除完成後，再用同一個登入方式登入會是全新的空帳號。聊聊對話不隨帳號刪除而刪除，你的名稱改顯示為『已刪除的帳號』。
         </div>
 
         <h2 className="mt-8 text-base font-bold">6. 內容審核與檢舉</h2>
@@ -130,16 +133,25 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
           。
         </p>
 
-        <h2 className="mt-8 text-base font-bold">7. 聯絡我們</h2>
+        <h2 className="mt-8 text-base font-bold">7. 聊聊</h2>
+        <p className="mt-2 text-base leading-7">
+          <strong className="font-semibold">聊聊訊息</strong>：你與店家在站內的對話內容（文字、圖片、商品與訂單卡片）會儲存在我們的資料庫與檔案儲存空間，用於提供對話功能與處理交易糾紛。對話不會自動刪除；你刪除帳號後，對方仍看得到既有對話，但你的名稱會顯示為『已刪除的帳號』。圖片只有對話雙方看得到。我們不會將對話內容用於廣告。
+        </p>
+
+        <h2 className="mt-8 text-base font-bold">8. 聯絡我們</h2>
         <p className="mt-2 text-base leading-7">
           關於你的資料有任何問題，請來信：
           <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>
         </p>
 
-        <h2 className="mt-8 text-base font-bold">8. 修訂紀錄</h2>
+        <h2 className="mt-8 text-base font-bold">9. 修訂紀錄</h2>
         <dl className="mt-2 rounded-md border border-line px-4">
           <div className="border-t border-line py-3 first:border-t-0">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_EFFECTIVE}</dt>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">新增『聊聊』：說明站內對話內容的儲存、保留與刪帳號後的顯示方式。</dd>
+          </div>
+          <div className="border-t border-line py-3">
+            <dt className="text-sm font-medium tabular-nums">{PRIVACY_DELETE_REQUEST}</dt>
             <dd className="mt-0.5 text-sm leading-6 text-muted">刪除帳號改為在 App 或網站提出申請、7 個工作天內處理，刪除時評價與照片一併刪除；新增『內容審核與檢舉』與檢舉紀錄的說明。</dd>
           </div>
           <div className="border-t border-line py-3">

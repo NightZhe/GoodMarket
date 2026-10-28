@@ -88,6 +88,12 @@ describe('聊聊列表的每一列', () => {
     expect(html({ side: 'shop', rows: [buyer('小明')] })).toContain('小明');
     expect(html({ side: 'shop', rows: [buyer(null)] })).toContain('買家 3F9A');
   });
+  it('賣家桌機雙欄：右邊開著的那一列是選中（淡底＋aria-current），其他列不是', () => {
+    const h = html({ side: 'shop', rows: [row({ conversation_id: 'c1' }), row({ conversation_id: 'c2' })], selectedId: 'c2' });
+    expect(h.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(h).toMatch(/<a [^>]*aria-current="page"[^>]*href="\/chat\/c2"|<a [^>]*href="\/chat\/c2"[^>]*aria-current="page"/);
+    expect(html({ rows: [row()] })).not.toContain('aria-current');
+  });
   it('列高至少 72（min-h-18）', () => {
     expect(html({ rows: [row()] })).toContain('min-h-18');
   });
