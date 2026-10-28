@@ -13,11 +13,13 @@ import { pendingCount, useCancelSummary } from '../../store/CancelSummaryContext
 import { dashboardCancelPrompt } from '../../lib/payment/refundView';
 import { getSellerReviewCounts } from '../../lib/reviews/api';
 import { useRefreshOnVisible } from '../../store/ReviewsContext';
+import { useChat } from '../../store/ChatContext';
 import PayoutCard from '../../components/payment/PayoutCard';
 import { LogisticsEntryRow, ReturnPrompt } from '../../components/logistics/ReturnPrompt';
 import { useReturnSettings } from '../../lib/logistics/useReturnSettings';
 import { shouldShowEntryRow, shouldShowReturnPrompt } from '../../lib/logistics/returnPrompt';
 import { RetryButton, SETTINGS_READ_TIMEOUT_MS } from './logisticsParts';
+import { ReviewsEntryRow, UnreadMessagesCard } from './dashboardCards';
 import { RetryLiveRegion, useRetryFeedback } from './useRetryFeedback';
 
 const FAIL_TITLE = '有些資料暫時讀不到';
@@ -29,6 +31,7 @@ export default function SellerDashboard() {
   const shop = myShop!;
   const cancelSummary = useCancelSummary().summary;
   const pendingCancel = pendingCount(cancelSummary);
+  const unreadMessages = useChat().summary.shop_messages;
   const mine = products.filter(p => p.shopId === shop.id);
   const valid = shopOrders.filter(o => o.status !== 'cancelled');
 
@@ -121,6 +124,7 @@ export default function SellerDashboard() {
             </Link>
           );
         })()}
+        <UnreadMessagesCard messages={unreadMessages} />
         {showReturnPrompt && <ReturnPrompt />}
         {/* 格線依內容寬排，不靠 md:（App 內 md: 不生效，X6、design-spec §5.4.1）：待辦 5 格橫排在內容寬 ≥ 400，否則 2 欄、第 5 格跨欄。
             @container 量的是這個包裝（比內容寬少 main 的 24 與待辦卡的 32），所以門檻寫 344。桌機網頁 md: 照舊 */}
@@ -140,6 +144,7 @@ export default function SellerDashboard() {
       </section>
 
       {showEntryRow && <LogisticsEntryRow />}
+      <ReviewsEntryRow />
 
       {/* 營收＋熱銷兩欄 1.4:1：內容寬 ≥ 620 時並排，否則上下堆（包裝比內容寬少 main 的 24，所以門檻 596） */}
       <div className="@container">

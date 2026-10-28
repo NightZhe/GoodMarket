@@ -41,7 +41,7 @@ export const shippingFor = (subtotal: number, products: (Product | undefined)[])
 
 const toShop = (r: ShopRow): Shop => ({
   id: r.id, name: r.name, avatar: r.avatar, description: r.description,
-  location: r.location, rating: Number(r.rating), joinedAt: r.created_at,
+  location: r.location, rating: Number(r.rating), joinedAt: r.created_at, ownerId: r.owner_id,
 });
 
 const toProduct = (r: ProductRow): Product => ({

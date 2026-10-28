@@ -26,6 +26,8 @@ import { useBlockActions } from '../../components/report/useBlockActions';
 import { useReport } from '../../components/report/useReport';
 import { visibleProducts } from '../../lib/block/filter';
 import { useToast } from '../../components/Toast';
+import ChatEntryButton from '../../components/chat/ChatEntryButton';
+import { newChatPath } from '../../lib/chat/nav';
 import { useOnline } from '../../lib/useOnline';
 import { cheapestVariant, discountOf, money, priceRange, soldText } from '../../lib/format';
 import { reduceMotion } from '../../lib/ui/scroll';
@@ -339,17 +341,21 @@ function ProductDetailView({ id }: { id: string }) {
       {shop && (
         <>
           <SectionHeader title="賣家" className={SECTION} />
-          <Link
-            to={`/shop/${shop.id}`}
-            className="flex items-center gap-3 px-5 py-2 transition-colors duration-200 active:bg-press active:duration-0 md:px-0"
-          >
-            <LetterAvatar name={shop.name} />
-            <span className="min-w-0 flex-1">
-              <span className="block break-words text-headline font-semibold text-ink">{shop.name}</span>
-              <span className="block text-subhead text-muted">{shop.location}</span>
-            </span>
-            <ChevronRight size={20} strokeWidth={2.4} className="shrink-0 text-chevron" aria-hidden="true" />
-          </Link>
+          {/* 整列原本是一個連結；聊聊鈕不能套在連結裡，所以拆成兩個兄弟節點。空間不夠（文字放大、窄螢幕）時鈕自己換到下一行 */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2 md:px-0">
+            <Link
+              to={`/shop/${shop.id}`}
+              className="flex min-w-0 flex-1 basis-48 items-center gap-3 transition-colors duration-200 active:bg-press active:duration-0"
+            >
+              <LetterAvatar name={shop.name} />
+              <span className="min-w-0 flex-1">
+                <span className="block break-words text-headline font-semibold text-ink">{shop.name}</span>
+                <span className="block text-subhead text-muted">{shop.location}</span>
+              </span>
+              <ChevronRight size={20} strokeWidth={2.4} className="shrink-0 text-chevron" aria-hidden="true" />
+            </Link>
+            <ChatEntryButton shopId={shop.id} shopName={shop.name} to={newChatPath({ shopId: shop.id, productId: product.id })} variant="pill" />
+          </div>
         </>
       )}
 

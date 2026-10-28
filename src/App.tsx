@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, RouterProvider, createHashRouter, createRoutes
 import { Loader2 } from 'lucide-react';
 import { StoreProvider } from './store/StoreContext';
 import { AuthProvider } from './store/AuthContext';
+import { ChatProvider } from './store/ChatContext';
 import AuthBoot from './components/auth/AuthBoot';
 import PendingRunner from './components/auth/PendingRunner';
 import { isConfigured } from './lib/supabase';
@@ -16,6 +17,8 @@ import ProductDetail from './pages/buyer/ProductDetail';
 import Cart from './pages/buyer/Cart';
 import Checkout from './pages/buyer/Checkout';
 import Orders from './pages/buyer/Orders';
+import ChatList from './pages/buyer/ChatList';
+import { ChatNew, ChatThread } from './pages/buyer/ChatConversation';
 import ShopPage from './pages/buyer/ShopPage';
 import ReviewForm from './pages/buyer/ReviewForm';
 import ReviewsOverview from './pages/buyer/ReviewsOverview';
@@ -41,6 +44,7 @@ import SellerProducts from './pages/seller/SellerProducts';
 import ProductForm from './pages/seller/ProductForm';
 import SellerOrders from './pages/seller/SellerOrders';
 import SellerReviews from './pages/seller/SellerReviews';
+import SellerChatShell, { SellerChatNew, SellerChatThread } from './pages/seller/SellerChat';
 import SellerPayout from './pages/seller/SellerPayout';
 import SellerLogistics from './pages/seller/SellerLogistics';
 import SellerLogisticsStoreForm from './pages/seller/SellerLogisticsStoreForm';
@@ -85,6 +89,10 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
       <Route path="checkout" element={<Checkout />} />
       <Route path="orders" element={<Orders />} />
       <Route path="orders/:orderId/review" element={<ReviewForm />} />
+      {/* 聊聊（買家端）：列表、既有對話、從店家頁／商品頁／訂單進的新對話（chat/new 要排在 :conversationId 前面，不會被當成對話 id） */}
+      <Route path="chat" element={<ChatList />} />
+      <Route path="chat/new" element={<ChatNew />} />
+      <Route path="chat/:conversationId" element={<ChatThread />} />
       <Route path="account" element={<Account />} />
       <Route path="account/profile" element={<AccountProfile />} />
       <Route path="account/addresses" element={<AccountAddresses />} />
@@ -113,6 +121,11 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
         <Route path="products/import" element={<Suspense fallback={<PageLoading />}><ImportWizard /></Suspense>} />
         <Route path="products/:id/edit" element={<ProductForm />} />
         <Route path="orders" element={<SellerOrders />} />
+        {/* 聊聊（賣家端）：chat 是版面路由（手機兩頁、桌機雙欄）。chat/new（從訂單進）排在 :conversationId 前面，不會被當成對話 id */}
+        <Route path="chat" element={<SellerChatShell />}>
+          <Route path="new" element={<SellerChatNew />} />
+          <Route path=":conversationId" element={<SellerChatThread />} />
+        </Route>
         <Route path="reviews" element={<SellerReviews />} />
         <Route path="logistics" element={<SellerLogistics />} />
         <Route path="logistics/stores/new" element={<SellerLogisticsStoreForm />} />
@@ -144,7 +157,9 @@ export default function App() {
         <ReviewsProvider>
           <ToastProvider>
             <AuthProvider>
-              <Routed />
+              <ChatProvider>
+                <Routed />
+              </ChatProvider>
             </AuthProvider>
           </ToastProvider>
         </ReviewsProvider>
