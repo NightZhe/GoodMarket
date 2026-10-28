@@ -88,7 +88,7 @@ describe('AC-5 setItem 寫安全儲存並清掉備援的舊份；removeItem 兩�
 });
 
 describe('AC-4 安全儲存丟例外 → 該次走備援、不向上丟；之後的呼叫都走備援', () => {
-  it('getItem 丟例外：回備援的值；接著 setItem／getItem 都不再碰安全儲存', async () => {
+  it('getItem 丟例外：回備援的值；接著 getItem 不再讀安全儲存、setItem 不再寫安全儲存', async () => {
     const secure = secureFake({ throwOn: new Set(['getItem']) });
     const fallback = fallbackFake();
     fallback.map.set(KEY, SESSION);
@@ -99,7 +99,38 @@ describe('AC-4 安全儲存丟例外 → 該次走備援、不向上丟；之後
     await store.setItem(KEY, 'next-session');
     await expect(store.getItem(KEY)).resolves.toBe('next-session');
     await store.removeItem(KEY);
-    expect(secure.calls).toEqual([]);
+    // 降級後只剩「盡力刪掉安全儲存的同 key」這一種呼叫，沒有讀也沒有寫
+    expect(secure.calls.filter(c => !c.startsWith('removeItem:'))).toEqual([]);
+    expect(fallback.map.has(KEY)).toBe(false);
+  });
+  it('降級期間登出：安全儲存裡的舊 session 也要盡力清掉，重啟後不會復活（D4 登出＝撤銷）', async () => {
+    const secure = secureFake({ throwOn: new Set(['getItem']) });
+    secure.map.set(KEY, 'stale-session-in-keychain');
+    const fallback = fallbackFake();
+    const store = createSessionStore({ secure: async () => secure.store, fallback: fallback.store });
+    await store.getItem(KEY); // 觸發降級
+    await store.removeItem(KEY);
+    expect(secure.map.has(KEY)).toBe(false);
+  });
+  it('降級期間換新 token：安全儲存裡的舊 token 要盡力清掉，重啟後不會蓋掉備援的新值', async () => {
+    const secure = secureFake({ throwOn: new Set(['getItem']) });
+    secure.map.set(KEY, 'stale-session-in-keychain');
+    const fallback = fallbackFake();
+    const store = createSessionStore({ secure: async () => secure.store, fallback: fallback.store });
+    await store.getItem(KEY); // 觸發降級
+    await store.setItem(KEY, 'rotated-session');
+    expect(secure.map.has(KEY)).toBe(false);
+    expect(fallback.map.get(KEY)).toBe('rotated-session');
+  });
+  it('降級後連刪也失敗：照樣不丟，備援仍正確', async () => {
+    const secure = secureFake({ throwOn: new Set(['getItem', 'removeItem']) });
+    secure.map.set(KEY, 'stale');
+    const fallback = fallbackFake();
+    const store = createSessionStore({ secure: async () => secure.store, fallback: fallback.store });
+    await store.getItem(KEY);
+    await expect(store.setItem(KEY, SESSION)).resolves.toBeUndefined();
+    await expect(store.getItem(KEY)).resolves.toBe(SESSION);
+    await expect(store.removeItem(KEY)).resolves.toBeUndefined();
     expect(fallback.map.has(KEY)).toBe(false);
   });
   it('setItem 丟例外：值寫進備援、不丟；之後讀得到', async () => {
