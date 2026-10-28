@@ -7,13 +7,17 @@ import { useToast } from '../../components/Toast';
 import ProductImage from '../../components/ProductImage';
 import Pagination, { DEFAULT_PAGE_SIZE, clampPage, parsePage, parseSize, totalPagesOf, type PageSize } from '../../components/Pagination';
 import LeaveDialog from '../../components/import/LeaveDialog';
+import Banner from '../../components/import/Banner';
 import { btnOutline, btnPrimary, btnPrimaryLg } from '../../components/import/ui';
 import { priceRange, soldText } from '../../lib/format';
+import { useOnline } from '../../lib/useOnline';
 import { BOTH_FIELDS_NAME, FIELD_NAME, resultNotice, type QuickField } from '../../lib/products/quickEdit';
 import { LOW_STOCK } from '../../lib/products/stock';
 import type { Product } from '../../types';
 import { QuickCellButton, QuickEditBlock } from './QuickEditCell';
 import QuickEditSheet from './QuickEditSheet';
+import { RetryButton } from './logisticsParts';
+import { productsListView } from './listView';
 import type { SavedInfo } from './useQuickEdit';
 import { hapticSuccess } from '../../lib/native/haptics';
 import { isNative } from '../../lib/native/platform';
@@ -73,6 +77,7 @@ function NoticeBar({ text, tone, onClose }: { text: string; tone: 'warn' | 'succ
 export default function SellerProducts() {
   const { myShop, products, loading, loadError, setProductStatus, deleteProduct, reload } = useStore();
   const toast = useToast();
+  const online = useOnline();
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -93,6 +98,9 @@ export default function SellerProducts() {
   const size = parseSize(params.get('size'));
 
   const mine = useMemo(() => products.filter(p => p.shopId === myShop?.id), [products, myShop?.id]);
+  // 重試一開始 store 就把 loadError 清成 null（loading 仍是 false、商品仍是空），要自己記住「正在重試」才不會閃出空態
+  const [retrying, setRetrying] = useState(false);
+  const view = productsListView({ loading, failed: Boolean(loadError) || retrying, hasProducts: mine.length > 0 });
   const counts = useMemo(
     () => Object.fromEntries(TABS.map(([id]) => [id, mine.filter(match[id]).length])) as Record<Tab, number>,
     [mine],
@@ -114,7 +122,7 @@ export default function SellerProducts() {
 
   // 網址帶了不合法的值，或刪除／下架讓目前頁消失：把網址改成實際顯示的狀態。
   // 資料還沒載完（含登入後重新載入）時總頁數不可信，這時不能改，否則 page=5 會被誤砍成第 1 頁。
-  const ready = !loading && !loadError && Boolean(myShop);
+  const ready = !loading && !loadError && !retrying && Boolean(myShop);
   useEffect(() => {
     if (!ready) return;
     const next = writeState(params, { tab, q: kw, page, size });
@@ -136,6 +144,29 @@ export default function SellerProducts() {
   const toForm = { from: `${location.pathname}${location.search}` };
 
   const say = (text: string) => setAnnounce(prev => ({ id: prev.id + 1, text }));
+
+  // 讀不到時的橫幅標題（離線只在「沒有資料」那一態換成離線說法；有舊資料時列表還在，不說「連上網路後才能看到」）
+  const failTitle = view === 'stale' ? '商品清單可能不是最新的' : online ? '讀不到商品資料' : '目前沒有網路';
+  const retry = useCallback(async () => {
+    setRetrying(true);
+    try { await reload(); } finally { setRetrying(false); }
+  }, [reload]);
+  // 重試做完：成功→橫幅消失，焦點移到標題（按鈕不見了，焦點不能掉到 body）；失敗→橫幅還在，再念一次標題
+  const retried = useRef(false);
+  useEffect(() => {
+    if (retrying) { retried.current = true; return; }
+    if (!retried.current) return;
+    retried.current = false;
+    if (loadError) setAnnounce(prev => ({ id: prev.id + 1, text: failTitle }));
+    else headingRef.current?.focus();
+  }, [retrying, loadError, failTitle]);
+  const failBanner = view === 'stale' ? (
+    <Banner kind="warning" role="status" title={failTitle} actions={<RetryButton onRetry={retry} />}>剛才重新讀取沒有成功，請檢查網路後再試一次。</Banner>
+  ) : online ? (
+    <Banner kind="error" title={failTitle} actions={<RetryButton onRetry={retry} />}>請檢查網路後再試一次。</Banner>
+  ) : (
+    <Banner kind="warning" role="status" title={failTitle} actions={<RetryButton onRetry={retry} />}>連上網路後才能看到商品。</Banner>
+  );
 
   const closeEdit = useCallback((back: { productId: string; kind: EditKind; index: number; gone: boolean } | null) => {
     setActive(null);
@@ -277,7 +308,7 @@ export default function SellerProducts() {
           {TABS.map(([id, label]) => (
             <button key={id} onClick={() => update({ tab: id, page: 1 })}
               className={`shrink-0 border-b-2 px-4 py-3 text-sm ${tab === id ? 'border-brand text-brand' : 'border-transparent'}`}>
-              {label} <span className="text-muted">({counts[id]})</span>
+              {label}{view !== 'error' && <span className="text-muted"> ({counts[id]})</span>}
             </button>
           ))}
         </div>
@@ -291,6 +322,8 @@ export default function SellerProducts() {
           )}
         </div>
 
+        {view === 'stale' && <div className="px-3 pb-3 md:px-4">{failBanner}</div>}
+
         <div ref={listRef}>
           <div className="hidden grid-cols-[1fr_150px_80px_80px_120px] gap-4 bg-[#fafafa] px-4 py-2.5 text-xs text-muted lg:grid">
             <span>商品</span>
@@ -299,11 +332,13 @@ export default function SellerProducts() {
             <span>銷量</span><span className="text-right">操作</span>
           </div>
 
-          {loading || list.length === 0 ? (
-            loading ? (
+          {view === 'loading' || view === 'error' || list.length === 0 ? (
+            view === 'loading' ? (
               <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted" role="status">
                 <Loader2 size={18} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> 載入中…
               </div>
+            ) : view === 'error' ? (
+              <div className="px-3 pb-4 md:px-4">{failBanner}</div>
             ) : mine.length === 0 ? (
               <div className="flex flex-col items-center gap-3 px-4 py-14 text-center">
                 <span className="text-5xl" aria-hidden="true">🛍️</span>
@@ -410,7 +445,7 @@ export default function SellerProducts() {
           )}
         </div>
 
-        {!loading && <Pagination page={page} totalPages={totalPages} size={size} total={list.length} onPage={goPage} onSize={goSize} />}
+        {view !== 'loading' && view !== 'error' && <Pagination page={page} totalPages={totalPages} size={size} total={list.length} onPage={goPage} onSize={goSize} />}
       </div>
 
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
