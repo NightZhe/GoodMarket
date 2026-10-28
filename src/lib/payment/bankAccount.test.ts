@@ -92,7 +92,7 @@ describe('validateDraft：欄位順序與文案', () => {
   it('全部正確：沒有錯', () => expect(validateDraft(ok, banks)).toEqual({}));
   it('全空：逐欄指出，第一個錯的是銀行', () => {
     const e = validateDraft(EMPTY_DRAFT, banks);
-    expect(e).toMatchObject({ bank: '請選擇銀行', city: '請選擇地區', branch: '請選擇分行', holder: '請輸入戶名', account: '請輸入帳號' });
+    expect(e).toMatchObject({ bank: '請選擇銀行', city: '請選擇地區', holder: '請輸入戶名', account: '請輸入帳號', account2: '請再輸入一次帳號' });
     expect(firstErrorField(e)).toBe('bank');
   });
   it('帳號：非數字、長度、兩次不一致', () => {
@@ -101,8 +101,13 @@ describe('validateDraft：欄位順序與文案', () => {
     expect(validateDraft({ ...ok, account2: '87654321' }, banks).account2).toBe('兩次輸入的帳號不一樣');
     expect(validateDraft({ ...ok, account2: '' }, banks).account2).toBe('請再輸入一次帳號');
   });
-  it('帳號有錯時不再報第二次帳號的錯', () => {
-    expect(validateDraft({ ...ok, account: '1', account2: '' }, banks).account2).toBeUndefined();
+  it('第二次帳號空白一律報錯（即使第一次帳號也有錯）；第一次有錯時不比對一致性', () => {
+    expect(validateDraft({ ...ok, account: '1', account2: '' }, banks).account2).toBe('請再輸入一次帳號');
+    expect(validateDraft({ ...ok, account: '1', account2: '2' }, banks).account2).toBeUndefined();
+  });
+  it('地區還沒選時不報分行錯誤；選了地區沒選分行才報', () => {
+    expect(validateDraft({ ...ok, city: '', branchCode: '' }, banks).branch).toBeUndefined();
+    expect(validateDraft({ ...ok, branchCode: '' }, banks).branch).toBe('請選擇分行');
   });
   it('戶名：過長與換行', () => {
     expect(validateDraft({ ...ok, holder: '王'.repeat(51) }, banks).holder).toBe('戶名最多 50 個字');

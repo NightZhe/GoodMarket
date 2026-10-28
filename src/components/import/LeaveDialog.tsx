@@ -3,7 +3,7 @@ import { LoaderCircle } from 'lucide-react';
 import { btnDangerText, btnOutline, btnPrimary } from './ui';
 
 interface Props {
-  title: string;
+  title: ReactNode;
   description: ReactNode;
   /** 安全選項（初始焦點；Esc 等於它） */
   stayLabel: string;

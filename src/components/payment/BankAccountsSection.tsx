@@ -11,7 +11,7 @@ import { PayoutChip, StatusChip } from './BankStatusChips';
 import { deleteBankAccount, errorCodeOf, isAuthError } from '../../lib/payment/api';
 import {
   FULL_ACCOUNT_NOTE, LIMIT_TEXT, PAYOUT_NO_DELETE_MANY, PAYOUT_NO_DELETE_ONLY, REJECTED_FALLBACK_REASON, UNAVAILABLE_BODY, UNAVAILABLE_TITLE,
-  accountTitle, bankErrorText, last4Spoken, lacksPayout, type BankAccount,
+  bankErrorText, last4Spoken, lacksPayout, type BankAccount,
 } from '../../lib/payment/bankAccount';
 import { clearBankDone, peekBankDone } from '../../lib/payment/bankDone';
 import { FROM_A, flowBase, verifyPath, type BankOrigin } from '../../lib/payment/bankRoutes';
@@ -100,6 +100,17 @@ export default function BankAccountsSection({ origin, online, focusTitle }: { or
     }
   };
 
+  const deleteBtn = (a: BankAccount) => (
+    <button
+      id={`bank-del-${a.id}`} type="button" aria-label={`刪除 ${a.bankName} ${last4Spoken(a.last4)}`}
+      aria-disabled={!online || a.isPayout || undefined}
+      onClick={() => askDelete(a)}
+      className={`${textActionCls} ${!online || a.isPayout ? 'text-muted' : 'text-error-text'}`}
+    >
+      刪除
+    </button>
+  );
+
   const head = (
     <div className="flex flex-wrap items-baseline justify-between gap-x-3 pr-5">
       <h2 id="bank-title" ref={titleRef} tabIndex={-1} className={`${sectionTitleCls} outline-none`}>銀行帳號</h2>
@@ -139,13 +150,11 @@ export default function BankAccountsSection({ origin, online, focusTitle }: { or
     return (
       <section aria-labelledby="bank-title">
         {head}
-        <div className="rounded-card bg-white p-4">
-          {online ? (
-            <Banner kind="error" title="讀不到你的銀行帳號" actions={<RetryButton busy={retrying} onClick={() => void retry()} />}>請檢查網路後再試一次。</Banner>
-          ) : (
-            <Banner kind="warning" role="status" title="目前沒有網路" actions={<RetryButton busy={retrying} onClick={() => void retry()} />}>連上網路後才能看到你的銀行帳號。</Banner>
-          )}
-        </div>
+        {online ? (
+          <Banner kind="error" title="讀不到你的銀行帳號" actions={<RetryButton busy={retrying} onClick={() => void retry()} />}>請檢查網路後再試一次。</Banner>
+        ) : (
+          <Banner kind="warning" role="status" title="目前沒有網路" actions={<RetryButton busy={retrying} onClick={() => void retry()} />}>連上網路後才能看到你的銀行帳號。</Banner>
+        )}
       </section>
     );
   }
@@ -190,7 +199,9 @@ export default function BankAccountsSection({ origin, online, focusTitle }: { or
       <p className="px-5 pb-2 text-footnote text-muted">撥款會匯到「撥款帳號」。新帳號要等第一次撥款成功才算「已驗證」。</p>
 
       <ul aria-label="我的銀行帳號" className="divide-y-[0.5px] divide-separator overflow-hidden rounded-card bg-white">
-        {rows.map(a => (
+        {rows.map(a => {
+          const canSet = !a.isPayout && a.status !== 'rejected';
+          return (
           <li key={a.id} role="group" aria-labelledby={`bank-title-${a.id}`} className="px-4 pb-3 pt-4">
             <div className="flex items-start gap-2">
               <BankLogo code={a.bankCode} size={24} />
@@ -205,12 +216,14 @@ export default function BankAccountsSection({ origin, online, focusTitle }: { or
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {a.isPayout ? <PayoutChip /> : <span className="sr-only">一般帳號</span>}
               <StatusChip status={a.status} />
+              {/* 沒有「設為撥款帳號」可按的列（撥款帳號、未通過）：刪除放進 chip 列最右，省掉一整條動作列（仍保 44 高點擊區） */}
+              {!canSet && <span className="-my-2 -mr-2 ml-auto">{deleteBtn(a)}</span>}
             </div>
             {a.status === 'rejected' && (
               <p className="mt-1 text-footnote text-ink [overflow-wrap:anywhere]">未通過原因：{a.reason || REJECTED_FALLBACK_REASON}</p>
             )}
-            <div className="-mb-2 -ml-2 mt-1 flex flex-wrap items-center">
-              {!a.isPayout && a.status !== 'rejected' && (
+            {canSet && (
+              <div className="-mb-2 -ml-2 mt-1 flex flex-wrap items-center">
                 <button
                   type="button" aria-label={`把 ${a.bankName} ${last4Spoken(a.last4)} 設為撥款帳號`} aria-disabled={!online || undefined}
                   onClick={() => { if (online) navigate(verifyPath(origin, 'payout', a.id), { state: FROM_A }); }}
@@ -218,16 +231,9 @@ export default function BankAccountsSection({ origin, online, focusTitle }: { or
                 >
                   設為撥款帳號
                 </button>
-              )}
-              <button
-                id={`bank-del-${a.id}`} type="button" aria-label={`刪除 ${a.bankName} ${last4Spoken(a.last4)}`}
-                aria-disabled={!online || a.isPayout || undefined}
-                onClick={() => askDelete(a)}
-                className={`${textActionCls} ml-auto ${!online || a.isPayout ? 'text-muted' : 'text-error-text'}`}
-              >
-                刪除
-              </button>
-            </div>
+                <span className="ml-auto">{deleteBtn(a)}</span>
+              </div>
+            )}
             {hintId === a.id && (
               <p role="status" className="mt-2 flex items-start gap-1.5 rounded-sm bg-subtle p-2.5 text-sm">
                 <Info size={16} className="mt-0.5 shrink-0 text-info-text" aria-hidden="true" />
@@ -235,7 +241,8 @@ export default function BankAccountsSection({ origin, online, focusTitle }: { or
               </p>
             )}
           </li>
-        ))}
+          );
+        })}
         <li>
           <button
             type="button" onClick={goAdd} aria-disabled={!online || full || undefined}
@@ -250,7 +257,7 @@ export default function BankAccountsSection({ origin, online, focusTitle }: { or
 
       {deleting && (
         <LeaveDialog
-          title={`刪除 ${accountTitle(deleting)}？`}
+          title={<>刪除 {deleting.bankName} <span className="whitespace-nowrap">末四碼 {deleting.last4}？</span></>}
           description="刪除後不能復原。要再用的話，需要重新新增。"
           stayLabel="取消" leaveLabel="刪除" busy={deleteBusy} busyLabel="處理中…"
           offlineNotice={online ? undefined : '目前沒有網路，連上網路後才能刪除。'}

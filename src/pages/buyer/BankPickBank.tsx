@@ -37,12 +37,12 @@ export default function BankPickBank() {
       {!searching && (
         <>
           <h2 className={sectionTitleCls}>常用銀行</h2>
-          <ul className="grid grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] gap-2">
+          <ul className="grid grid-cols-[repeat(auto-fit,minmax(88px,1fr))] gap-2">
             {COMMON_BANKS.map(b => (
               <li key={b.code} className="flex">
                 <button
                   type="button" onClick={() => pick(b)} aria-label={`${b.name}，代碼 ${b.code}`} aria-current={draft.bankCode === b.code || undefined}
-                  className={`flex min-h-[6.5rem] w-full flex-col items-center justify-center gap-1 rounded-card bg-white p-2 text-center ${pressCls}`}
+                  className={`flex min-h-[104px] w-full flex-col items-center justify-center gap-1 rounded-card bg-white p-2 text-center ${pressCls}`}
                 >
                   <BankLogo code={b.code} size={44} />
                   <span aria-hidden="true" className="text-subhead [overflow-wrap:anywhere]">{b.short ?? b.name}</span>
@@ -59,7 +59,7 @@ export default function BankPickBank() {
         <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden="true" />
         <input
           type="search" inputMode="search" enterKeyHint="search" autoComplete="off" autoCorrect="off" spellCheck={false}
-          value={query} onChange={e => setQuery(e.target.value)} aria-label="搜尋銀行名稱或代碼" placeholder="搜尋銀行名稱或代碼"
+          value={query} onChange={e => setQuery(e.target.value)} aria-label="搜尋銀行名稱或代碼" placeholder="搜尋銀行"
           className="block h-11 w-full appearance-none rounded-sm bg-search pl-10 pr-11 text-base outline-none placeholder:text-muted focus-visible:outline-2 focus-visible:outline-brand [&::-webkit-search-cancel-button]:hidden"
         />
         {query !== '' && (

@@ -145,7 +145,7 @@ function AddForm({ bankName, bankCode }: { bankName: string; bankCode: string })
       <h2 ref={titleRef} tabIndex={-1} className="sr-only outline-none">填寫銀行帳號資料</h2>
 
       <div className="mt-3">
-        <Banner kind="info" role="none" title="帳戶要是你本人或你公司名下，否則撥款會失敗。">
+        <Banner kind="info" role="none" title="須為你本人或公司名下的帳戶，否則撥款會失敗。">
           {!first && draft.setPayout && '設為撥款帳號後，下一次撥款就會匯到這個帳號；它還沒驗證過，要等第一次撥款成功才算通過。'}
         </Banner>
       </div>
@@ -231,7 +231,7 @@ function AddForm({ bankName, bankCode }: { bankName: string; bankCode: string })
             className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left"
           >
             <span className="text-body">設為撥款帳號</span>
-            <span aria-hidden="true" className={`relative inline-flex h-[31px] w-[51px] shrink-0 items-center rounded-full ${setPayout ? (first ? 'bg-brand/50' : 'bg-brand') : 'bg-disabled'}`}>
+            <span aria-hidden="true" className={`relative inline-flex h-[31px] w-[51px] shrink-0 items-center rounded-full ${setPayout ? 'bg-brand' : 'bg-disabled'}`}>
               <span className={`absolute size-[27px] rounded-full bg-white transition-transform duration-150 motion-reduce:transition-none ${setPayout ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
             </span>
           </button>

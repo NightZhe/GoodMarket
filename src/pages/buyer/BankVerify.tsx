@@ -11,7 +11,7 @@ import { useToast } from '../../components/Toast';
 import { phoneOf } from '../../lib/auth/identity';
 import { errorCodeOf, isAuthError, setPayoutBankAccount } from '../../lib/payment/api';
 import {
-  PHONE_REQUIRED_ADD_TEXT, PHONE_REQUIRED_PAYOUT_TEXT, bankErrorText, last4Display, last4Spoken, type BankAccount,
+  PHONE_REQUIRED_ADD_TEXT, PHONE_REQUIRED_PAYOUT_TEXT, bankErrorText, last4Spoken, type BankAccount,
 } from '../../lib/payment/bankAccount';
 import { pageAPath, type VerifyPurpose } from '../../lib/payment/bankRoutes';
 import { clearFlow, flowStore } from '../../lib/auth/phoneFlow';
@@ -127,7 +127,12 @@ function VerifyView({ purpose, id }: { purpose: VerifyPurpose; id: string | null
   ) : target && (
     <>
       <h2 ref={titleRef} tabIndex={-1} className="text-headline font-semibold outline-none">把這個帳號設為撥款帳號</h2>
-      <p className="mt-1 text-sm font-medium [overflow-wrap:anywhere]">{target.bankName}{target.branchName && `　${target.branchName}`}　<span className="sr-only">{last4Spoken(target.last4)}</span><span aria-hidden="true">{last4Display(target.last4)}</span></p>
+      <p className="mt-1 text-sm font-semibold [overflow-wrap:anywhere]">{target.bankName}</p>
+      <p className="text-sm [overflow-wrap:anywhere]">
+        {target.branchName && <>{target.branchName} · </>}
+        <span aria-hidden="true" className="tabular-nums">末四碼 {target.last4}</span>
+        <span className="sr-only">{last4Spoken(target.last4)}</span>
+      </p>
       <p className="mt-1 text-sm">下一次撥款會匯到這個帳號。</p>
       {current && current.id !== target.id && <p className="mt-1 text-sm">目前的撥款帳號（{current.bankName} 末四碼 {current.last4}）會變成一般帳號。</p>}
       {target.status === 'pending' && <p className="mt-1 text-sm">這個帳號還沒驗證過，第一次撥款成功才算通過，請先確認帳號正確。</p>}
@@ -141,7 +146,7 @@ function VerifyView({ purpose, id }: { purpose: VerifyPurpose; id: string | null
       <section className="mt-2 rounded-card bg-white p-4">
         {national ? (
           <StepUpVerify
-            national={national} notice={state?.notice} exitLabel="取消"
+            national={national} notice={state?.notice} exitLabel="取消" hideTitle
             onVerified={() => void afterVerified()} onCancel={() => leaveToA()}
           />
         ) : (

@@ -180,12 +180,15 @@ export function validateDraft(d: BankDraft, banks: readonly BankOption[]): Field
   const e: FieldErrors = {};
   if (!banks.some(b => b.code === d.bankCode)) e.bank = FIELD_ERROR_TEXT.bank;
   if (d.city === '') e.city = FIELD_ERROR_TEXT.city;
-  if (!isValidBranch(d.branchCode)) e.branch = FIELD_ERROR_TEXT.branch;
+  // 地區還沒選時分行是 disabled，不重複報錯；選了地區才驗分行
+  if (d.city !== '' && !isValidBranch(d.branchCode)) e.branch = FIELD_ERROR_TEXT.branch;
   const h = holderError(d.holder);
   if (h) e.holder = h;
   const a = accountError(d.account);
   if (a) e.account = a;
-  else {
+  // 第二次帳號空白一律要報；兩次是否一致，等第一次帳號本身合法才比
+  if (normalizeAccount(d.account2) === '') e.account2 = FIELD_ERROR_TEXT.account2Empty;
+  else if (!a) {
     const a2 = account2Error(d.account, d.account2);
     if (a2) e.account2 = a2;
   }

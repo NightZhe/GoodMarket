@@ -21,13 +21,15 @@ import { STEP_UP_TEXT } from '../../lib/payment/bankAccount';
  * 用 signInWithOtp 的路徑，成功會換發 amr=otp 的 session，之後 10 分鐘內送出才算數。
  * 沿用手機登入的 Turnstile、錯誤文案、60 秒重寄與 S-10 輸入畫面（CodeStep stepUp）。
  */
-export default function StepUpVerify({ national, notice, exitLabel = '取消', onVerified, onCancel }: {
+export default function StepUpVerify({ national, notice, exitLabel = '取消', hideTitle = false, onVerified, onCancel }: {
   /** 帳號上綁定的門號，例 0912345678 */
   national: string;
   /** 例如伺服器說驗證過期時，頂端的說明 */
   notice?: string;
   /** 退出鈕文字 */
   exitLabel?: string;
+  /** 呼叫端已經有自己的標題與說明（銀行帳號驗證頁的摘要卡）：不再畫「先確認是你本人」標題與保護說明，只留傳送說明與按鈕 */
+  hideTitle?: boolean;
   onVerified: () => void;
   onCancel: () => void;
 }) {
@@ -106,14 +108,18 @@ export default function StepUpVerify({ national, notice, exitLabel = '取消', o
   const masked = maskTwPhone(national);
   return (
     <div>
-      <h2 data-phase-title="" tabIndex={-1} className="text-lg font-bold outline-none">先確認是你本人</h2>
-      <p className="mt-1 text-sm leading-6">{STEP_UP_TEXT}</p>
+      {!hideTitle && (
+        <>
+          <h2 data-phase-title="" tabIndex={-1} className="text-lg font-bold outline-none">先確認是你本人</h2>
+          <p className="mt-1 text-sm leading-6">{STEP_UP_TEXT}</p>
+        </>
+      )}
       {notice && <div className="mt-3"><Banner kind="warning" role="status" title={notice} /></div>}
       {offlineHit && !online && (
         <div className="mt-3"><Banner kind="warning" role="status" title="目前沒有網路連線">連上網路後再按一次「傳送驗證碼」。</Banner></div>
       )}
       {error && <div className="mt-3"><Banner kind={error.kind} role="alert" title={error.title}>{error.body}</Banner></div>}
-      <p className="mt-3 text-sm">
+      <p className={`${hideTitle && !notice && !error && !offlineHit ? '' : 'mt-3 '}text-sm`}>
         會傳送驗證碼簡訊到{' '}
         <strong className="whitespace-nowrap font-bold tabular-nums" aria-label={`你帳號上綁定的手機，尾數 ${national.slice(7)}`}>{masked}</strong>
         ，驗證碼 5 分鐘內有效。
