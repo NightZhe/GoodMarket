@@ -206,12 +206,15 @@ export function incomingAnnouncement(fresh: ServerMessage[]): string | null {
 // ───────── 待送出卡片 ─────────
 
 /**
- * 伺服器開對話時給的待送出卡片，扣掉這條對話裡已經送過的：
- * 對話已有（或本機剛送出、還沒確認的）訊息帶著同一張卡（種類與 id 相同）就不再待送出，
- * 否則回前景重讀、重新整理網址都會把已送出的卡片變回待送出，下一句又附一次
+ * 伺服器開對話時給的待送出卡片，扣掉「剛剛才送過」的：
+ * 只有對話最後一則訊息（任一方，依 seq 最新）已帶著同一張卡（種類與 id 相同），
+ * 或本機剛送出、還沒確認的訊息帶著同一張卡，才不再待送出——
+ * 回前景重讀、重新整理網址不會把剛送出的卡變回待送出，下一句又附一次；
+ * 但隔幾天再從同一商品頁按「聊聊」，卡片已被後來的訊息蓋過，仍會待送出（§6.1／§6.4）
  */
 export function pendingCardFor(card: ChatCard | null, server: ServerMessage[], local: LocalMessage[]): ChatCard | null {
   if (!card) return null;
   const same = (c: ChatCard | null) => c !== null && c.type === card.type && c.id === card.id;
-  return server.some(m => same(m.card)) || local.some(m => same(m.card)) ? null : card;
+  const last = server.reduce<ServerMessage | null>((acc, m) => (acc === null || m.seq > acc.seq ? m : acc), null);
+  return same(last?.card ?? null) || local.some(m => same(m.card)) ? null : card;
 }

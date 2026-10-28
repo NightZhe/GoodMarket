@@ -184,7 +184,7 @@ describe('新訊息宣告（live region 只念一次，不重念整頁）', () =
   });
 });
 
-describe('待送出卡片只在這張卡還沒送過時才出現（B2：回前景重讀、重新整理都不重複附卡）', () => {
+describe('待送出卡片只在對話最後一則已是這張卡時才不出現（B2：回前景重讀不重複附卡；隔幾天再聊聊仍要有卡）', () => {
   const product: ChatCard = { type: 'product', id: 'p1', title: 'A', image: '', price: 100 };
   const order: ChatCard = { type: 'order', id: 'o1', order_no: 'N1', title: 'A', image: '', item_count: 1, total: 100, status: 'to_ship' };
   const sentLocal = (card: ChatCard) => createLocal({
@@ -195,15 +195,22 @@ describe('待送出卡片只在這張卡還沒送過時才出現（B2：回前�
   it('對話裡沒有這張卡的訊息：照伺服器給的待送出卡片', () => {
     expect(pendingCardFor(product, [msg(1), msg(2, { card: order })], [])).toEqual(product);
   });
-  it('伺服器訊息裡已有同一張卡（種類與 id 都相同）：不再待送出', () => {
+  it('最後一則（依 seq 最新）已是同一張卡（種類與 id 都相同）：不再待送出', () => {
     expect(pendingCardFor(product, [msg(1, { card: product })], [])).toBeNull();
-    expect(pendingCardFor(order, [msg(1, { card: order })], [])).toBeNull();
+    expect(pendingCardFor(order, [msg(1), msg(2, { card: order })], [])).toBeNull();
+  });
+  it('最後一則是對方文字、更早有同卡：仍待送出（幾天後再從同一商品頁按聊聊）', () => {
+    expect(pendingCardFor(product, [msg(1, { card: product }), msg(2, { text: '還在嗎', mine: false })], [])).toEqual(product);
+  });
+  it('最後一則是自己送的同卡：不待送出，且不依陣列順序而依 seq', () => {
+    expect(pendingCardFor(product, [msg(3, { card: product, mine: true }), msg(1, { text: '嗨' })], [])).toBeNull();
   });
   it('同 id 但種類不同不算同一張', () => {
     expect(pendingCardFor({ ...product, id: 'x' }, [msg(1, { card: { ...order, id: 'x' } })], [])).not.toBeNull();
   });
   it('本機剛送出（傳送中或失敗待重送）的訊息帶著這張卡：也不再待送出', () => {
     expect(pendingCardFor(product, [], [sentLocal(product)])).toBeNull();
+    expect(pendingCardFor(product, [msg(1, { text: '嗨', mine: false })], [sentLocal(product)])).toBeNull();
   });
   it('伺服器沒給待送出卡片：維持沒有', () => {
     expect(pendingCardFor(null, [msg(1)], [])).toBeNull();
