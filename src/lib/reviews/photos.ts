@@ -83,11 +83,18 @@ const toJpeg = (canvas: HTMLCanvasElement, quality: number) =>
     canvas.toBlob(b => (b ? resolve(b) : reject(new Error('圖片轉檔失敗'))), 'image/jpeg', quality);
   });
 
-/** 長邊 ≤ 1280、JPEG、方向轉正、不帶 EXIF；超過 2 MB 就逐步降低品質（伺服器上限） */
-export async function compressReviewPhoto(file: Blob): Promise<Blob> {
+export interface CompressOptions {
+  maxEdge: number;
+  /** 超過就逐步降低品質（伺服器上限） */
+  maxBytes: number;
+  qualities: readonly number[];
+}
+
+/** 長邊縮到 maxEdge 以內、JPEG、方向轉正、不帶 EXIF；超過 maxBytes 就逐步降低品質。評價與聊聊各給自己的參數 */
+export async function compressPhoto(file: Blob, opts: CompressOptions): Promise<Blob> {
   const bitmap = await decode(file);
   try {
-    const { width, height } = fitWithin(bitmap.width, bitmap.height);
+    const { width, height } = fitWithin(bitmap.width, bitmap.height, opts.maxEdge);
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -96,9 +103,9 @@ export async function compressReviewPhoto(file: Blob): Promise<Blob> {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(bitmap, 0, 0, width, height);
-    let blob = await toJpeg(canvas, QUALITIES[0]);
-    for (const q of QUALITIES.slice(1)) {
-      if (blob.size <= MAX_UPLOAD_BYTES) break;
+    let blob = await toJpeg(canvas, opts.qualities[0]);
+    for (const q of opts.qualities.slice(1)) {
+      if (blob.size <= opts.maxBytes) break;
       blob = await toJpeg(canvas, q);
     }
     return blob;
@@ -106,3 +113,7 @@ export async function compressReviewPhoto(file: Blob): Promise<Blob> {
     bitmap.close();
   }
 }
+
+/** 長邊 ≤ 1280、JPEG、方向轉正、不帶 EXIF；超過 2 MB 就逐步降低品質（伺服器上限） */
+export const compressReviewPhoto = (file: Blob): Promise<Blob> =>
+  compressPhoto(file, { maxEdge: MAX_EDGE, maxBytes: MAX_UPLOAD_BYTES, qualities: QUALITIES });

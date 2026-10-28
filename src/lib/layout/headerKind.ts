@@ -27,6 +27,7 @@ export function headerFor(pathname: string): HeaderKind {
   if (path === '/') return { kind: 'large', title: '好物集', cart: true, search: true };
   if (path === '/search') return { kind: 'large', title: '逛逛', cart: true, search: true };
   if (path === '/orders') return { kind: 'large', title: '訂單', cart: false, search: false };
+  if (path === '/chat') return { kind: 'large', title: '聊聊', cart: false, search: false };
   if (path === '/account') return { kind: 'large', title: '我的', cart: false, search: false };
 
   const product = /^\/product\/([^/]+)$/.exec(path);
