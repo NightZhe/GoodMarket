@@ -8,7 +8,7 @@ import type { ChatCard } from '../../lib/chat/types';
 const noop = () => undefined;
 const handlers: ScreenHandlers = {
   onOpenMenu: noop, onUnblock: noop, onDismissRules: noop, onSend: noop, onResend: noop, onRemoveCard: noop, onLoadMore: noop,
-  onRetryLoad: noop, onRetryMessages: noop, onLogin: noop, onFocusChange: noop,
+  onRetryLoad: noop, onRetryMessages: noop, onLogin: noop,
   cardTo: c => (c.type === 'product' ? `/product/${c.id}` : '/orders'), cardGone: () => false, onCardGone: noop, onBrokenImage: noop, onOpenImage: noop,
 };
 const shopPeer = { name: '好物小舖', letter: '好物小舖', deleted: false, shopId: 's1' };

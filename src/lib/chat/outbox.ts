@@ -202,3 +202,16 @@ export function incomingAnnouncement(fresh: ServerMessage[]): string | null {
   if (fresh.length === 0) return null;
   return fresh.length === 1 ? `新訊息：${snippet(fresh[0])}` : `收到 ${fresh.length} 則新訊息`;
 }
+
+// ───────── 待送出卡片 ─────────
+
+/**
+ * 伺服器開對話時給的待送出卡片，扣掉這條對話裡已經送過的：
+ * 對話已有（或本機剛送出、還沒確認的）訊息帶著同一張卡（種類與 id 相同）就不再待送出，
+ * 否則回前景重讀、重新整理網址都會把已送出的卡片變回待送出，下一句又附一次
+ */
+export function pendingCardFor(card: ChatCard | null, server: ServerMessage[], local: LocalMessage[]): ChatCard | null {
+  if (!card) return null;
+  const same = (c: ChatCard | null) => c !== null && c.type === card.type && c.id === card.id;
+  return server.some(m => same(m.card)) || local.some(m => same(m.card)) ? null : card;
+}

@@ -60,7 +60,6 @@ export interface ScreenHandlers {
   onRetryLoad: () => void;
   onRetryMessages: () => void;
   onLogin: () => void;
-  onFocusChange: (focused: boolean) => void;
   cardTo: (card: ChatCard) => string;
   cardGone: (card: ChatCard) => boolean;
   onCardGone: (card: ChatCard) => void;
@@ -155,7 +154,6 @@ export default function ConversationScreen({ m, h, overlays }: { m: ScreenModel;
             onRemoveCard={h.onRemoveCard}
             onSend={h.onSend}
             focusToken={m.focusToken}
-            onFocusChange={h.onFocusChange}
             desktopHint={m.desktopHint}
           />
         </>

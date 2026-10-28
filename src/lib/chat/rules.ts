@@ -26,3 +26,9 @@ export function dismissRules(store: StorageLike | null): boolean {
 export function browserStore(): StorageLike | null {
   try { return typeof window === 'undefined' ? null : window.localStorage; } catch { return null; }
 }
+
+/**
+ * 是否顯示。只看有沒有按過關閉，不看輸入框焦點或螢幕高度：
+ * 曾經因「矮螢幕鍵盤開著就收起」，使目標按鈕（重送）的 mousedown 讓輸入框失焦、提示重新出現、版面下推，點擊落空（B1）
+ */
+export const rulesVisible = (dismissed: boolean): boolean => !dismissed;

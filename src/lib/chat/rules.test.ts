@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RULES_KEY, RULES_TEXT, dismissRules, rulesDismissed } from './rules';
+import { RULES_KEY, RULES_TEXT, dismissRules, rulesDismissed, rulesVisible } from './rules';
 
 const memory = () => {
   const m = new Map<string, string>();
@@ -28,5 +28,12 @@ describe('規則提示（AC-M38）', () => {
     expect(dismissRules(broken)).toBe(false);
     expect(rulesDismissed(null)).toBe(false);
     expect(dismissRules(null)).toBe(false);
+  });
+});
+
+describe('規則提示顯示條件（§8.2、AC-M23 B1）', () => {
+  it('沒按關閉就顯示；顯示與否只取決於是否關閉過（不看輸入框焦點或螢幕高度）', () => {
+    expect(rulesVisible(false)).toBe(true);
+    expect(rulesVisible(true)).toBe(false);
   });
 });
