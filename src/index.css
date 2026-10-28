@@ -208,6 +208,16 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
     .fold-tray .glass-tray--checkout { max-width: min(340px, calc(100vw - var(--inset-l) - var(--inset-r) - 36px)); }
   }
 
+  /* 水平玻璃膠囊群組（GlassGroup，賣家中心頂部右上）：一顆 .glass 膠囊、n 格 44×44 圖示鈕，格子沿用軌裡「平面項目」的規則（沒有自己的底，按下是灰圓）。
+     分隔槽 2 寬、內有 0.5px 細線（上下各留 11）。放不下時收成 .glass-btn 的「⋯」，浮層 .glass-group-pop：底用 96% 白（面板上的 error-text／brand 文字才過對比，不改全域 .glass） */
+  .glass-group { display: flex; align-items: center; height: 44px; border-radius: 22px; }
+  .glass-group .glass-btn { background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .glass-group .glass-btn:active { transform: none; background-color: var(--color-press-rail); }
+  .glass-group-sep { display: flex; align-items: center; justify-content: center; width: 2px; height: 44px; }
+  .glass-group-sep::before { content: ''; width: 0.5px; height: 22px; background: var(--color-separator); }
+  .glass-group-pop { position: absolute; right: 0; top: calc(100% + 8px); width: min(240px, calc(100vw - 16px)); padding: 6px; border-radius: 20px; background: rgb(255 255 255 / 0.96); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: var(--shadow-popover), 0 0 0 0.5px rgb(0 0 0 / 0.06); transform-origin: top right; visibility: hidden; opacity: 0; transform: scale(.96); transition: opacity 150ms ease, visibility 0s 150ms, transform 0s 150ms; }
+  .glass-group-pop[data-open='true'] { visibility: visible; opacity: 1; transform: none; transition: opacity 200ms ease, transform 200ms cubic-bezier(.23,1,.32,1), visibility 0s; }
+
   /* 確認對話框（alertdialog）的外層容器，與內層 .fold-panel 成對（SellerProducts 的刪除確認、LeaveDialog）：四邊各吃安全區（至少 24），
      內容限定在折線一側（D13）：直向 ≥ 620 靠下（內直、佇立；一般姿態保持置中，LeaveDialog 的 items-end 是 utilities 層，蓋得過這條），
      橫向 ≥ 760 落在右半（面板寬扣掉的是容器右內距 max(24, 軌欄)，不是軌欄本身，所以這裡重算寬度，欄在左側時也不會碰到中線帶）。
@@ -223,7 +233,7 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
   /* 減少動態：實心白、不縮放（AC-14）。減少透明度：Safari／WKWebView 不一定認得這個 media feature（D10），認得就降級，不認得就靠 86% 白。
      放在 components 層裡：未分層的規則會蓋過分層的「軌裡的鈕沒有底」「按下底」 */
   @media (prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce) {
-    .glass { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .glass, .glass-group-pop { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     .glass-btn, .glass-btn:active, .tray-btn, .tray-btn:active { transition: none; transform: none; }
@@ -231,6 +241,9 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
     .glass-rail-pop, .glass-rail-pop[data-open='true'] { transform: none; transition: opacity 150ms ease, visibility 0s; }
     .glass-rail-pop:not([data-open='true']) { transition: opacity 150ms ease, visibility 0s 150ms; }
     .glass-rail-trigger { transition: none; }
+    /* 「⋯」浮層：同樣只淡入淡出 150ms，不縮放 */
+    .glass-group-pop, .glass-group-pop[data-open='true'] { transform: none; transition: opacity 150ms ease, visibility 0s; }
+    .glass-group-pop:not([data-open='true']) { transition: opacity 150ms ease, visibility 0s 150ms; }
   }
 }
 
@@ -270,3 +283,7 @@ html.native :is(textarea, select, input:not([type="checkbox"], [type="radio"], [
 /* 綠界綁卡欄位是站內付 SDK 畫進頁面的同頁 DOM（不是 iframe）。它預設字級 15px：輸入框小於 16px 時，iOS Safari 聚焦會自動放大頁面；預設高 41px，觸控目標要 ≥44 */
 #ECPayPayment input { font-size: 1rem; min-height: 2.75rem; }
 @media (prefers-reduced-motion: reduce) { #ECPayPayment *, #ECPayPayment *::before, #ECPayPayment *::after { animation: none !important; transition: none !important; } }
+
+/* 賣家中心有 SubHeader 的三頁（物流兩張表單、收款帳戶；design.md U-8 方案 A）：頂部色帶加高到 --seller-band-h，SubHeader（買家「我的」子頁共用，不改它）黏在色帶正下方。
+   寫在 @layer 之外才蓋得過 Tailwind 的 top-0 與 native.css 的安全區規則；多一個 body 讓權重高於 native.css 那條 */
+body [data-seller-layout] header.material-grouped.sticky.top-0 { top: var(--seller-band-h, 0px); }

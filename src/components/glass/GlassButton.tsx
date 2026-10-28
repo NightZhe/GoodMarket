@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Link } from 'react-router-dom';
 import { CountBadge } from './CountBadge';
 
@@ -11,13 +11,19 @@ type Props = {
   badge?: number;
   /** 定位用 class。單顆懸浮時由呼叫端決定位置（例如首頁購物車 fixed 在右上）；放進 GlassCapsule 時不必給 */
   className?: string;
+  /** 桌機 hover 提示（圖示鈕沒有可見文字）。朗讀仍以 label 為準 */
+  title?: string;
+  /** 這顆鈕會開對話框（例如登出確認）：給 aria-haspopup。只對 onClick 版有效 */
+  hasPopup?: 'dialog';
+  /** 只給 onClick 版（button）：讓外面能把焦點交回這顆鈕 */
+  buttonRef?: Ref<HTMLButtonElement>;
 } & ({ to: string; onClick?: never } | { onClick: () => void; to?: never });
 
 /**
  * 懸浮玻璃鈕（design-spec §4.2）：44×44 圓，熱區等於視覺。
  * 單獨使用時是浮在內容上的玻璃圓；放進 GlassCapsule 時自動變成軌裡的平面項目（沒有自己的底，按下是灰圓）。
  */
-export function GlassButton({ label, icon, badge = 0, className = '', to, onClick }: Props) {
+export function GlassButton({ label, icon, badge = 0, className = '', title, hasPopup, buttonRef, to, onClick }: Props) {
   const cls = `glass glass-btn z-40 flex size-11 shrink-0 items-center justify-center rounded-full text-brand ${className}`;
   const body = (
     <>
@@ -26,6 +32,6 @@ export function GlassButton({ label, icon, badge = 0, className = '', to, onClic
     </>
   );
   return to !== undefined
-    ? <Link to={to} aria-label={label} className={cls}>{body}</Link>
-    : <button type="button" onClick={onClick} aria-label={label} className={cls}>{body}</button>;
+    ? <Link to={to} aria-label={label} title={title} className={cls}>{body}</Link>
+    : <button ref={buttonRef} type="button" onClick={onClick} aria-label={label} title={title} aria-haspopup={hasPopup} className={cls}>{body}</button>;
 }
