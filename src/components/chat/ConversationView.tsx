@@ -1,0 +1,156 @@
+import { useCallback, useMemo, useState } from 'react';
+import ActionSheet, { type SheetAction } from './ActionSheet';
+import ConversationScreen, { type ScreenHandlers, type ScreenModel } from './ConversationScreen';
+import LeaveDialog from '../import/LeaveDialog';
+import PhotoLightbox from '../reviews/PhotoLightbox';
+import { useToast } from '../Toast';
+import { useAuth } from '../../store/AuthContext';
+import { useOnline } from '../../lib/useOnline';
+import { useConversation } from '../../lib/chat/useConversation';
+import { useSignedUrls } from '../../lib/chat/useSignedUrls';
+import { browserStore, dismissRules, rulesDismissed } from '../../lib/chat/rules';
+import type { OpenTarget } from '../../lib/chat/outbox';
+import type { ChatCard, ChatSide } from '../../lib/chat/types';
+import type { DisplayMessage } from '../../lib/chat/outbox';
+
+interface Props {
+  side: ChatSide;
+  /** 換對話請用 key 讓整個元件重來 */
+  target: OpenTarget;
+  backTo?: string;
+  backLabel?: string;
+  listTo: string;
+  homeTo: string;
+  ordersTo: string;
+  fallbackName?: string;
+  cardTo: (card: ChatCard) => string;
+  /** 點卡片時目標還在不在（買家看自己的訂單與商品資料、賣家看店內資料） */
+  cardGone: (card: ChatCard) => boolean;
+  /** 隱藏成功之後（買家：回到列表）。賣家沒有隱藏，不傳 */
+  onHidden?: () => void;
+  desktopHint?: boolean;
+  className?: string;
+}
+
+type Dialog = null | 'menu' | 'confirm-block';
+
+/**
+ * 一條對話的完整畫面（買家與賣家共用）：資料與動作來自 useConversation，畫面是 ConversationScreen。
+ * 這裡負責把兩者接起來，加上選單、封鎖確認、全螢幕看圖、規則提示的本機記憶與各種 toast。
+ */
+export default function ConversationView(p: Props) {
+  const convo = useConversation(p.side, p.target);
+  const online = useOnline();
+  const toast = useToast();
+  const { openLogin } = useAuth();
+
+  const remotePaths = useMemo(() => convo.messages.filter(m => !m.photosAreLocal).flatMap(m => m.photos), [convo.messages]);
+  const signed = useSignedUrls(remotePaths);
+
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [busy, setBusy] = useState(false);
+  const [unblockBusy, setUnblockBusy] = useState(false);
+  const [focusToken, setFocusToken] = useState(0);
+  const [focused, setFocused] = useState(false);
+  const [rulesGone, setRulesGone] = useState(() => rulesDismissed(browserStore()));
+  const [viewer, setViewer] = useState<{ paths: string[]; local: boolean; index: number; trigger: HTMLElement } | null>(null);
+
+  const closeDialog = useCallback(() => setDialog(null), []);
+
+  // 鍵盤開著又是矮螢幕（SE）時暫時收起規則提示，免得訊息區只剩一條縫；這不算關閉
+  const shortScreen = (window.visualViewport?.height ?? window.innerHeight) < 700;
+  const rulesVisible = !rulesGone && !(focused && shortScreen);
+
+  const unblock = async () => {
+    setUnblockBusy(true);
+    const ok = await convo.unblock();
+    setUnblockBusy(false);
+    if (ok) setFocusToken(n => n + 1);
+    else toast('解除封鎖失敗，請稍後再試', 'error');
+  };
+
+  const confirmBlock = async () => {
+    setBusy(true);
+    const ok = await convo.block();
+    setBusy(false);
+    if (ok) setDialog(null);
+    else toast('封鎖失敗，請稍後再試', 'error');
+  };
+
+  const hide = async () => {
+    setDialog(null);
+    if (await convo.hide()) {
+      toast('已隱藏對話', 'info');
+      p.onHidden?.();
+    } else {
+      toast('隱藏失敗，請稍後再試', 'error');
+    }
+  };
+
+  const m: ScreenModel = {
+    side: p.side, phase: convo.phase, online, peer: convo.peer, fallbackName: p.fallbackName,
+    blockedByMe: convo.blockedByMe, peerDeleted: convo.peerDeleted, hasMenu: convo.convId !== null,
+    messages: convo.messages, hasMore: convo.hasMore, loadingMore: convo.loadingMore, moreFailed: convo.moreFailed, messagesFailed: convo.messagesFailed,
+    pendingCard: convo.pendingCard, cardRemovable: convo.cardRemovable, rulesVisible,
+    urls: signed.urls, signFailed: signed.failed, incoming: convo.incoming, failure: convo.failure,
+    unblockBusy, focusToken, backTo: p.backTo, backLabel: p.backLabel, listTo: p.listTo, homeTo: p.homeTo, ordersTo: p.ordersTo,
+    desktopHint: p.desktopHint, className: p.className,
+  };
+
+  const h: ScreenHandlers = {
+    onOpenMenu: () => setDialog('menu'),
+    onUnblock: () => { void unblock(); },
+    onDismissRules: () => { dismissRules(browserStore()); setRulesGone(true); },
+    onSend: convo.send,
+    onResend: convo.resend,
+    onRemoveCard: convo.removePendingCard,
+    onLoadMore: () => { void convo.loadMore(); },
+    onRetryLoad: convo.retryLoad,
+    onRetryMessages: () => { void convo.retryMessages(); },
+    onLogin: () => openLogin({ trigger: { kind: 'goto' } }),
+    onFocusChange: setFocused,
+    cardTo: p.cardTo,
+    cardGone: p.cardGone,
+    onCardGone: card => toast(card.type === 'product' ? '商品已下架' : '找不到訂單', 'info'),
+    onBrokenImage: signed.refresh,
+    onOpenImage: (msg: DisplayMessage, index, trigger) => setViewer({ paths: msg.photos, local: msg.photosAreLocal, index, trigger }),
+  };
+
+  const actions: SheetAction[] = [
+    convo.blockedByMe
+      ? { key: 'unblock', label: '解除封鎖', tone: 'brand', onSelect: () => { setDialog(null); void unblock(); } }
+      : { key: 'block', label: '封鎖', hint: '對方和你都無法在這個對話傳送訊息。', tone: 'danger', onSelect: () => setDialog('confirm-block') },
+    ...(p.onHidden
+      ? [{ key: 'hide', label: '隱藏對話', hint: '只會從你的列表移除，對方再傳訊息時會回來。', tone: 'brand' as const, onSelect: () => { void hide(); } }]
+      : []),
+  ];
+
+  return (
+    <ConversationScreen
+      m={m}
+      h={h}
+      overlays={
+        <>
+          {dialog === 'menu' && <ActionSheet title="對話選項" actions={actions} onClose={closeDialog} />}
+          {dialog === 'confirm-block' && (
+            // 說明文字不透露「對方會看到什麼」（D22）
+            <LeaveDialog
+              title="封鎖此用戶？"
+              description="封鎖後，你和對方都無法在這個對話傳送訊息。既有的訂單不受影響，隨時可以解除封鎖。"
+              stayLabel="取消" leaveLabel="封鎖" busy={busy} busyLabel="封鎖中…"
+              onStay={closeDialog} onLeave={() => { void confirmBlock(); }}
+            />
+          )}
+          {viewer && (
+            <PhotoLightbox
+              paths={viewer.paths} startIndex={viewer.index} returnFocusTo={viewer.trigger} noun="圖片"
+              urlFor={path => (viewer.local ? path : signed.urls[path] ?? '')}
+              onReload={signed.refresh}
+              onClose={() => setViewer(null)}
+            />
+          )}
+        </>
+      }
+    />
+  );
+}

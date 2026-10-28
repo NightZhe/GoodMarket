@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, CircleUserRound, ClipboardList, House, Search as SearchIcon, Share, ShoppingCart, Store } from 'lucide-react';
+import { ChevronLeft, CircleUserRound, ClipboardList, House, Search as SearchIcon, Share, ShoppingCart } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
+import { useChat } from '../../store/ChatContext';
+import ChatIcon from '../../components/chat/ChatIcon';
+import { buyerChatTab, isChatConversationPath } from '../../lib/chat/nav';
+import { badgeCount, chatNavLabel } from '../../lib/chat/unread';
 import { useToast } from '../../components/Toast';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useOnline } from '../../lib/useOnline';
@@ -31,6 +35,7 @@ export default function BuyerLayout() {
 
 function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
   const { cartCount, loading, loadError, reload } = useStore();
+  const chat = useChat();
   usePaymentConfig(); // 先讀一次線上付款開關，之後帳號頁、結帳頁不必再等
   const online = useOnline();
   // 只有第一次載入商品時用骨架取代頁面。登入、登出、登入過期之後的重新載入是在背景進行：
@@ -62,7 +67,9 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
   const hideTabBar = pathname.startsWith('/product/') || pathname === '/checkout' || pathname === '/cart'
     || /^\/orders\/[^/]+\/review$/.test(pathname) || pathname.startsWith('/account/addresses/')
     // 綁卡頁有鍵盤（綠界欄位）、付款結果頁要專心看結果
-    || pathname === '/account/payment-methods/new' || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/');
+    || pathname === '/account/payment-methods/new' || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/')
+    // 聊聊的對話頁有自己的輸入列與鍵盤（列表頁 /chat 仍顯示）
+    || isChatConversationPath(pathname);
 
   const header = headerFor(pathname);
   // 側邊姿態（系統欄在左右側直立）：控制搬進直立軌，第二層頁不顯示頂部導覽列，改成內容頂端的行內標題（design-spec §3.3）
@@ -77,7 +84,9 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
   const grouped = pathname === '/account' || pathname.startsWith('/account/');
   const material = grouped ? 'material-grouped' : 'material';
 
-  const tabs = buyerTabs(pathname === '/');
+  const tabs = buyerTabs(pathname === '/', badgeCount(chat.summary, 'buyer'));
+  // 對話頁有自己的離線提示（「目前離線，無法傳送」），外框那一條不再出現，免得兩條並存
+  const inConversation = isChatConversationPath(pathname);
 
   return (
     // --bar-h：釘在頂端的導覽列高度，給商品頁兩欄的 sticky 照片留位置
@@ -136,7 +145,7 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
       )}
 
       <div role="status">
-        {!online && (
+        {!online && !inConversation && (
           <p className="bg-canvas px-5 py-2 text-center text-footnote text-muted">目前離線，顯示的是上次載入的內容</p>
         )}
       </div>
@@ -161,7 +170,7 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
         )}
       </main>
 
-      <footer className="mt-10 hidden border-t border-line bg-white md:block">
+      <footer className={`mt-10 hidden border-t border-line bg-white ${inConversation ? '' : 'md:block'}`}>
         <div className="mx-auto grid max-w-6xl grid-cols-3 gap-8 px-4 py-10 text-sm text-muted">
           <div>
             <p className="mb-3 font-semibold text-ink">客服中心</p>
@@ -309,10 +318,15 @@ function RailShareButton({ target }: { target: ShareTarget }) {
 function DesktopLinks({ className = '' }: { className?: string }) {
   const { user } = useStore();
   const { openLogin } = useAuth();
+  const unread = badgeCount(useChat().summary, 'buyer');
   return (
     <div className={`hidden items-center gap-5 text-subhead text-muted md:flex ${className}`}>
       <Link to="/seller" className="hover:text-brand">賣家中心</Link>
       <Link to="/orders" className="hover:text-brand">我的訂單</Link>
+      <Link to="/chat" aria-label={chatNavLabel(unread)} className="hover:text-brand">
+        聊聊
+        {unread > 0 && <span aria-hidden="true" className="ml-1 inline-block rounded-full bg-badge px-1.5 text-[12px] leading-[18px] text-white">{unread > 99 ? '99+' : unread}</span>}
+      </Link>
       {user ? (
         <Link to="/account" className="hover:text-brand">我的帳號</Link>
       ) : (
@@ -421,14 +435,15 @@ function ProductSkeleton() {
 }
 
 /** 買家 5 格分頁（順序與第 5 格「我的」沿用 UI 改版 D4）。onReselect：在首頁再點一次捲回頂端 */
-function buyerTabs(atHome: boolean): TabItem[] {
+function buyerTabs(atHome: boolean, chatBadge: number): TabItem[] {
   const line = { size: 24, strokeWidth: 1.7 } as const;
   const bold = { size: 24, strokeWidth: 2.5 } as const;
   return [
     { to: '/', label: '首頁', end: true, onReselect: atHome ? scrollPageToTop : undefined, icon: <House {...line} />, iconActive: <HouseFilled /> },
     { to: '/search', label: '逛逛', icon: <SearchIcon {...line} />, iconActive: <SearchIcon {...bold} /> },
     { to: '/orders', label: '訂單', icon: <ClipboardList {...line} />, iconActive: <ClipboardList {...bold} /> },
-    { to: '/seller', label: '我要賣', icon: <Store {...line} />, iconActive: <Store {...line} /> },
+    // 第 4 格「聊聊」取代「我要賣」（D14）；賣家中心的入口是「我的」頁既有的「賣家中心」列。選中只加粗線寬、不填色（內部兩行字反白在 24pt 太擠）
+    { ...buyerChatTab(chatBadge), icon: <ChatIcon {...line} />, iconActive: <ChatIcon {...bold} /> },
     // 第 5 格一律是前往 /account 的分頁，未登入時登入入口在頁內（HIG：tab bar 用來導覽，不是放動作）
     { to: '/account', label: '我的', icon: <CircleUserRound {...line} />, iconActive: <ProfileFilled /> },
   ];
