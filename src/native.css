@@ -1,9 +1,9 @@
 /* 原生殼（Capacitor）專用樣式。由 main.tsx 靜態載入（網頁版也會載到，但全部掛在 html.native 底下，瀏覽器不會命中）。
    狀態列安全區：買家前台（App Store 風改版後）自己處理了——頂欄是 sticky top-[env(safe-area-inset-top)]，上面另有一條安全區色帶；
-   賣家中心頂欄（SellerLayout）自己長高並吃四邊安全區（iPhone Duo 適配 T8），不再需要殼補丁。
-   這裡只剩：賣家登入頁（賣家路由、沒有黏頂頂欄）把整個 body 往下推（html.native-no-sticky 由 shell.ts 用 MutationObserver 維護；買家前台不套用），
+   賣家中心（SellerLayout）自己有一條蓋住安全區的色帶與懸浮控制列（頂欄已拿掉），不需要殼補丁。
+   這裡只剩：沒有賣家外框的賣家頁（賣家登入頁、開店表單）把整個 body 往下推（html.native-no-sticky 由 shell.ts 用 MutationObserver 看 [data-seller-layout] 維護；買家前台不套用），
    以及 SubHeader 的黏頂位置。 */
 /* iOS 導覽列（components/account/ui.tsx SubHeader，買家「我的」子頁與賣家物流表單）：買家前台上面已有安全區色帶，
-   這裡不墊內距（墊了會在頁面最上方多一條空白），改成黏在色帶下緣；賣家物流表單裡它本來就黏在賣家頂欄後面，行為與網頁版相同。 */
+   這裡不墊內距（墊了會在頁面最上方多一條空白），改成黏在色帶下緣；賣家物流表單與收款帳戶頁改由 index.css 的 [data-seller-layout] 規則黏在（加高後的）賣家色帶下緣。 */
 html.native header.material-grouped.sticky.top-0 { top: env(safe-area-inset-top); }
 html.native.native-no-sticky body { padding-top: env(safe-area-inset-top); }

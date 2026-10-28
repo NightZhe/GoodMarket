@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ClipboardList, ExternalLink, LayoutDashboard, LogOut, Package, PlusCircle, Star, Truck } from 'lucide-react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { ChevronLeft, ClipboardList, LayoutDashboard, Package, PlusCircle, Star, Truck } from 'lucide-react';
 import ChatIcon from '../../components/chat/ChatIcon';
 import { useStore } from '../../store/StoreContext';
 import { useChat } from '../../store/ChatContext';
@@ -8,9 +8,12 @@ import { CancelSummaryProvider, pendingCount, useCancelSummary } from '../../sto
 import { badgeCount, chatNavLabel, formatUnread } from '../../lib/chat/unread';
 import { SELLER_CHAT_LIST_PATH } from '../../lib/chat/sellerPaths';
 import { useSplitLayout } from '../../lib/layout/splitLayout';
+import { usePosture } from '../../lib/layout/posture';
+import { SELLER_LAYOUT_MARK } from '../../lib/native/shellInset';
 import { GlassButton, GlassCapsule, TabPill } from '../../components/glass';
-import { hasSaveTray, hidesNav, isChatThreadPath } from './sellerNav';
+import { SUB_HEADER_LAYOUT, hasOwnBackHeader, hasSaveTray, hidesNav, isChatThreadPath, showsHomeButton } from './sellerNav';
 import { buildSellerTabs } from './sellerTabs';
+import SellerTopBar from './SellerTopBar';
 
 const NAV: { to: string; label: string; icon: ComponentType<{ size?: number }>; end: boolean }[] = [
   { to: '/seller', label: '賣場總覽', icon: LayoutDashboard, end: true },
@@ -33,7 +36,7 @@ export default function SellerLayout() {
 }
 
 function SellerLayoutView() {
-  const { myShop, signOut, shopOrders } = useStore();
+  const { shopOrders } = useStore();
   const pending = pendingCount(useCancelSummary().summary);
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -41,7 +44,6 @@ function SellerLayoutView() {
   const isOn = (to: string, isActive: boolean) =>
     isActive || (to === '/seller/products' && pathname.startsWith('/seller/products/import'));
   const hideNav = hidesNav(pathname);
-  const shop = myShop!; // SellerGate 已確保登入且有店
   const toShip = shopOrders.filter(o => o.status === 'to_ship').length;
   const chatBadge = badgeCount(useChat().summary, 'shop');
   const split = useSplitLayout();
@@ -50,34 +52,19 @@ function SellerLayoutView() {
 
   // 水平姿態＝置中懸浮膠囊，側邊姿態（外蓋、展開橫向、書本）＝右（左）側直立軌，兩個元件自己看姿態、同一時間只出現一個（AC-21）。
   // 桌機網頁（md 以上）仍是左側欄；App 內 md: 不生效，永遠不出現左側欄（D4、X1）
+  // 頂部：色帶（只蓋安全區）＋懸浮控制列（SellerTopBar）。有 SubHeader 的三頁（U-8 方案 A）色帶加高到安全區＋52、改灰，右群組坐在這一列，SubHeader 緊接其下
+  const posture = usePosture();
+  const ownBack = hasOwnBackHeader(pathname);
+  const subTall = SUB_HEADER_LAYOUT === 'band' && ownBack;
   const tabs = buildSellerTabs({ pathname, toShip, pending, chatBadge, goTo: navigate });
 
   return (
-    <div className="min-h-dvh bg-[#f6f6f6]">
-      {/* 頂欄：背景全寬（畫進安全區與軌欄），logo、店名、登出留在內容欄——四邊各自吃安全區，右端讓開直立軌（design-spec §5.4.1）。
-          高度＝內容 56＋上緣安全區（取代 native.css 對 header.h-14 的補丁） */}
-      {chatThreadFull ? (
-        // 頂欄藏起來之後，狀態列／動態島仍要有一條材質蓋住（對話頁自己的導覽列在它下面）
-        <div aria-hidden="true" className="material sticky top-0 z-40 h-[env(safe-area-inset-top)]" />
-      ) : (
-        <header className="sticky top-0 z-40 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-3 border-b border-line bg-white pl-[calc(var(--inset-l)+1rem)] pr-[calc(var(--inset-r)+1rem)] pt-[env(safe-area-inset-top)] md:px-6">
-          <Link to="/seller" className="flex min-h-11 items-center gap-1.5 font-bold text-brand">
-            🛍️ <span>好物集</span><span className="font-normal text-ink">賣家中心</span>
-          </Link>
-          <div className="ml-auto flex min-w-0 items-center gap-2 md:gap-4">
-            <Link to={`/shop/${shop.id}`} className="hidden items-center gap-1 text-sm text-muted hover:text-brand md:flex">
-              查看我的賣場 <ExternalLink size={14} />
-            </Link>
-            <span className="flex min-w-0 items-center gap-2 rounded-full bg-canvas py-1 pl-1 pr-3 text-sm">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-lg">{shop.avatar}</span>
-              <span className="max-w-28 truncate md:max-w-none">{shop.name}</span>
-            </span>
-            <button onClick={() => { void signOut(); navigate('/seller'); }} aria-label="登出" title="登出" className="-mr-2 flex size-11 shrink-0 items-center justify-center text-muted hover:text-brand md:mr-0 md:size-auto md:p-2">
-              <LogOut size={18} aria-hidden="true" />
-            </button>
-          </div>
-        </header>
-      )}
+    <div {...{ [SELLER_LAYOUT_MARK]: '' }} className={`min-h-dvh bg-[#f6f6f6] ${subTall ? '[--seller-band-h:calc(env(safe-area-inset-top)+52px)] md:[--seller-band-h:env(safe-area-inset-top)]' : '[--seller-band-h:env(safe-area-inset-top)]'}`}>
+      {/* 上緣安全區材質色帶（與買家端同款）：蓋住狀態列／動態島，內容捲上來從底下穿過。桌機高度 0。
+          --seller-band-h 是色帶高度，SubHeader 的黏頂位置也讀它（index.css 的 [data-seller-layout] 規則） */}
+      <div aria-hidden="true" className={`${subTall ? 'material-grouped' : 'material'} sticky top-0 z-40 h-(--seller-band-h)`} />
+      {/* 聊聊對話頁在手機上整頁都是對話：自己有導覽列與輸入列，懸浮控制列藏起來（鍵盤開著時不吃高度），只留上面的色帶；桌機雙欄照常有 */}
+      {!chatThreadFull && <SellerTopBar showHome={showsHomeButton(pathname, posture)} forceCollapse={SUB_HEADER_LAYOUT === 'collapse' && ownBack} />}
 
       {/* 側邊姿態的頁面工具：只有「回到買家首頁」一顆（X5），DOM 放在頁首之後、內容之前（朗讀順序）。物流表單頁整條軌都不出現（AC-25） */}
       {!hideNav && (
@@ -87,7 +74,7 @@ function SellerLayoutView() {
       )}
 
       <div className="app-shell flex">
-        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 border-r border-line bg-white p-3 md:block">
+        <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 border-r border-line bg-white p-3 pt-15 md:block">
           {NAV.map(n => (
             <NavLink key={n.to} to={n.to} end={n.end} aria-label={n.to === SELLER_CHAT_LIST_PATH ? chatNavLabel(chatBadge) : undefined}
               className={({ isActive }) => `mb-1 flex ${n.to === '/seller/orders' && pending > 0 ? 'flex-wrap ' : ''}items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition ${isOn(n.to, isActive) ? 'bg-brand-soft font-medium text-brand' : 'hover:bg-canvas'}`}>
@@ -106,11 +93,10 @@ function SellerLayoutView() {
               )}
             </NavLink>
           ))}
-          <Link to="/" className="mt-6 block border-t border-line px-3 pt-4 text-xs text-muted hover:text-brand">← 回到買家首頁</Link>
         </aside>
 
         {/* 底部預留：有分頁導覽的頁＝膠囊高＋底距（側邊姿態只留系統底緣）；新增／編輯商品頁由 ProductForm 自己依托盤預留；物流表單頁不顯示導覽 */}
-        <main className={`min-w-0 flex-1 ${chatThreadFull ? 'p-0' : `p-3 md:p-6 ${hideNav || hasSaveTray(pathname) ? 'pb-6' : 'pb-[max(var(--tabs-clearance),1.5rem)] md:pb-6'}`}`}>
+        <main className={`min-w-0 flex-1 ${chatThreadFull ? 'p-0' : `p-3 md:p-6 ${subTall ? 'pt-0' : 'pt-15'} md:pt-15 ${hideNav || hasSaveTray(pathname) ? 'pb-6' : 'pb-[max(var(--tabs-clearance),1.5rem)] md:pb-6'}`}`}>
           <Outlet />
         </main>
       </div>

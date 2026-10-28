@@ -144,7 +144,7 @@ function StoreForm() {
   };
 
   const title = editing ? '編輯退貨門市' : '新增退貨門市';
-  const header = <SubHeader to={BACK} backLabel="回到物流設定" title={title} />;
+  const header = <SubHeader to={BACK} backLabel="回到物流設定" backText="物流設定" title={title} />;
   const goBack = <Link to={BACK} className={btnPrimary}>回物流設定</Link>;
 
   const shell = (children: React.ReactNode) => (

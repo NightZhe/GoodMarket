@@ -50,3 +50,34 @@ export function sellerTabRoutes(pathname: string): SellerTabRoute[] {
   const proxy = proxyTab(pathname);
   return TABS.map(t => ({ key: t.key, to: t.key === proxy ? pathname : t.to, goTo: t.to }));
 }
+
+/**
+ * 自己有 SubHeader「‹ 上一層」返回的賣家頁（物流兩張表單、收款帳戶）。頂部懸浮的「‹ 首頁」在這幾頁不出現（C2＝a），
+ * 否則同畫面兩個返回；右上四顆照常。日後新增有 SubHeader 的賣家頁要加進來。
+ */
+export const hasOwnBackHeader = (pathname: string): boolean =>
+  /^\/seller\/logistics\/(stores|address)(\/|$)/.test(pathname) || /^\/seller\/payout\/?$/.test(pathname);
+
+/** 左上「‹ 首頁」要不要出現：側邊姿態（直立軌已有「回到買家首頁」，X5）與自己有返回的頁都不出現 */
+export const showsHomeButton = (pathname: string, posture: 'bottom' | 'side-left' | 'side-right'): boolean =>
+  posture === 'bottom' && !hasOwnBackHeader(pathname);
+
+/**
+ * 有 SubHeader 的三頁，頂部怎麼排（design.md U-8，使用者尚未回覆，照小u 預設 A）：
+ *   'band'：A。色帶加高到「安全區＋52」改灰，右群組坐在這一列，SubHeader 緊接其下（SellerLayout 的 --seller-band-h 與 index.css 的 .seller-sub-top）。
+ *   'collapse'：B。這三頁右上改收成「⋯」、SubHeader 加高到 52 垂直對齊。要切到 B：改這個常數，並把 SellerTopBar 的 forceCollapse 接上，
+ *               SellerLayout 色帶不再加高（SUB_HEADER_LAYOUT !== 'band' 時 subTall 為 false），另補「SubHeader 52 高」的範圍 CSS（不改 components/account/ui.tsx）。
+ */
+export const SUB_HEADER_LAYOUT: 'band' | 'collapse' = 'band';
+
+/** 左鈕寬度（含「‹」與間距）固定的部分：左內距 6＋「‹」24＋右內距 14 */
+export const HOME_BUTTON_CHROME = 44;
+const HOME_GAP = 8;
+const MORE_BUTTON = 44;
+
+/**
+ * 左鈕連「⋯」都放不下（列寬 < 左鈕全寬＋間距＋44）才縮成只有「‹」的 44 圓鈕（保險條款：朗讀名稱不變）。
+ * 量不到（Infinity）時不縮。
+ */
+export const homeButtonCompact = (rowWidth: number, homeFullWidth: number): boolean =>
+  rowWidth < homeFullWidth + HOME_GAP + MORE_BUTTON;
