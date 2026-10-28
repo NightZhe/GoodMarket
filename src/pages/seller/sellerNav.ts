@@ -1,12 +1,14 @@
 // 賣家中心導覽的純邏輯（無畫面）：哪些頁隱藏導覽、哪些頁底部有儲存托盤、5 個分頁各自的導覽目標。
 // 只有 SellerLayout 用（hidesNav／hasSaveTray／isChatThreadPath／sellerTabRoutes）；圖示與版面留在元件裡。
 
+import { SELLER_CHAT_LIST_PATH } from '../../lib/chat/sellerPaths';
+
 export type SellerTabKey = 'overview' | 'chat' | 'products' | 'new' | 'orders';
 
 /** 分頁的真實目的地（順序固定 5 格：總覽／聊聊／商品／新增／訂單，聊聊 N2＝A 使用者定版；物流設定與評價管理從賣場總覽進，決策 N4＝B） */
 const TABS: { key: SellerTabKey; to: string }[] = [
   { key: 'overview', to: '/seller' },
-  { key: 'chat', to: '/seller/chat' },
+  { key: 'chat', to: SELLER_CHAT_LIST_PATH },
   { key: 'products', to: '/seller/products' },
   { key: 'new', to: '/seller/products/new' },
   { key: 'orders', to: '/seller/orders' },

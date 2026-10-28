@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildSendArgs, canSubmit, confirmSent, createLocal, dropConfirmed, incomingAnnouncement, markFailed, mergeLatest, mergeServer, restart, slotsReusable,
-  textLength, visibleMessages,
+  buildSendArgs, canSubmit, confirmSent, createLocal, createSendQueue, dropConfirmed, incomingAnnouncement, markFailed, mergeLatest, mergeServer, rebindToConversation,
+  restart, slotsReusable, textLength, visibleMessages,
 } from './outbox';
 import type { ChatCard, ServerMessage } from './types';
 
@@ -108,6 +108,34 @@ describe('送出參數（§9 chat_send：三個目標參數恰好一個）', () 
   });
   it('空白文字不送（R-M6：去前後空白，空就省略）', () => {
     expect('p_text' in buildSendArgs({ target: { kind: 'shop', shopId: 's1' }, conversationId: null, clientId: 'k', text: '   ', card })).toBe(false);
+  });
+});
+
+describe('對話還沒建立時連續送出（第二則不能再附一張訂單卡）', () => {
+  it('第一則回來、拿到對話 id 後，後續訊息改走 p_conversation_id，丟掉 p_order_id／p_shop_id', () => {
+    expect(rebindToConversation({ p_client_id: 'k2', p_order_id: 'o1', p_text: '第二則' }, 'c1')).toEqual({
+      p_client_id: 'k2', p_conversation_id: 'c1', p_text: '第二則',
+    });
+    expect(rebindToConversation({ p_client_id: 'k2', p_shop_id: 's1', p_text: 'hi' }, 'c1')).toEqual({
+      p_client_id: 'k2', p_conversation_id: 'c1', p_text: 'hi',
+    });
+  });
+  it('已經走 p_conversation_id 的不變；使用者自己附的卡片保留', () => {
+    const args = { p_client_id: 'k', p_conversation_id: 'c1', p_card: { type: 'product' as const, id: 'p1' } };
+    expect(rebindToConversation(args, 'c1')).toEqual(args);
+  });
+  it('排隊：第一則還沒回來，第二則不會開始；第一則失敗了第二則也照樣輪到', async () => {
+    const q = createSendQueue();
+    const log: string[] = [];
+    let release!: () => void;
+    const first = q.enqueue(async () => { log.push('1 開始'); await new Promise<void>(r => { release = r; }); log.push('1 結束'); throw new Error('斷網'); });
+    const second = q.enqueue(async () => { log.push('2 開始'); });
+    await Promise.resolve();
+    expect(log).toEqual(['1 開始']);
+    release();
+    await expect(first).rejects.toThrow('斷網');
+    await second;
+    expect(log).toEqual(['1 開始', '1 結束', '2 開始']);
   });
 });
 

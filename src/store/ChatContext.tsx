@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from './StoreContext';
 import { chatUnreadSummary, subscribeTopic } from '../lib/chat/api';
-import { errorCodeOf, isUnavailable } from '../lib/chat/errors';
+import { summaryFailure } from '../lib/chat/errors';
 import { EMPTY_SUMMARY, type UnreadSummary } from '../lib/chat/types';
-import type { ChatAvailability } from '../lib/chat/nav';
+import { nextAvailability, type ChatAvailability } from '../lib/chat/nav';
 
 // 聊聊的全站狀態：資料庫有沒有升級（降級判斷，R-M24）與未讀摘要（買家 tab、桌機連結、賣家底欄與總覽卡的角標數）。
 // 更新時機（§6.5）：進站、登入狀態改變、App 回前景、網路恢復、收到 user:<uid> 頻道的事件、對話頁標已讀之後。
@@ -45,15 +45,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           setSummary(s);
           setRevision(n => n + 1);
         } catch (e) {
-          if (isUnavailable(e)) {
-            setAvailability('unavailable');
-            setSummary(EMPTY_SUMMARY);
-          } else if (errorCodeOf(e) === 'LOGIN_REQUIRED') {
-            // 遊客：函式存在（拿到的是「請先登入」而不是「找不到函式」），聊聊可用，只是沒有未讀
-            setAvailability('ok');
-            setSummary(EMPTY_SUMMARY);
-          }
-          // 其他（網路中斷、逾時）：保留目前的數字，下次更新時機再讀
+          const failure = summaryFailure(e);
+          setAvailability(prev => nextAvailability(prev, failure));
+          if (failure !== 'transient') setSummary(EMPTY_SUMMARY);
+          // 降級或遊客（函式存在，拿到的是「請先登入」而不是「找不到函式」）：沒有未讀。
+          // 暫時的失敗（網路中斷、逾時）：保留目前的數字；第一次就失敗時入口鈕照常顯示、角標暫不顯示，回前景／恢復連線時會再讀
         }
       } while (again.current);
     })().finally(() => { running.current = null; });

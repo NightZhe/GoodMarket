@@ -34,9 +34,10 @@ describe('未讀與角標（R-M13、AC-M16～M19）', () => {
     expect(badgeCount({ buyer_conversations: 1, shop_conversations: Number.NaN, shop_messages: 0 }, 'shop')).toBe(0);
   });
 
-  it('總覽提示卡：N 則未讀訊息；0 不出現、超過 99 顯示 99+', () => {
+  it('總覽提示卡：N 則未讀訊息；0 不出現、超過 99 照實顯示（不封頂，99+ 只用在角標）', () => {
     expect(unreadOverview(0)).toBeNull();
     expect(unreadOverview(6)).toBe('你有 6 則未讀訊息');
-    expect(unreadOverview(120)).toBe('你有 99+ 則未讀訊息');
+    expect(unreadOverview(120)).toBe('你有 120 則未讀訊息');
+    expect(unreadOverview(123)).toBe('你有 123 則未讀訊息');
   });
 });

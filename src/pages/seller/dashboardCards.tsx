@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, Star } from 'lucide-react';
 import ChatIcon from '../../components/chat/ChatIcon';
 import { focusRing } from '../../components/import/ui';
+import { SELLER_CHAT_LIST_PATH } from '../../lib/chat/sellerPaths';
 import { unreadOverview } from '../../lib/chat/unread';
 
 // 賣場總覽的兩個聊聊相關元件（設計 8.3）。188 寬（手機 200% 文字）時藏起裝飾圖示，文字才有空間（同 ReturnPrompt）。
@@ -14,7 +15,7 @@ export function UnreadMessagesCard({ messages }: { messages: number }) {
   const text = unreadOverview(messages);
   if (!text) return null;
   return (
-    <Link to="/seller/chat" className={`mt-3 flex min-h-12 items-center gap-3 rounded-md border border-brand/25 bg-brand-soft p-3 text-sm ${focusRing}`}>
+    <Link to={SELLER_CHAT_LIST_PATH} className={`mt-3 flex min-h-12 items-center gap-3 rounded-md border border-brand/25 bg-brand-soft p-3 text-sm ${focusRing}`}>
       <ChatIcon size={20} className="shrink-0 text-brand max-[239px]:hidden" />
       <span className="min-w-0 flex-1 font-medium text-ink">{text}</span>
       <ChevronRight size={18} className="shrink-0 text-muted max-[239px]:hidden" aria-hidden="true" />
@@ -22,10 +23,10 @@ export function UnreadMessagesCard({ messages }: { messages: number }) {
   );
 }
 
-/** 評價管理入口列（僅手機；桌機有側欄）。評價管理退出底欄後，從總覽進 */
+/** 評價管理入口列（所有寬度都顯示，AC-M35）。評價管理退出底欄後，從總覽進 */
 export function ReviewsEntryRow() {
   return (
-    <Link to="/seller/reviews" className={`flex min-h-12 items-center gap-3 rounded-lg bg-white px-4 py-2 text-sm md:hidden ${focusRing}`}>
+    <Link to="/seller/reviews" className={`flex min-h-12 items-center gap-3 rounded-lg bg-white px-4 py-2 text-sm ${focusRing}`}>
       <Star size={20} className="shrink-0 text-muted max-[239px]:hidden" aria-hidden="true" />
       <span className="min-w-0 flex-1">
         評價管理

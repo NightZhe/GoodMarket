@@ -16,8 +16,8 @@ describe('賣場總覽「你有 N 則未讀訊息」提示卡（AC-M20）', () =
     expect(html(<UnreadMessagesCard messages={0} />)).toBe('');
   });
 
-  it('超過 99 則顯示 99+；數字壞掉（NaN、負數）當 0 不顯示', () => {
-    expect(html(<UnreadMessagesCard messages={250} />)).toContain('你有 99+ 則未讀訊息');
+  it('超過 99 則照實顯示真實數字（99+ 只用在角標）；數字壞掉（NaN、負數）當 0 不顯示', () => {
+    expect(html(<UnreadMessagesCard messages={250} />)).toContain('你有 250 則未讀訊息');
     expect(html(<UnreadMessagesCard messages={Number.NaN} />)).toBe('');
     expect(html(<UnreadMessagesCard messages={-3} />)).toBe('');
   });
@@ -37,9 +37,9 @@ describe('賣場總覽「評價管理」入口列（評價退出底欄後從這�
     expect(h).toContain('查看與回覆買家的評價');
   });
 
-  it('桌機有側欄所以隱藏（md:hidden），點擊範圍高度至少 48', () => {
+  it('所有寬度都看得到（AC-M35：總覽有評價管理入口，桌機也一樣），點擊範圍高度至少 48', () => {
     const h = html(<ReviewsEntryRow />);
-    expect(h).toContain('md:hidden');
+    expect(h).not.toContain('md:hidden');
     expect(h).toContain('min-h-12');
   });
 });

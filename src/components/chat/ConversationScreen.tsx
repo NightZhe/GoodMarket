@@ -80,9 +80,11 @@ export default function ConversationScreen({ m, h, overlays }: { m: ScreenModel;
   const statusId = useId();
   const ready = m.phase === 'ready';
   const peerName = m.peer?.name ?? m.fallbackName ?? '';
-  const block: ComposerBlock = m.phase === 'loading' ? 'loading' : !m.online ? 'offline' : m.peerDeleted ? 'gone' : m.blockedByMe ? 'blocked' : null;
+  // 開頁時網路錯誤（offline）：還沒拿到對話，輸入列一律停用；瀏覽器說在線時用「載入中」的樣子，不假稱離線
+  const openedOffline = m.phase === 'offline';
+  const block: ComposerBlock = m.phase === 'loading' ? 'loading' : !m.online ? 'offline' : openedOffline ? 'loading' : m.peerDeleted ? 'gone' : m.blockedByMe ? 'blocked' : null;
   const emptyText = m.side === 'buyer' ? '還沒有訊息，傳一則打聲招呼吧。' : '還沒有訊息，傳一則訊息給買家吧。';
-  const failedPhase = m.phase !== 'loading' && m.phase !== 'ready';
+  const failedPhase = m.phase !== 'loading' && m.phase !== 'ready' && m.phase !== 'offline';
 
   return (
     <div className={`flex flex-col bg-white ${m.className ?? DEFAULT_ROOT}`}>
@@ -113,18 +115,21 @@ export default function ConversationScreen({ m, h, overlays }: { m: ScreenModel;
       </header>
 
       {failedPhase ? (
-        <ConversationFailure phase={m.phase as Exclude<ConversationPhase, 'loading' | 'ready'>} side={m.side} listTo={m.listTo} homeTo={m.homeTo} ordersTo={m.ordersTo} onRetry={h.onRetryLoad} onLogin={h.onLogin} />
+        <ConversationFailure phase={m.phase as Exclude<ConversationPhase, 'loading' | 'ready' | 'offline'>} side={m.side} listTo={m.listTo} homeTo={m.homeTo} ordersTo={m.ordersTo} onRetry={h.onRetryLoad} onLogin={h.onLogin} />
       ) : (
         <>
-          {ready && (
+          {(ready || openedOffline) && (
             !m.online ? <OfflineBar id={statusId} />
+            : openedOffline ? null
             : m.peerDeleted ? <PeerGoneBar id={statusId} kind={m.side === 'buyer' ? 'shop' : 'account'} />
             : m.blockedByMe ? <BlockedBar id={statusId} busy={m.unblockBusy} onUnblock={h.onUnblock} />
             : null
           )}
           {ready && m.rulesVisible && <RulesNotice onDismiss={h.onDismissRules} />}
 
-          {m.phase === 'loading' ? <MessagesSkeleton /> : m.messagesFailed && m.messages.length === 0 ? (
+          {m.phase === 'loading' ? <MessagesSkeleton /> : openedOffline && m.online ? (
+            <MessagesFailed onRetry={h.onRetryLoad} />
+          ) : m.messagesFailed && m.messages.length === 0 ? (
             <MessagesFailed onRetry={h.onRetryMessages} />
           ) : (
             <MessageList
@@ -144,7 +149,7 @@ export default function ConversationScreen({ m, h, overlays }: { m: ScreenModel;
 
           <Composer
             block={block}
-            reasonId={ready && block !== null && block !== 'loading' ? statusId : undefined}
+            reasonId={(ready || openedOffline) && block !== null && block !== 'loading' ? statusId : undefined}
             pendingCard={m.phase === 'loading' ? null : m.pendingCard}
             cardRemovable={m.cardRemovable}
             onRemoveCard={h.onRemoveCard}

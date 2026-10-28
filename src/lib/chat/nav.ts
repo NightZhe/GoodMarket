@@ -2,6 +2,7 @@
 //   /chat                 聊聊列表
 //   /chat/:conversationId 既有對話
 //   /chat/new?shop=…&product=…｜&order=…   從店家頁／商品頁／訂單進（對話還不一定存在，由 chat_open 決定）
+import type { SummaryFailure } from './errors';
 import { chatNavLabel } from './unread';
 import type { OpenTarget } from './outbox';
 import type { Counterpart } from './types';
@@ -32,6 +33,16 @@ export function parseNewChat(search: string): Extract<OpenTarget, { kind: 'shop'
 export const isChatConversationPath = (pathname: string): boolean => /^\/chat\/[^/]+/.test(pathname);
 
 export type ChatAvailability = 'unknown' | 'ok' | 'unavailable';
+
+/**
+ * 摘要讀取失敗後，聊聊可用性怎麼變（R-M24：只有確認降級才隱藏入口鈕）。
+ * 第一次讀就遇到網路錯誤時停在 unknown 會把入口鈕藏到下次重讀，所以視為可用；已確認降級的不被網路錯誤翻回來
+ */
+export function nextAvailability(prev: ChatAvailability, failure: SummaryFailure): ChatAvailability {
+  if (failure === 'degraded') return 'unavailable';
+  if (failure === 'guest') return 'ok';
+  return prev === 'unknown' ? 'ok' : prev;
+}
 
 /**
  * 商品頁／店家頁／訂單卡上的入口鈕要不要顯示。降級（資料庫未升級，R-M24）與「還沒確認可用」都隱藏；

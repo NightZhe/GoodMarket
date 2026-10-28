@@ -24,9 +24,9 @@ export function chatNavLabel(n: number): string {
   return n > 99 ? '聊聊，99 條以上未讀' : `聊聊，${n} 條未讀`;
 }
 
-/** 賣場總覽的提示卡文字；0 則不顯示（回 null） */
+/** 賣場總覽的提示卡文字；0 則不顯示（回 null）。照實顯示真實數字，不封頂（99+ 是角標的規則） */
 export function unreadOverview(messages: number): string | null {
   const n = safe(messages);
   if (n === 0) return null;
-  return `你有 ${n > 99 ? '99+' : n} 則未讀訊息`;
+  return `你有 ${n} 則未讀訊息`;
 }
