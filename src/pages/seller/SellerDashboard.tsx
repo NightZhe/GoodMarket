@@ -93,64 +93,71 @@ export default function SellerDashboard() {
           );
         })()}
         {showReturnPrompt && <ReturnPrompt />}
-        <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md bg-line md:grid-cols-5">
-          <Todo to="/seller/orders" n={toShip} label="待出貨" highlight={toShip > 0} />
-          <Todo to="/seller/orders" n={shopOrders.filter(o => o.status === 'shipping').length} label="運送中" />
-          <Todo to="/seller/products" n={active} label="上架中商品" />
-          <Todo to="/seller/products" n={lowStock.length} label="庫存偏低" highlight={lowStock.length > 0} />
-          <Todo
-            to="/seller/reviews?tab=unreplied" n={unreplied.n} label="待回覆評價" highlight={(unreplied.n ?? 0) > 0}
-            className="col-span-2 md:col-span-1"
-            ariaLabel={unreplied.n === null && unreplied.failed ? '待回覆評價，無法取得數量' : undefined}
-          />
+        {/* 格線依內容寬排，不靠 md:（App 內 md: 不生效，X6、design-spec §5.4.1）：待辦 5 格橫排在內容寬 ≥ 400，否則 2 欄、第 5 格跨欄。
+            @container 量的是這個包裝（比內容寬少 main 的 24 與待辦卡的 32），所以門檻寫 344。桌機網頁 md: 照舊 */}
+        <div className="@container mt-3">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md bg-line @min-[344px]:grid-cols-5 md:grid-cols-5">
+            <Todo to="/seller/orders" n={toShip} label="待出貨" highlight={toShip > 0} />
+            <Todo to="/seller/orders" n={shopOrders.filter(o => o.status === 'shipping').length} label="運送中" />
+            <Todo to="/seller/products" n={active} label="上架中商品" />
+            <Todo to="/seller/products" n={lowStock.length} label="庫存偏低" highlight={lowStock.length > 0} />
+            <Todo
+              to="/seller/reviews?tab=unreplied" n={unreplied.n} label="待回覆評價" highlight={(unreplied.n ?? 0) > 0}
+              className="col-span-2 @min-[344px]:col-span-1 md:col-span-1"
+              ariaLabel={unreplied.n === null && unreplied.failed ? '待回覆評價，無法取得數量' : undefined}
+            />
+          </div>
         </div>
       </section>
 
       {showEntryRow && <LogisticsEntryRow />}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <section className="rounded-lg bg-white p-4 md:p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-            <h2 className="font-medium">營收</h2>
-            <span className="text-xs text-muted">不含已取消訂單</span>
-          </div>
-          <p className="mt-2 break-words text-3xl font-semibold text-brand max-[319px]:text-2xl">{money(revenue)}</p>
-          <p className="text-xs text-muted">共 {valid.length} 筆訂單</p>
-          {/* 窄螢幕（320、手機 200% 字級）7 根長條放不下時，只讓圖表自己橫向捲，不撐開整頁 */}
-          <div className="mt-5 overflow-x-auto">
-            <div className="flex h-36 min-w-fit items-end gap-2" role="img" aria-label="近 7 天營收長條圖">
-              {days.map(d => (
-                <div key={d.label} className="flex flex-1 flex-col items-center gap-1.5 whitespace-nowrap">
-                  <span className="text-[10px] text-muted">{d.sum ? `$${soldText(d.sum)}` : ''}</span>
-                  <div className="w-full max-w-9 rounded-t-sm bg-brand/85 transition-all" style={{ height: `${Math.max(2, (d.sum / peak) * 96)}px` }} />
-                  <span className="text-[11px] text-muted">{d.label}</span>
-                </div>
-              ))}
+      {/* 營收＋熱銷兩欄 1.4:1：內容寬 ≥ 620 時並排，否則上下堆（包裝比內容寬少 main 的 24，所以門檻 596） */}
+      <div className="@container">
+        <div className="grid grid-cols-1 gap-4 @min-[596px]:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+          <section className="rounded-lg bg-white p-4 md:p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+              <h2 className="font-medium">營收</h2>
+              <span className="text-xs text-muted">不含已取消訂單</span>
             </div>
-          </div>
-        </section>
-
-        <section className="rounded-lg bg-white p-4 md:p-5">
-          <h2 className="font-medium">熱銷商品</h2>
-          {top.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted">
-              還沒有商品，<Link to="/seller/products/new" className="text-brand">上架第一件 →</Link>
-            </div>
-          ) : (
-            <ol className="mt-3 space-y-3">
-              {top.map((p, i) => (
-                <li key={p.id} className="flex items-center gap-3 max-[319px]:gap-2">
-                  <span className={`w-4 shrink-0 text-center text-sm font-semibold ${i < 3 ? 'text-brand' : 'text-muted'}`}>{i + 1}</span>
-                  <ProductImage src={p.images[0]} alt="" size="sm" className="w-10 shrink-0 rounded-sm max-[319px]:hidden" />
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 break-words text-sm">{p.title}</p>
-                    <p className="mt-0.5 text-xs text-muted">已售 {soldText(p.sold)}</p>
+            <p className="mt-2 break-words text-3xl font-semibold text-brand max-[319px]:text-2xl">{money(revenue)}</p>
+            <p className="text-xs text-muted">共 {valid.length} 筆訂單</p>
+            {/* 窄螢幕（320、手機 200% 字級）7 根長條放不下時，只讓圖表自己橫向捲，不撐開整頁 */}
+            <div className="mt-5 overflow-x-auto">
+              <div className="flex h-36 min-w-fit items-end gap-2" role="img" aria-label="近 7 天營收長條圖">
+                {days.map(d => (
+                  <div key={d.label} className="flex flex-1 flex-col items-center gap-1.5 whitespace-nowrap">
+                    <span className="text-[10px] text-muted">{d.sum ? `$${soldText(d.sum)}` : ''}</span>
+                    <div className="w-full max-w-9 rounded-t-sm bg-brand/85 transition-all" style={{ height: `${Math.max(2, (d.sum / peak) * 96)}px` }} />
+                    <span className="text-[11px] text-muted">{d.label}</span>
                   </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-lg bg-white p-4 md:p-5">
+            <h2 className="font-medium">熱銷商品</h2>
+            {top.length === 0 ? (
+              <div className="py-10 text-center text-sm text-muted">
+                還沒有商品，<Link to="/seller/products/new" className="text-brand">上架第一件 →</Link>
+              </div>
+            ) : (
+              <ol className="mt-3 space-y-3">
+                {top.map((p, i) => (
+                  <li key={p.id} className="flex items-center gap-3 max-[319px]:gap-2">
+                    <span className={`w-4 shrink-0 text-center text-sm font-semibold ${i < 3 ? 'text-brand' : 'text-muted'}`}>{i + 1}</span>
+                    <ProductImage src={p.images[0]} alt="" size="sm" className="w-10 shrink-0 rounded-sm max-[319px]:hidden" />
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 break-words text-sm">{p.title}</p>
+                      <p className="mt-0.5 text-xs text-muted">已售 {soldText(p.sold)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        </div>
       </div>
 
       {lowStock.length > 0 && (

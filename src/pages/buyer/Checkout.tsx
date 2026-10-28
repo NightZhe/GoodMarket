@@ -12,10 +12,13 @@ import { AddressSummary, snapshotLine, snapshotPhone } from '../../components/ac
 import { focusFirstError, useAddressForm } from '../../components/account/useAddressForm';
 import { Bone, CheckRow, pressCls } from '../../components/account/ui';
 import BindSheet from '../../components/payment/BindSheet';
+import { GlassTray, TrayButton } from '../../components/glass';
 import { CardName } from '../../components/payment/CardLabel';
 import CardRadioList from '../../components/payment/CardRadioList';
 import PayGroup from '../../components/payment/PayGroup';
 import { BIND_RETURN_PATH } from './PaymentMethodNew';
+import { TRAY_DIMMED, TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
+import { trayReserveStyle, useTrayHeightReport } from '../../lib/layout/trayReserve';
 import { EMPTY_DRAFT, normalizePhone, type AddressDraft } from '../../lib/account/address';
 import { saveAddress } from '../../lib/account/addresses';
 import { addressFromDraft, buyerOf, pickBookAddress } from '../../lib/account/checkoutAddress';
@@ -35,6 +38,7 @@ import ProductImage from '../../components/ProductImage';
 import CheckoutRejected from '../../components/checkout/CheckoutRejected';
 import EmptyState from '../../components/EmptyState';
 import { money } from '../../lib/format';
+import { useOwnsPageTitle } from '../../lib/layout/pageTitle';
 import type { CartItem, CheckoutRejection, Order } from '../../types';
 
 type LegacyPay = Exclude<Order['payment'], 'ecpay_card'>;
@@ -89,6 +93,8 @@ function CheckoutView() {
   const [degraded, setDegraded] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [trayHeight, setTrayHeight] = useState(0);
+  const trayRef = useTrayHeightReport(setTrayHeight);
   const [announce, setAnnounce] = useState('');
   const [saveWarning, setSaveWarning] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -98,6 +104,7 @@ function CheckoutView() {
   const [payment, setPayment] = useState<LegacyPay>(state?.payment && state.payment !== 'ecpay_card' ? state.payment : 'cod');
   const [done, setDone] = useState<Order[] | null>(null);
   const [rejected, setRejected] = useState<CheckoutRejection[] | null>(null);
+  useOwnsPageTitle(done !== null); // 成功態有自己的 h1「訂單成立！」，外框不補「結帳」行內標題（下單失敗態由 CheckoutRejected 自己宣告）
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [ownShopError, setOwnShopError] = useState(false);
@@ -440,7 +447,7 @@ function CheckoutView() {
   const payingOnline = submitting && plan.onlineCount > 0;
 
   return (
-    <div aria-busy={submitting || undefined} className={`mx-auto max-w-6xl ${online ? 'pb-40' : 'pb-28'} md:px-4 md:pt-6 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-4 lg:pb-10`}>
+    <div aria-busy={submitting || undefined} style={trayReserveStyle(false, trayHeight)} className={`mx-auto max-w-6xl pb-(--tray-reserve) md:px-4 md:pt-6 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-4 lg:pb-10`}>
       {/* 桌機：左內容 + 右側訂單摘要（手機用底部固定列） */}
       <div className="min-w-0 space-y-2 md:space-y-4">
       {reauthNotice && (
@@ -606,36 +613,32 @@ function CheckoutView() {
         {slow && <p role="status" className="mt-3 text-sm">還在處理，請不要關閉或重新整理。</p>}
       </aside>
 
-      {/* 手機：底部固定下單列。線上付款開啟時分兩層：上層總付款（有貨到付款時右側「其中貨到付款」），下層整寬按鈕 */}
-      {online ? (
-        <div className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white px-4 pt-2 lg:hidden">
+      {/* 手機：底部懸浮下單托盤（C5）。上一列放錯誤或「還在處理」，下一列是總付款（有貨到付款時多一行「其中貨到付款」）與下單鈕。桌機（lg 以上）用右側訂單摘要卡 */}
+      <div ref={trayRef} className={`lg:hidden ${TRAY_DIMMED} ${TRAY_RIGHT_HALF}`}>
+        <GlassTray label="下單" variant="checkout">
           {submitError ? (
-            <p role="alert" className="text-sm text-error-text">{submitError}{ownShopError && <> <Link to="/cart" className="underline">回購物車</Link></>}</p>
+            <p role="alert" className="col-span-3 text-footnote text-error-text">{submitError}{ownShopError && <> <Link to="/cart" className="underline">回購物車</Link></>}</p>
           ) : slow ? (
-            <p role="status" className="text-sm">還在處理，請不要關閉或重新整理。</p>
-          ) : (
-            <p className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
-              <span>總付款 <span className="text-lg text-brand">{money(subtotal + shipping)}</span></span>
-              {!paymentLoading && plan.onlineCount > 0 && plan.cod.length > 0 && <span className="text-sm text-muted">其中貨到付款 {money(plan.codTotal)}</span>}
-            </p>
-          )}
-          <div className="mb-2 mt-2">
-            <PayButton label={payingOnline ? '付款中…' : payLabel} busy={submitting} disabled={paymentLoading} onClick={() => void submit()} />
+            <p role="status" className="col-span-3 text-footnote text-ink">還在處理，請不要關閉或重新整理。</p>
+          ) : null}
+          <div className="col-span-2 min-w-0 pl-1">
+            <p className="text-footnote text-muted">總付款</p>
+            <p className="text-headline font-bold text-ink">{money(subtotal + shipping)}</p>
+            {online && !paymentLoading && plan.onlineCount > 0 && plan.cod.length > 0 && (
+              <p className="text-footnote text-muted">其中貨到付款 {money(plan.codTotal)}</p>
+            )}
           </div>
-        </div>
-      ) : (
-        <div className="pb-safe fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-line bg-white lg:hidden">
-          <div className="flex-1 px-4">
-            <p className="text-sm">總付款 <span className="text-lg text-brand">{money(subtotal + shipping)}</span></p>
-            {submitError && <p role="alert" className="text-xs text-error">{submitError}{ownShopError && <> <Link to="/cart" className="underline">回購物車</Link></>}</p>}
-          </div>
-          <button onClick={() => void submit()} disabled={submitting}
-            className="flex h-12 min-w-32 items-center justify-center gap-2 bg-brand px-6 text-white transition hover:bg-brand-dark disabled:bg-disabled">
-            {submitting && <Loader2 size={16} className="animate-spin" />}
-            下訂單
-          </button>
-        </div>
-      )}
+          <TrayButton
+            tone="primary" aria-disabled={submitting || paymentLoading || undefined} aria-busy={submitting || undefined}
+            onClick={() => { if (!submitting && !paymentLoading) void submit(); }}
+          >
+            <span className="flex items-center gap-2">
+              {submitting && <Loader2 size={16} className="motion-safe:animate-spin" aria-hidden="true" />}
+              {online ? (payingOnline ? '付款中…' : payLabel) : '下訂單'}
+            </span>
+          </TrayButton>
+        </GlassTray>
+      </div>
 
       {sheetOpen && (
         <AddressSheet

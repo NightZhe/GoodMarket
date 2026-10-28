@@ -65,11 +65,12 @@ export default function LeaveDialog({
   const primary = leaveTone === 'primary';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 md:items-center" onKeyDown={onKeyDown}>
+    // 容器吃四邊安全區、面板避開中線帶（.fold-dialog／.fold-panel，D13）：一般姿態靠下，內橫／書本落右半；桌機網頁維持置中
+    <div className="fold-dialog fixed inset-0 z-50 items-end md:items-center md:p-4" onKeyDown={onKeyDown}>
       <div className="absolute inset-0 bg-black/45" aria-hidden="true" />
       <div
         role="alertdialog" aria-modal="true" aria-labelledby="leave-title" aria-describedby="leave-desc"
-        className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-popover"
+        className="fold-panel relative max-w-md rounded-lg bg-white p-6 shadow-popover md:mx-0 md:w-full md:max-h-none"
       >
         <h2 id="leave-title" className="text-lg font-bold">{title}</h2>
         <div id="leave-desc" className="mt-2 text-sm text-muted">{description}</div>

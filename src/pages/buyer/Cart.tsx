@@ -11,8 +11,11 @@ import QtyStepper from '../../components/QtyStepper';
 import EmptyState from '../../components/EmptyState';
 import Clauses from '../../components/checkout/Clauses';
 import { cartMarks, cartStockNote, defaultSelected, readPriceCheckState } from '../../lib/account/priceCheck';
+import { GlassTray, TrayButton } from '../../components/glass';
 import { money } from '../../lib/format';
 import type { CartItem } from '../../types';
+import { TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
+import { trayReserveStyle, useTrayHeightReport } from '../../lib/layout/trayReserve';
 
 const keyOf = (c: Pick<CartItem, 'productId' | 'variantId'>) => `${c.productId}|${c.variantId}`;
 
@@ -26,8 +29,11 @@ export default function Cart() {
 }
 
 function CartSkeleton() {
+  // 骨架的托盤也會隨文字放大換行變高：預留跟實測高度走，載入完成換成 CartView 時內容底部不跳
+  const [trayHeight, setTrayHeight] = useState(0);
+  const trayRef = useTrayHeightReport(setTrayHeight);
   return (
-    <div aria-busy="true" className="mx-auto max-w-6xl pb-28 md:px-4 md:pt-6">
+    <div aria-busy="true" style={trayReserveStyle(false, trayHeight)} className="mx-auto max-w-[600px] pb-(--tray-reserve) md:max-w-6xl md:px-4 md:pt-6">
       <p role="status" className="sr-only">載入中</p>
       <div className="space-y-2 md:space-y-4" aria-hidden="true">
         {[0, 1].map(i => (
@@ -44,12 +50,17 @@ function CartSkeleton() {
           </div>
         ))}
       </div>
-      {/* 結帳列照常顯示，但不顯示橘色大字：避免讓人以為購物車真的是 0 */}
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white">
-        <div className="flex items-center justify-end gap-3 py-2 pl-4">
-          <p className="text-sm text-muted">總金額 $ 0</p>
-          <span className="flex h-12 min-w-28 items-center justify-center self-stretch bg-disabled px-5 text-white">去買單 (0)</span>
-        </div>
+      {/* 結帳托盤照常顯示，但總額不用粗黑字：避免讓人以為購物車真的是 0 */}
+      <div ref={trayRef} className={`lg:hidden ${TRAY_RIGHT_HALF}`}>
+        <GlassTray label="結帳" variant="checkout">
+          <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-between gap-x-2" aria-hidden="true">
+            <span className="flex min-h-11 items-center gap-2 text-callout text-muted-2">
+              <input type="checkbox" disabled className="size-5" tabIndex={-1} />全選
+            </span>
+            <p className="ml-auto text-right text-footnote text-muted">總金額 $ 0</p>
+          </div>
+          <TrayButton tone="primary" disabled>去買單 (0)</TrayButton>
+        </GlassTray>
       </div>
     </div>
   );
@@ -65,6 +76,8 @@ function CartView() {
   const [priceCheck] = useState(() => readPriceCheckState(location.state));
   const [selected, setSelected] = useState<Set<string>>(() => new Set(defaultSelected(cart.map(keyOf), priceCheck)));
   const [retrying, setRetrying] = useState(false);
+  const [trayHeight, setTrayHeight] = useState(0);
+  const trayRef = useTrayHeightReport(setTrayHeight);
 
   // 別台裝置改了購物車、這裡背景重讀後有變：畫面已經會更新，另外對讀屏宣告一聲（只在進頁之後發生的變動）
   const firstTick = useRef(cartUpdateTick);
@@ -178,7 +191,7 @@ function CartView() {
   const allOn = allKeys.every(k => selected.has(k));
 
   return (
-    <div className="mx-auto max-w-6xl pb-28 md:px-4 md:pt-6 lg:pb-10">
+    <div style={trayReserveStyle(false, trayHeight)} className="mx-auto max-w-[600px] pb-(--tray-reserve) md:max-w-6xl md:px-4 md:pt-6 lg:pb-10">
       {liveRegion}
       <h1 className="hidden text-xl font-medium md:block">購物車</h1>
 
@@ -316,24 +329,22 @@ function CartView() {
         </aside>
       </div>
 
-      {/* 手機：底部固定結帳列 */}
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white lg:hidden">
-        <div className="flex items-center gap-3 py-2 pl-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" className="h-4 w-4 accent-brand" checked={allOn} onChange={e => toggle(allKeys, e.target.checked)} />
-            全選
-          </label>
-          <div className="ml-auto text-right">
-            <p className="text-sm">總金額 <span className="text-lg text-brand">{money(total)}</span></p>
+      {/* 手機：底部懸浮結帳托盤（C5）。桌機（lg 以上）用右側訂單摘要卡 */}
+      <div ref={trayRef} className={`lg:hidden ${TRAY_RIGHT_HALF}`}>
+        <GlassTray label="結帳" variant="checkout">
+          {/* 全選與總金額合成一格橫跨前兩欄：文字放大到放不下時它們自己換行，按鈕留在右側不被擠出托盤 */}
+          <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-between gap-x-2">
+            <label className="flex min-h-11 items-center gap-2 text-callout text-ink">
+              <input type="checkbox" className="size-5 accent-brand" checked={allOn} onChange={e => toggle(allKeys, e.target.checked)} />
+              全選
+            </label>
+            <p className="ml-auto text-right">
+              <span className="block text-footnote text-muted">總金額</span>
+              <span className="block text-headline font-bold text-ink">{money(total)}</span>
+            </p>
           </div>
-          <button
-            disabled={!count}
-            onClick={goCheckout}
-            className="h-12 min-w-28 self-stretch bg-brand px-5 text-white transition hover:bg-brand-dark disabled:bg-disabled"
-          >
-            去買單 ({count})
-          </button>
-        </div>
+          <TrayButton tone="primary" disabled={!count} onClick={goCheckout}>去買單 ({count})</TrayButton>
+        </GlassTray>
       </div>
     </div>
   );

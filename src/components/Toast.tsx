@@ -22,8 +22,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={show}>
       {children}
       {toast && (
-        // 外層負責置中與左右各留 16px，內層只做進出場動畫：兩者的 transform 不能疊在同一個元素上
-        <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center px-4">
+        // 外層負責置中：四邊各自吃安全區（側邊姿態右緣讓開直立軌），再各留 16px；內層只做進出場動畫：兩者的 transform 不能疊在同一個元素上。
+        // 不可點、不受中線帶規則限制（D13）
+        <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center pb-[calc(env(safe-area-inset-bottom)+1rem)] pl-[calc(var(--inset-l)+1rem)] pr-[calc(var(--inset-r)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)]">
           <div
             key={toast.key}
             role={toast.kind === 'error' ? 'alert' : 'status'}

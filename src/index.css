@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* App（Capacitor 殼，<html class="native">）內永遠不顯示桌機殼（iPhone Duo 適配 D4）：
+   Duo 內橫 951pt、iPad、Pro Max 橫向都會命中 md／lg，掉進桌機版面（文字連結列、頁尾、隱藏 tab bar）。
+   所以 md:／lg: 只在「不是 App」且視窗夠寬時生效；App 內一律是手機版面，內容寬度的調整靠連續規則（auto-fill、max-height），不靠斷點。
+   覆寫內建斷點變體：全站既有的 md:／lg: 不必逐檔改。 */
+@custom-variant md { @media (width >= 48rem) { &:where(html:not(.native) *) { @slot; } } }
+@custom-variant lg { @media (width >= 64rem) { &:where(html:not(.native) *) { @slot; } } }
+
 /* Design tokens — 與 Figma 設計檔（GoodShop）的 Variables 一一對應。
    改色請兩邊一起改：https://www.figma.com/design/mZQGGpGnwijMNRP2rkYr2S/GoodShop */
 @theme {
@@ -22,6 +29,13 @@
   --color-search: #efeff0; /* 搜尋框底 */
   --color-press: #e5e5ea; /* 列表列、灰膠囊按下 */
   --color-chevron: #c4c4c7; /* 列表 ›（裝飾，整列可點） */
+
+  /* 懸浮玻璃（iPhone Duo 適配，design-spec §9）：沒有新色相，只有玻璃專用的選中底、小字色與按下底 */
+  --color-tab-sel: #fbefea; /* 膠囊選中 pill、托盤次要鈕底。brand 對它 4.59 */
+  --color-tab-sel-press: #f4ddd3; /* 托盤次要鈕按下，字換 brand-dark（5.0 以上） */
+  --color-label2-glass: #5c5c60; /* 壓在內容上的玻璃裡的小字（膠囊未選中標籤）：對玻璃最差合成色 #dbdbdb 4.81，對白 6.66；muted 在這裡只有 3.78 */
+  --color-press-glass: rgb(229 229 234 / 0.92); /* 玻璃鈕按下的底 */
+  --color-press-rail: rgb(120 120 128 / 0.16); /* 軌與膠囊項目按下的底 */
 
   /* 語意色：成功（免運、已完成）、警告（庫存、折扣）、錯誤、資訊（運送中） */
   --color-success: #0d9488;
@@ -46,6 +60,7 @@
   --shadow-popover: 0 8px 24px -4px rgb(0 0 0 / 0.12);
   --shadow-bar-top: 0 -4px 12px rgb(0 0 0 / 0.05);
   --shadow-story: 0 4px 14px -4px rgb(0 0 0 / 0.18), 0 0 0 0.5px rgb(0 0 0 / 0.06); /* 只給故事卡 */
+  --shadow-glass: 0 4px 14px -4px rgb(0 0 0 / 0.18), 0 0 0 0.5px rgb(0 0 0 / 0.06); /* 懸浮玻璃（鈕、軌、膠囊、托盤）；數值同故事卡，另取語意名 */
 
   --radius-card: 12px;
   --radius-story: 16px;
@@ -59,6 +74,8 @@
   --text-title2--line-height: 28px;
   --text-title3: 20px;
   --text-title3--line-height: 25px;
+  --text-callout: 16px;
+  --text-callout--line-height: 21px;
   --text-headline: 17px;
   --text-headline--line-height: 22px;
   --text-body: 17px;
@@ -91,6 +108,132 @@ button:disabled { cursor: not-allowed; }
   .material-grouped { background: #f2f2f7; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 
+/* ===== 懸浮玻璃與姿態版面（iPhone Duo 適配；規格 design-spec §3、§4、§9，決策 decisions.md） =====
+   <html data-bars> 由 lib/layout/posture.ts 寫入：side-right／side-left＝系統欄在左右側直立（外蓋、展開橫向、書本、Split View），bottom＝其餘。
+   網頁版沒有 data-bars，等同 bottom。 */
+:root {
+  /* 狀態區底邊（實測 Duo 內橫狀態膠囊底 103，加 12 留白在 --rail-top）。預設 104；外螢幕三個姿態的狀態區位置不同，由 html[data-rail] 覆寫（下面） */
+  --sys-status-end: 104px;
+  --rail-top: calc(max(env(safe-area-inset-top), var(--sys-status-end)) + 12px);
+  --rail-bottom: max(env(safe-area-inset-bottom), 12px); /* 分頁組下緣離視窗底；外橫 secondary 要避開相機，由 html[data-rail] 覆寫 */
+  /* 直立軌幾何：數字在 components/glass/railGeometry.ts 還有一份（算層級用），railGeometry.test.ts 守著兩邊一致 */
+  --rail-cap-w: 48px; /* 直立軌膠囊寬，也是 L2 鈕邊長 */
+  --rail-center: 48px; /* 直立軌中心線距系統欄那側的螢幕邊（X10：對齊系統島，不用 --rail-w 的一半） */
+  --rail-pad: 6px; /* 膠囊上下內距 */
+  --rail-pad-solo: 2px; /* 工具組只有一顆時的上下內距：44＋2×2＝48，外殼成圓（X11） */
+  --cell-h: 50px; /* 分頁格高：圖示＋標籤（水平膠囊、軌 L0） */
+  --cell-h-compact: 44px; /* 分頁格高：純圖示（軌 L1） */
+  --rail-w: 0px; /* 側邊姿態才有值（下面）：軌欄寬，內容讓出這一欄 */
+  --tp-bottom: max(calc(env(safe-area-inset-bottom) + 8px), 12px); /* 膠囊與托盤下緣離視窗底 */
+  --pill-h: 62px;
+  --tray-h: 64px;
+  --pill-clearance: calc(var(--pill-h) + var(--tp-bottom) + 16px); /* 內容底部預留：膠囊高＋底距＋16（內直 120） */
+  --tray-clearance: calc(var(--tray-h) + var(--tp-bottom) + 16px); /* 托盤版（購物車等頁）122；托盤實際比 --tray-h 高（文字放大換行）時，頁面用 lib/layout/trayReserve 補上多出的高度 */
+  --stack-clearance: calc(var(--tray-h) + 8px + var(--pill-h) + var(--tp-bottom) + 16px); /* 托盤疊在膠囊上（賣家新增商品直向）192 */
+  --tabs-clearance: var(--pill-clearance); /* 有分頁導覽的頁，內容底部預留 */
+  --inset-l: env(safe-area-inset-left); /* 內容欄左右內縮：side 姿態時系統欄那一側換成軌欄寬 */
+  --inset-r: env(safe-area-inset-right);
+  /* 中線帶（雙畫面，D13、X2）：折線兩側各 24、總寬 48。推估，T0 量到折疊區實際寬度後調整。互動元件熱區不得進入 */
+  --midline-band: 48px;
+  --midline-half: calc(var(--midline-band) / 2);
+}
+html[data-bars='side-right'] { --rail-w: max(env(safe-area-inset-right), 68px); --inset-r: var(--rail-w); --tabs-clearance: env(safe-area-inset-bottom); }
+html[data-bars='side-left'] { --rail-w: max(env(safe-area-inset-left), 68px); --inset-l: var(--rail-w); --tabs-clearance: env(safe-area-inset-bottom); }
+/* 軌的版型（lib/layout/posture.ts 的 classifyRail 寫入）。數字是 T0 在 iPhone Duo 外螢幕的實測（decisions 第七節）：
+   外直：相機＋島＋時間＋島下方灰點佔 y 29–151（灰點底 150.7，七-3 更正） → 起點 163｜外橫 primary（欄在左）：只有相機 y 29–66 → 起點 78
+   外橫 secondary（欄在右，X9）：相機在欄底 y 400–436、欄頂沒有系統 UI → 起點貼頂 12，底緣留 74（視窗高 466，分頁組底在 y 392，離相機 8） */
+html[data-rail='outer-portrait'] { --sys-status-end: 151px; }
+html[data-rail='outer-landscape-primary'] { --sys-status-end: 66px; }
+html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bottom: 74px; }
+
+/* 買家外框：內容欄吃四邊安全區，各自處理、不假設兩側相等。全幅背景（頁面底色、安全區材質條）仍畫滿，只有內容被推進來 */
+.app-shell { padding-left: var(--inset-l); padding-right: var(--inset-r); }
+
+@layer components {
+  /* 玻璃材質＝.material 的配方（86% 白＋模糊），不模仿折射（D3）。放在 components 層，Tailwind 工具類（按下底、圓角）才蓋得過它 */
+  .glass { background: rgb(255 255 255 / 0.86); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); box-shadow: var(--shadow-glass), inset 0 0.5px 0 rgb(255 255 255 / 0.9); }
+
+  /* 單顆懸浮鈕 44×44 */
+  .glass-btn { position: relative; transition: transform 160ms cubic-bezier(.23,1,.32,1), background-color 160ms; }
+  .glass-btn:active { transform: scale(.97); background-color: var(--color-press-glass); transition-duration: 100ms; }
+
+  /* 直立軌（側邊姿態）：兩個獨立的膠囊，工具組貼上（--rail-top 起）、分頁組貼下，中間彈性空白；中心線距系統欄那側的螢幕邊 --rail-center（X10），左右姿態鏡像 */
+  .glass-capsule { position: fixed; z-index: 40; width: var(--rail-cap-w); border-radius: calc(var(--rail-cap-w) / 2); padding: var(--rail-pad) 0; display: flex; flex-direction: column; align-items: center; }
+  .glass-capsule--tools { top: var(--rail-top); }
+  .glass-capsule--solo { padding: var(--rail-pad-solo) 0; border-radius: 50%; }
+  html[data-bars='side-right'] .glass-capsule, html[data-bars='side-right'] .glass-rail-tabs { right: calc(var(--rail-center) - var(--rail-cap-w) / 2); }
+  html[data-bars='side-left'] .glass-capsule, html[data-bars='side-left'] .glass-rail-tabs { left: calc(var(--rail-center) - var(--rail-cap-w) / 2); }
+
+  /* 分頁組：外層固定在 --rail-bottom 上，裡面的 <nav> 是 L0／L1 的膠囊；L2 時外層只剩一顆 48 的鈕，<nav> 變成往上展開的浮層。
+     .glass-rail-room 是隱形探針：高度＝軌的區間（--rail-top 到 --rail-bottom），元件量它來選層級，幾何數字只放在 CSS。層級切換不做動畫（AC-14） */
+  .glass-rail-tabs { position: fixed; z-index: 40; bottom: var(--rail-bottom); width: var(--rail-cap-w); }
+  .glass-rail-body { width: 100%; border-radius: calc(var(--rail-cap-w) / 2); padding: var(--rail-pad) 0; display: flex; flex-direction: column; align-items: center; }
+  .glass-rail-room { position: fixed; top: var(--rail-top); bottom: var(--rail-bottom); width: 0; visibility: hidden; pointer-events: none; }
+  .glass-rail-trigger { position: relative; display: flex; width: var(--rail-cap-w); height: var(--rail-cap-w); align-items: center; justify-content: center; border-radius: 9999px; transition: background-color 160ms; }
+  .glass-rail-trigger:active { background-color: var(--color-press-glass); transition-duration: 0s; }
+  /* L2 浮層：從鈕往上展開（scale .96＋淡入，200ms），收起只淡出 150ms 不縮放（§7.4）。收起時不可見、不可點（元件另設 inert） */
+  .glass-rail-pop { position: absolute; left: 0; bottom: calc(100% + 8px); transform-origin: bottom center; visibility: hidden; opacity: 0; transform: scale(.96); transition: opacity 150ms ease, visibility 0s 150ms, transform 0s 150ms; }
+  .glass-rail-pop[data-open='true'] { visibility: visible; opacity: 1; transform: none; transition: opacity 200ms ease, transform 200ms cubic-bezier(.23,1,.32,1), visibility 0s; }
+  /* 軌裡的 GlassButton 不再自己有玻璃底，按下是 44 圓形灰底 */
+  .glass-capsule .glass-btn { background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .glass-capsule .glass-btn:active { transform: none; background-color: var(--color-press-rail); }
+
+  /* 水平姿態的分頁膠囊：不貼邊、只包五格、置中在內容欄、離底有間距 */
+  .glass-pill { position: fixed; z-index: 40; left: var(--inset-l); right: var(--inset-r); bottom: var(--tp-bottom); margin-inline: auto; width: max-content; height: var(--pill-h); border-radius: calc(var(--pill-h) / 2); padding: 6px; display: flex; }
+  .glass-pill--icons { height: 56px; border-radius: 28px; }
+
+  /* 托盤：購買／儲存（hug，兩顆時 272）與結帳（吃欄寬，上限 340）。置中在內容欄；放不下（文字放大）時按鈕換行上下排 */
+  .glass-tray { position: fixed; z-index: 40; left: var(--inset-l); right: var(--inset-r); bottom: var(--tp-bottom); margin-inline: auto; width: max-content; max-width: calc(100vw - var(--inset-l) - var(--inset-r) - 16px); min-height: var(--tray-h); border-radius: 32px; padding: 10px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
+  .glass-tray--checkout { width: auto; max-width: min(340px, calc(100vw - var(--inset-l) - var(--inset-r) - 16px)); display: grid; grid-template-columns: auto 1fr auto; gap: 8px; padding: 10px 10px 10px 12px; }
+  .glass-tray--above-pill { bottom: calc(var(--tp-bottom) + var(--pill-h) + 8px); }
+  .tray-btn { display: grid; height: 44px; min-width: 120px; flex-grow: 1; place-items: center; border-radius: 22px; padding: 0 18px; white-space: nowrap; transition: transform 160ms cubic-bezier(.23,1,.32,1), background-color 160ms; }
+  .tray-btn:active { transform: scale(.97); transition-duration: 100ms; }
+  .glass-tray--checkout .tray-btn { min-width: 0; flex-grow: 0; }
+
+  /* 半折（零偵測，C7、D13）：面板落在折線一側，不跨中線帶。沒有折線的裝置不套用：直向寬 < 620（外直、一般 iPhone），
+     橫向寬 < 760（外橫 678×466：系統欄 84 在側邊時右半只剩 231，放不下托盤與面板；內橫 951、書本都 ≥ 760）。
+     內直／佇立：只佔下半（超過時面板內捲動）；展開橫向／書本：只佔右半。T3／T4／T8 的面板與托盤掛 fold-panel／fold-tray 即可，不必知道門檻。
+     不套用時 fold-panel 是滿欄寬、限高 90dvh（utilities 層的 w-／max-h- 蓋得過它，所以預設值寫在這裡而不是呼叫端） */
+  .fold-panel { width: 100%; max-height: 90dvh; }
+  @media (min-width: 620px) and (orientation: portrait) {
+    .fold-panel { max-height: calc(50dvh - var(--midline-half)); overflow-y: auto; }
+  }
+  @media (min-width: 760px) and (orientation: landscape) {
+    .fold-panel { margin-left: auto; margin-right: var(--inset-r); width: calc(50vw - var(--midline-half) - var(--inset-r)); }
+    /* 底部托盤落在右半：把內容欄左緣挪到右半的中線帶外緣再內縮 20，右緣（軌欄左側）也內縮 20（design-spec §6.2：右頁 519.5→847），
+       托盤自己置中在剩下的右半。右緣不能改 --inset-r（自己引用自己會失效），所以直接推 .glass-tray 的 right；
+       最大寬再扣掉這 20，結帳托盤在內橫算出 311.5（不是 340） */
+    .fold-tray { --inset-l: calc(50vw + var(--midline-half) + 20px); }
+    .fold-tray .glass-tray { right: calc(var(--inset-r) + 20px); max-width: calc(100vw - var(--inset-l) - var(--inset-r) - 36px); }
+    .fold-tray .glass-tray--checkout { max-width: min(340px, calc(100vw - var(--inset-l) - var(--inset-r) - 36px)); }
+  }
+
+  /* 確認對話框（alertdialog）的外層容器，與內層 .fold-panel 成對（SellerProducts 的刪除確認、LeaveDialog）：四邊各吃安全區（至少 24），
+     內容限定在折線一側（D13）：直向 ≥ 620 靠下（內直、佇立；一般姿態保持置中，LeaveDialog 的 items-end 是 utilities 層，蓋得過這條），
+     橫向 ≥ 760 落在右半（面板寬扣掉的是容器右內距 max(24, 軌欄)，不是軌欄本身，所以這裡重算寬度，欄在左側時也不會碰到中線帶）。
+     桌機網頁（md 以上）請在呼叫端補 md:items-center、面板補 md:mx-0 md:w-full md:max-h-none 回到置中 */
+  .fold-dialog { display: flex; align-items: center; justify-content: center; padding: max(24px, env(safe-area-inset-top)) max(24px, var(--inset-r)) max(24px, env(safe-area-inset-bottom)) max(24px, var(--inset-l)); }
+  @media (min-width: 620px) and (orientation: portrait) {
+    .fold-dialog { align-items: flex-end; }
+  }
+  @media (min-width: 760px) and (orientation: landscape) {
+    .fold-dialog > .fold-panel { margin-left: auto; margin-right: 0; width: calc(50vw - var(--midline-half) - max(24px, var(--inset-r))); }
+  }
+
+  /* 減少動態：實心白、不縮放（AC-14）。減少透明度：Safari／WKWebView 不一定認得這個 media feature（D10），認得就降級，不認得就靠 86% 白。
+     放在 components 層裡：未分層的規則會蓋過分層的「軌裡的鈕沒有底」「按下底」 */
+  @media (prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce) {
+    .glass { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .glass-btn, .glass-btn:active, .tray-btn, .tray-btn:active { transition: none; transform: none; }
+    /* L2 浮層：減少動態時開關都只淡入淡出 150ms，不縮放（§7.4） */
+    .glass-rail-pop, .glass-rail-pop[data-open='true'] { transform: none; transition: opacity 150ms ease, visibility 0s; }
+    .glass-rail-pop:not([data-open='true']) { transition: opacity 150ms ease, visibility 0s 150ms; }
+    .glass-rail-trigger { transition: none; }
+  }
+}
+
 /* 頁面（文件）捲軸全站隱藏：只藏視覺，仍可捲動。內層捲動容器（橫滑列等）用 .no-scrollbar 各自處理 */
 html { scrollbar-width: none; }
 html::-webkit-scrollbar { display: none; }
@@ -110,12 +253,20 @@ html::-webkit-scrollbar { display: none; }
 /* 登入面板：手機從底部滑上來；桌機是置中對話框，只淡入（跟遮罩一樣） */
 .animate-auth-panel { animation: fade-in .2s ease-out; }
 @media (max-width: 767px) { .animate-auth-panel { animation: sheet-up .28s cubic-bezier(.32,.72,0,1); } }
+/* App 內沒有桌機版面（md: 已停用），登入面板在任何寬度都是底部面板，動畫要跟著 */
+html.native .animate-auth-panel { animation: sheet-up .28s cubic-bezier(.32,.72,0,1); }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade, .animate-toast { animation: none; }
-  .animate-sheet, .animate-auth-panel { animation: fade-in .15s ease-out; }
+  .animate-sheet, .animate-auth-panel, html.native .animate-auth-panel { animation: fade-in .15s ease-out; }
 }
 
+/* App 內（WKWebView）輸入框字級不得小於 16px：iOS 聚焦字級小於 16px 的輸入框會把整頁自動放大（全站輸入框多用 text-sm＝14px），
+   放大後收鍵盤、換頁都不復原，內橫右側直立軌會被擠出畫面（QA 第二輪 B5）。不改 viewport meta（maximum-scale／user-scalable=no 會擋住使用者自己縮放，違反無障礙底線），改把字級提上來。
+   寫在 @layer 之外：Tailwind 的 text-sm 在 utilities 層，未分層規則一律勝過分層規則，不必拉高優先序。
+   已經 ≥16px 的 Tailwind 字級（text-lg 以上；text-base 本來就是 1rem）不動，免得把驗證碼欄（text-xl）縮小。用 rem：跟著使用者的文字大小設定放大，不會縮到 16px 以下。
+   不含勾選、單選、拉桿、按鈕、檔案、顏色等沒有文字游標的 type：它們不會觸發放大，改字級只會動到按鈕上的字。網頁版（非 native）不套用。 */
+html.native :is(textarea, select, input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"], [type="reset"], [type="file"], [type="image"], [type="color"], [type="hidden"])):not(.text-lg, .text-xl, .text-2xl, .text-3xl, .text-4xl) { font-size: 1rem; }
 /* 綠界綁卡欄位是站內付 SDK 畫進頁面的同頁 DOM（不是 iframe）。它預設字級 15px：輸入框小於 16px 時，iOS Safari 聚焦會自動放大頁面；預設高 41px，觸控目標要 ≥44 */
 #ECPayPayment input { font-size: 1rem; min-height: 2.75rem; }
 @media (prefers-reduced-motion: reduce) { #ECPayPayment *, #ECPayPayment *::before, #ECPayPayment *::after { animation: none !important; transition: none !important; } }
