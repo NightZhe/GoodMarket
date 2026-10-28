@@ -72,7 +72,7 @@ export function toInput(a: PendingAction): PendingInput {
     case 'add_to_cart':
     case 'buy_now': return { kind: a.kind, productId: a.productId, variantId: a.variantId, qty: a.qty };
     case 'checkout': return { kind: 'checkout', items: a.items, fromCart: a.fromCart, payment: a.payment, cardId: a.cardId, address: a.address };
-    case 'goto': return { kind: 'goto' };
+    case 'goto': return { kind: 'goto', to: a.returnTo };
   }
 }
 

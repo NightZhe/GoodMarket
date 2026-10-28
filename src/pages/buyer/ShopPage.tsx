@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Ban } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import ChatEntryButton from '../../components/chat/ChatEntryButton';
+import { newChatPath } from '../../lib/chat/nav';
 import ProductCard from '../../components/ProductCard';
 import EmptyState from '../../components/EmptyState';
 import { pillButton } from '../../components/pillButton';
@@ -56,12 +58,13 @@ function ShopView({ shop }: { shop: Shop }) {
   return (
     <div className="mx-auto max-w-6xl md:px-4 md:pt-6">
       <section className="px-5 pt-2 md:px-0">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <LetterAvatar name={shop.name} size={64} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1 basis-32">
             <h1 className="truncate text-title2 font-bold text-ink">{shop.name}</h1>
             <p className="text-subhead text-muted">{shop.location}</p>
           </div>
+          <ChatEntryButton shopId={id} shopName={shop.name} to={newChatPath({ shopId: id })} variant="pill" />
         </div>
         <dl className="mt-4 grid grid-cols-3 border-y-[0.5px] border-separator py-2.5 text-center md:max-w-md">
           <Stat label="商品" value={String(list.length)} />

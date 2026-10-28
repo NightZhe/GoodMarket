@@ -5,6 +5,12 @@ import { reduceMotion } from '../../lib/ui/scroll';
 
 interface Props {
   paths: string[];
+  /** 路徑 → 圖片網址。預設是評價照片（公開 bucket）；聊聊是私有 bucket 的簽名網址，由呼叫端傳入 */
+  urlFor?: (path: string) => string;
+  /** 圖片載入失敗、使用者按「重試」時呼叫（聊聊用來重換過期的簽名網址）。沒給就在網址後面加 ?r= 重新請求（評價的做法） */
+  onReload?: (path: string) => void;
+  /** 對話框名稱與每張圖的 alt／朗讀前綴；預設「評價照片」 */
+  noun?: string;
   startIndex: number;
   /** 關閉後把焦點還給原本點的縮圖 */
   returnFocusTo: HTMLElement | null;
@@ -18,7 +24,7 @@ interface Props {
  * 全螢幕遮罩蓋到螢幕邊，但右上關閉鈕要讓開直立軌與系統欄：頂列左右各自吃 --inset-l／--inset-r（側邊姿態時系統欄那側＝軌欄寬）。
  * 關閉鈕貼右緣、計數貼左緣，都不在水平或垂直的中線帶（D13）內。
  */
-export default function PhotoLightbox({ paths, startIndex, returnFocusTo, onClose }: Props) {
+export default function PhotoLightbox({ paths, urlFor = reviewPhotoUrl, onReload, noun = '評價照片', startIndex, returnFocusTo, onClose }: Props) {
   const total = paths.length;
   const [index, setIndex] = useState(startIndex);
   const scroller = useRef<HTMLDivElement>(null);
@@ -85,7 +91,7 @@ export default function PhotoLightbox({ paths, startIndex, returnFocusTo, onClos
 
   return (
     <div
-      role="dialog" aria-modal="true" aria-label="評價照片檢視" onKeyDown={onKeyDown}
+      role="dialog" aria-modal="true" aria-label={`${noun}檢視`} onKeyDown={onKeyDown}
       className="animate-fade fixed inset-0 z-[60] flex flex-col bg-black/90"
     >
       <div className="flex items-center justify-between pl-[max(0.5rem,var(--inset-l))] pr-[max(0.5rem,var(--inset-r))] pt-[max(env(safe-area-inset-top),0.5rem)] text-white">
@@ -115,7 +121,7 @@ export default function PhotoLightbox({ paths, startIndex, returnFocusTo, onClos
                   <p className="text-sm">照片無法載入</p>
                   <button
                     type="button"
-                    onClick={() => { setState(s => { const n = { ...s }; delete n[i]; return n; }); setRetry(r => ({ ...r, [i]: (r[i] ?? 0) + 1 })); }}
+                    onClick={() => { setState(s => { const n = { ...s }; delete n[i]; return n; }); if (onReload) onReload(p); else setRetry(r => ({ ...r, [i]: (r[i] ?? 0) + 1 })); }}
                     className="min-h-11 px-4 text-sm underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                   >
                     重試
@@ -127,8 +133,8 @@ export default function PhotoLightbox({ paths, startIndex, returnFocusTo, onClos
                     <LoaderCircle size={28} aria-hidden="true" className="absolute text-white/70 motion-safe:animate-spin" />
                   )}
                   <img
-                    src={`${reviewPhotoUrl(p)}${retry[i] ? `?r=${retry[i]}` : ''}`}
-                    alt={`評價照片 ${i + 1}，共 ${total} 張`}
+                    src={`${urlFor(p)}${retry[i] ? `?r=${retry[i]}` : ''}`}
+                    alt={`${noun} ${i + 1}，共 ${total} 張`}
                     onLoad={() => setState(s => ({ ...s, [i]: 'loaded' }))}
                     onError={() => setState(s => ({ ...s, [i]: 'error' }))}
                     className="max-h-full max-w-full object-contain"
@@ -157,7 +163,7 @@ export default function PhotoLightbox({ paths, startIndex, returnFocusTo, onClos
           </>
         )}
       </div>
-      <p role="status" className="sr-only">評價照片 {index + 1}，共 {total} 張</p>
+      <p role="status" className="sr-only">{noun} {index + 1}，共 {total} 張</p>
     </div>
   );
 }
