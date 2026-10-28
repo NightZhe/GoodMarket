@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import { isNative } from './native/platform';
+import { authOptions } from './auth/clientOptions';
+import { nativeSessionStore } from './native/sessionStore';
 
 // 金鑰從環境變數來。anon key 是設計上可公開的：資料安全靠 Supabase 的
 // Row Level Security（supabase/schema.sql），不是靠把這把金鑰藏起來。
@@ -9,10 +12,12 @@ export const isConfigured = Boolean(url && anonKey);
 export const supabaseUrl = url ?? '';
 export const supabaseAnonKey = anonKey ?? '';
 
-// 本站是 hash 路由，implicit 流程把 token 接在 # 後面，會跟路由打架，所以用 PKCE（回跳網址是 ?code=）。
-// detectSessionInUrl 關掉：?code= 由 AuthBoot 在路由掛載之前自己換（要能顯示「登入中」、處理失敗與取消）。
+// auth 設定（PKCE、不自動抓 ?code=）集中在 auth/clientOptions.ts。
+// App 內（keep-signed-in T1）：session 改存手機安全儲存（iOS Keychain／Android KeyStore），由 native/sessionStore 的轉接器接手，
+// supabase-js 寫的所有 key（session、PKCE code verifier）都走它。isNative() 是同步判斷，client 建立時就能決定。
+// 網頁版：不建轉接器，維持 supabase-js 預設（localStorage），設定與之前完全相同。
 export const supabase = createClient(url ?? 'https://placeholder.supabase.co', anonKey ?? 'placeholder', {
-  auth: { persistSession: true, autoRefreshToken: true, flowType: 'pkce', detectSessionInUrl: false },
+  auth: authOptions(isNative() ? nativeSessionStore() : null),
 });
 
 /** Supabase 回傳 snake_case，App 內部一律 camelCase，轉換集中在這裡 */
