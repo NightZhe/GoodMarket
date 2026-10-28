@@ -12,16 +12,17 @@ const TABS: { key: SellerTabKey; to: string }[] = [
   { key: 'reviews', to: '/seller/reviews' },
 ];
 
-/** 物流店到店與地址表單頁會跳出鍵盤，固定在底部的導覽在 iOS 鍵盤開關時會跳，所以這幾頁不顯示分頁導覽（含直立軌，AC-25） */
-export const hidesNav = (pathname: string): boolean => /^\/seller\/logistics\/(stores|address)(\/|$)/.test(pathname);
+/** 物流店到店與地址表單頁、新增銀行帳號與簡訊驗證頁會跳出鍵盤，固定在底部的導覽在 iOS 鍵盤開關時會跳，所以這幾頁不顯示分頁導覽（含直立軌，AC-25） */
+export const hidesNav = (pathname: string): boolean =>
+  /^\/seller\/logistics\/(stores|address)(\/|$)/.test(pathname) || /^\/seller\/payout\/bank-accounts\/(new|verify)/.test(pathname);
 
 /** 新增與編輯商品：底部有懸浮儲存托盤（內容底部要為它預留空間）。匯入精靈（/products/import）不算 */
 export const hasSaveTray = (pathname: string): boolean => /^\/seller\/products\/(new|[^/]+\/edit)$/.test(pathname);
 
-/** 不在自己分頁路徑上、但屬於某分頁的流程：匯入精靈屬「我的商品」，物流設定屬「賣場總覽」 */
+/** 不在自己分頁路徑上、但屬於某分頁的流程：匯入精靈屬「我的商品」，物流設定與銀行帳號屬「賣場總覽」 */
 function proxyTab(pathname: string): SellerTabKey | null {
   if (pathname.startsWith('/seller/products/import')) return 'products';
-  if (pathname.startsWith('/seller/logistics')) return 'overview';
+  if (pathname.startsWith('/seller/logistics') || pathname.startsWith('/seller/payout')) return 'overview';
   return null;
 }
 

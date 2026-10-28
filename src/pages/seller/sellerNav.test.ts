@@ -8,6 +8,11 @@ describe('hidesNav：哪些賣家頁不出現分頁導覽（膠囊與直立軌�
     expect(hidesNav('/seller/logistics/address')).toBe(true);
   });
 
+  it('新增銀行帳號、選銀行、簡訊驗證頁有鍵盤，導覽隱藏；銀行帳號列表本身有導覽', () => {
+    for (const p of ['/seller/payout/bank-accounts/new', '/seller/payout/bank-accounts/new/bank', '/seller/payout/bank-accounts/verify']) expect(hidesNav(p), p).toBe(true);
+    expect(hidesNav('/seller/payout')).toBe(false);
+  });
+
   it('物流設定列表本身與其他賣家頁都有導覽', () => {
     expect(hidesNav('/seller/logistics')).toBe(false);
     expect(hidesNav('/seller')).toBe(false);
@@ -52,6 +57,13 @@ describe('sellerTabRoutes：5 個分頁的導覽目標與選中', () => {
   it('物流設定列表：「賣場總覽」代為選中，點下去回總覽', () => {
     const tabs = at('/seller/logistics');
     expect(tabs.overview).toMatchObject({ to: '/seller/logistics', goTo: '/seller' });
+  });
+
+  it('銀行帳號頁（含它的子頁）：「賣場總覽」代為選中，點下去回總覽（AC-32）', () => {
+    for (const p of ['/seller/payout', '/seller/payout/bank-accounts/new']) {
+      expect(at(p).overview, p).toMatchObject({ to: p, goTo: '/seller' });
+    }
+    expect(at('/seller/payout').orders.to).toBe('/seller/orders');
   });
 
   it('編輯商品頁沒有任何分頁代選中', () => {

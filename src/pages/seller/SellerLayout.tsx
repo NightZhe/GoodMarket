@@ -1,8 +1,11 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ClipboardList, ExternalLink, LayoutDashboard, LogOut, Package, PlusCircle, Star, Truck, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, ClipboardList, ExternalLink, Landmark, LayoutDashboard, LogOut, Package, PlusCircle, Star, Truck, type LucideIcon } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { CancelSummaryProvider, pendingCount, useCancelSummary } from '../../store/CancelSummaryContext';
 import { ordersNavLabel } from '../../lib/payment/refundView';
+import { usePayoutState } from '../../lib/payment/useBankAccounts';
+import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
+import PayoutBadge from '../../components/payment/PayoutBadge';
 import { GlassButton, GlassCapsule, TabPill, type TabItem } from '../../components/glass';
 import { hasSaveTray, hidesNav, sellerTabRoutes, type SellerTabKey } from './sellerNav';
 
@@ -14,6 +17,8 @@ const NAV = [
   { to: '/seller/reviews', label: '評價管理', icon: Star, end: true },
   // 物流設定的新增／編輯表單是 /seller/logistics 底下的子路由，側欄要保持選中（end: false）
   { to: '/seller/logistics', label: '物流設定', icon: Truck, end: false },
+  // 銀行帳號只在線上付款開關打開時出現；新增流程是 /seller/payout 底下的子路由（end: false）
+  { to: '/seller/payout', label: '銀行帳號', icon: Landmark, end: false },
 ];
 
 export default function SellerLayout() {
@@ -33,6 +38,8 @@ function SellerLayoutView() {
   const isOn = (to: string, isActive: boolean) =>
     isActive || (to === '/seller/products' && pathname.startsWith('/seller/products/import'));
   const hideNav = hidesNav(pathname);
+  const { enabled: payEnabled } = usePaymentConfig();
+  const payoutState = usePayoutState(payEnabled);
   const shop = myShop!; // SellerGate 已確保登入且有店
   const toShip = shopOrders.filter(o => o.status === 'to_ship').length;
 
@@ -84,11 +91,12 @@ function SellerLayoutView() {
 
       <div className="app-shell flex">
         <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 border-r border-line bg-white p-3 md:block">
-          {NAV.map(n => (
+          {NAV.filter(n => n.to !== '/seller/payout' || payEnabled).map(n => (
             <NavLink key={n.to} to={n.to} end={n.end}
               className={({ isActive }) => `mb-1 flex ${n.to === '/seller/orders' && pending > 0 ? 'flex-wrap ' : ''}items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition ${isOn(n.to, isActive) ? 'bg-brand-soft font-medium text-brand' : 'hover:bg-canvas'}`}>
               <n.icon size={18} />
               {n.label}
+              {n.to === '/seller/payout' && payoutState && <PayoutBadge state={payoutState} className="ml-auto" />}
               {n.to === '/seller/orders' && toShip > 0 && (
                 <span className="ml-auto rounded-full bg-brand px-1.5 text-xs leading-5 text-white">{toShip}</span>
               )}

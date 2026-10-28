@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CircleAlert, CircleCheck, CircleDashed, Clock, LoaderCircle } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
 import { useToast } from '../../components/Toast';
@@ -10,25 +10,10 @@ import { BlockedNavRow, DeleteNavRow, Group, NavRow, ROW, ROW_IN, SignedOut } fr
 import { clearGoto, rememberGoto, takeGoto } from '../../components/account/loginGoto';
 import { browserStores } from '../../lib/auth/pending';
 import { phoneOf } from '../../lib/auth/identity';
-import { MERCHANT_STATE_TEXT, type MerchantState } from '../../lib/payment/merchant';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
-import { useMerchantState } from '../../lib/payment/useMerchant';
 import { useOnline } from '../../lib/useOnline';
 import { pendingOf } from '../../lib/deletion/status';
 import { useDeletionStatus } from '../../lib/deletion/useDeletionStatus';
-
-const BADGE: Record<MerchantState, { Icon: typeof Clock; tone: string }> = {
-  none: { Icon: CircleDashed, tone: 'text-ink' },
-  review: { Icon: Clock, tone: 'text-info-text' },
-  active: { Icon: CircleCheck, tone: 'text-success-text' },
-  rejected: { Icon: CircleAlert, tone: 'text-error-text' },
-  suspended: { Icon: CircleAlert, tone: 'text-error-text' },
-};
-
-function MerchantBadge({ state }: { state: MerchantState }) {
-  const { Icon, tone } = BADGE[state];
-  return <span className={`inline-flex items-center gap-1 text-sm ${tone}`}><Icon size={14} aria-hidden="true" />{MERCHANT_STATE_TEXT[state].title}</span>;
-}
 
 const store = () => browserStores()[0] ?? null;
 
@@ -89,10 +74,9 @@ export default function Account() {
 }
 
 function SignedIn() {
-  const { user, signOutBuyer, myShop } = useStore();
-  // 線上付款開關關著時，「付款方式」「收款帳戶」兩個入口都不出現
+  const { user, signOutBuyer } = useStore();
+  // 線上付款開關關著時，「銀行帳號／信用卡」入口不出現
   const { enabled: payEnabled } = usePaymentConfig();
-  const merchantState = useMerchantState(payEnabled && myShop !== null);
   const { providers } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
@@ -152,7 +136,7 @@ function SignedIn() {
 
       <Group id="acct-me" title="我的帳戶">
         <NavRow to="/account/profile" label="個人檔案" />
-        {payEnabled && <NavRow to="/account/payment-methods" label="付款方式" />}
+        {payEnabled && <NavRow to="/account/payment-methods" label="銀行帳號／信用卡" />}
         <NavRow to="/account/addresses" label="地址" />
         <DeleteNavRow pending={pendingDeletion !== null} dueDate={pendingDeletion?.due_date ?? ''} />
       </Group>
@@ -162,15 +146,6 @@ function SignedIn() {
       </Group>
       <Group id="acct-seller" title="賣家">
         <NavRow to="/seller" label="賣家中心" />
-        {payEnabled && myShop && (
-          <NavRow to="/account/payout" label="收款帳戶">
-            {/* 狀態文字與圖示一起顯示（不只靠顏色）；200% 時狀態換到標籤下面。還沒讀到狀態就不顯示 */}
-            <span className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
-              <span>收款帳戶</span>
-              {merchantState && <MerchantBadge state={merchantState} />}
-            </span>
-          </NavRow>
-        )}
       </Group>
       <Group id="acct-privacy" title="隱私">
         <NavRow to="/privacy" label="隱私政策" />

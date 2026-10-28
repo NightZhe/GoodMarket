@@ -62,7 +62,7 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
   const hideTabBar = pathname.startsWith('/product/') || pathname === '/checkout' || pathname === '/cart'
     || /^\/orders\/[^/]+\/review$/.test(pathname) || pathname.startsWith('/account/addresses/')
     // 綁卡頁有鍵盤（綠界欄位）、付款結果頁要專心看結果
-    || pathname === '/account/payment-methods/new' || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/');
+    || pathname === '/account/payment-methods/new' || pathname.startsWith('/account/bank-accounts/') || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/');
 
   const header = headerFor(pathname);
   // 側邊姿態（系統欄在左右側直立）：控制搬進直立軌，第二層頁不顯示頂部導覽列，改成內容頂端的行內標題（design-spec §3.3）

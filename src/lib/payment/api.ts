@@ -12,6 +12,8 @@ import type {
   SellerCancelReason, SellerEcpayMerchantRow, SellerOrderPayoutRow, ShopCancelSummary, ShopOnlinePayable, ShopOrderRefundRow,
 } from './types';
 import { chunkIds } from './payoutView';
+import { parseLogosEnabled } from '../../data/bankLogos';
+import { parseBankAccountList, type AddBankRequest, type BankAccountList } from './bankAccount';
 
 // 線上付款的前端呼叫（介面見 .work/account-payment-methods/interface-payment.md）。
 // 前端永遠碰不到 BindCardID、卡號、HashKey：卡號只輸入在綠界的欄位，這裡只傳「綁卡編號」與綠界 SDK 給的一次性代碼。
@@ -41,6 +43,12 @@ export async function fetchPaymentConfig(): Promise<boolean> {
   const { data, error } = await supabase.rpc('get_payment_config');
   if (error) return fail(error);
   return Boolean((data as { onlinePaymentEnabled?: boolean } | null)?.onlinePaymentEnabled);
+}
+
+/** 銀行 logo 的伺服器端開關（get_bank_ui_config）。讀不到、舊資料庫、不是明確的 true：一律當作關（純文字） */
+export async function fetchBankLogosEnabled(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('get_bank_ui_config');
+  return !error && parseLogosEnabled(data);
 }
 
 // ── 卡片 ──
@@ -101,6 +109,35 @@ export async function fetchMyMerchant(): Promise<SellerEcpayMerchantRow | null> 
 }
 export const submitMerchantId = (id: string) => rpc<{ status: string }>('submit_seller_ecpay_merchant', { p_merchant_id: id });
 
+// ── 銀行帳號（掛人、最多 5 筆、不可修改；介面見 .work/seller-bank-account/interface-bank-account-v2.md）──
+// 前端拿不到完整帳號與密文：讀只有摘要；新增時整串明文只走「瀏覽器 → bank-account-add」這一段，這裡不記錄、不快取。
+/** 讀列表。RPC 不存在（資料庫未升級）→ AccountError 'backend_missing'；沒登入 → 'auth' */
+export async function fetchMyBankAccounts(): Promise<BankAccountList> {
+  const { data, error } = await supabase.rpc('get_my_bank_accounts');
+  if (error) return fail(error);
+  return parseBankAccountList(data);
+}
+
+/** 新增；成功回「更新後的完整列表」與新帳號 id。Edge Function 錯誤→PaymentError（code 是契約 3.2 的碼） */
+export async function addBankAccount(input: AddBankRequest): Promise<{ id: string; list: BankAccountList }> {
+  const out = await call<{ ok: true; id?: unknown; limit?: unknown; accounts?: unknown }>('bank-account-add', { ...input });
+  if (typeof out.id !== 'string') throw new PaymentError('bank-account-add: bad response', 'server', null, null);
+  return { id: out.id, list: parseBankAccountList({ limit: out.limit, accounts: out.accounts }) };
+}
+
+/** 設為撥款帳號（簡訊再驗證由資料庫讀 JWT）；回更新後的完整列表 */
+export async function setPayoutBankAccount(id: string): Promise<BankAccountList> {
+  const { data, error } = await supabase.rpc('set_payout_bank_account', { p_id: id });
+  if (error) return fail(error);
+  return parseBankAccountList(data);
+}
+
+export async function deleteBankAccount(id: string): Promise<BankAccountList> {
+  const { data, error } = await supabase.rpc('delete_my_bank_account', { p_id: id });
+  if (error) return fail(error);
+  return parseBankAccountList(data);
+}
+
 // ── 退款：已付款線上訂單的取消（介面 8.1、8.2；全部是 RPC，沒有 Edge Function）──
 const noteOrNull = (note: string | null | undefined): string | null => note?.trim() || null;
 
@@ -137,3 +174,7 @@ export function payErrorText(e: unknown, fallback: string): string {
   const known = code ? paymentErrorText(new PaymentError('', 'server', code, null), '') : '';
   return known || accountErrorText(e, fallback);
 }
+
+/** 收款帳戶的後端還沒升級：RPC 不存在（PGRST202）或 Edge Function 404。畫面顯示「收款帳戶暫時無法使用」，不退回舊表單 */
+export const isBankUnavailable = (e: unknown): boolean =>
+  (e instanceof AccountError && e.kind === 'backend_missing') || (e instanceof PaymentError && e.status === 404);

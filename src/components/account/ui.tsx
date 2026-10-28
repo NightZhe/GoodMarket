@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from 'react';
+import type { MouseEvent, ReactNode, Ref } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, CircleAlert, LoaderCircle } from 'lucide-react';
 
@@ -48,7 +48,7 @@ export function FieldError({ id, children }: { id: string; children?: string }) 
  * -mx-4 抵掉 SubPage 的左右內距，讓材質底填滿容器寬。onBack／titleRef 給有自己離開流程與焦點管理的頁（綁定手機）
  */
 export function SubHeader({ to, backLabel, backText = '我的', title, onBack, titleRef }: {
-  to: string; backLabel: string; backText?: string; title: string; onBack?: () => void; titleRef?: Ref<HTMLHeadingElement>;
+  to: string; backLabel: string; backText?: string; title: string; onBack?: (e: MouseEvent<HTMLAnchorElement>) => void; titleRef?: Ref<HTMLHeadingElement>;
 }) {
   return (
     <header className="material-grouped sticky top-0 z-30 -mx-4 mb-2 border-b-[0.5px] border-separator">
