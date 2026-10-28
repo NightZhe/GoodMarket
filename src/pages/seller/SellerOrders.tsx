@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Banknote, CalendarClock, CircleAlert, CircleCheck, CircleDashed, ChevronDown, Clock, CreditCard, Info, MapPin, Phone, Receipt, Truck, User } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import { useChat } from '../../store/ChatContext';
+import ContactBuyerLink from './ContactBuyerLink';
 import { useRefreshOnVisible } from '../../store/ReviewsContext';
 import { orderActionErrorMessage } from '../../lib/orders/errors';
 import LeaveDialog from '../../components/import/LeaveDialog';
@@ -225,6 +227,7 @@ export default function SellerOrders() {
   const { enabled: payEnabled } = usePaymentConfig();
   const merchantState = useMerchantState(payEnabled);
   const online = useOnline();
+  const chatOn = useChat().availability === 'ok';
   const cancelSummary = useCancelSummary();
   // 取消申請與退款的細節。沒有線上付款訂單、開關也關著時不讀（舊資料庫沒有這支函式，畫面與上線前逐字相同）；退款不跟開關走（R-RF9）
   const hasOnlineOrders = shopOrders.some(o => o.payment === 'ecpay_card');
@@ -440,7 +443,11 @@ export default function SellerOrders() {
               )}
 
               <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-4 py-3">
-                <span className="mr-auto text-xs text-muted">{sellerPayLabel(o.payment, payEnabled, rv.refundStatus)}・運費 {money(o.shippingFee)}</span>
+                {/* 「聯絡買家」放在收合的卡片腳（不在運送進度展開區裡），收合與展開都看得到（§8.6）；降級時不畫 */}
+                <div className="mr-auto flex flex-col items-start gap-1.5">
+                  {chatOn && <ContactBuyerLink orderId={o.id} orderNo={o.orderNo} />}
+                  <span className="text-xs text-muted">{sellerPayLabel(o.payment, payEnabled, rv.refundStatus)}・運費 {money(o.shippingFee)}</span>
+                </div>
                 <span className="text-sm">訂單金額 <span className="text-lg font-medium text-brand">{money(o.total)}</span></span>
                 {o.status === 'shipping' && (
                   <MilestoneButtons
