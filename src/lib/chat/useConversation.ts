@@ -171,7 +171,7 @@ export function useConversation(side: ChatSide, target: OpenTarget, onCreated?: 
         }
         if (!alive) return;
         applyConvId(id);
-        // 這條對話已經送過這張卡（回前景重讀、重新整理網址）就不再待送出
+        // 最後一則就是這張卡（回前景重讀、重新整理網址）才不再待送出
         setPendingCard(pendingCardFor(card, page?.messages ?? [], [...entries.current.values()]));
         if (page) {
           applyMeta(page);
