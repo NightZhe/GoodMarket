@@ -55,14 +55,14 @@ function SellerLayoutView() {
   // 頂部：色帶（只蓋安全區）＋懸浮控制列（SellerTopBar）。有 SubHeader 的三頁（U-8 方案 A）色帶加高到安全區＋52、改灰，右群組坐在這一列，SubHeader 緊接其下
   const posture = usePosture();
   const ownBack = hasOwnBackHeader(pathname);
-  const subTall = SUB_HEADER_LAYOUT === 'band' && ownBack;
+  const bandTall = SUB_HEADER_LAYOUT === 'band' && ownBack;
   const tabs = buildSellerTabs({ pathname, toShip, pending, chatBadge, goTo: navigate });
 
   return (
-    <div {...{ [SELLER_LAYOUT_MARK]: '' }} className={`min-h-dvh bg-[#f6f6f6] ${subTall ? '[--seller-band-h:calc(env(safe-area-inset-top)+52px)] md:[--seller-band-h:env(safe-area-inset-top)]' : '[--seller-band-h:env(safe-area-inset-top)]'}`}>
+    <div {...{ [SELLER_LAYOUT_MARK]: '' }} className={`min-h-dvh bg-[#f6f6f6] ${bandTall ? '[--seller-band-h:calc(env(safe-area-inset-top)+52px)] md:[--seller-band-h:env(safe-area-inset-top)]' : '[--seller-band-h:env(safe-area-inset-top)]'}`}>
       {/* 上緣安全區材質色帶（與買家端同款）：蓋住狀態列／動態島，內容捲上來從底下穿過。桌機高度 0。
           --seller-band-h 是色帶高度，SubHeader 的黏頂位置也讀它（index.css 的 [data-seller-layout] 規則） */}
-      <div aria-hidden="true" className={`${subTall ? 'material-grouped' : 'material'} sticky top-0 z-40 h-(--seller-band-h)`} />
+      <div aria-hidden="true" className={`${bandTall ? 'material-grouped' : 'material'} sticky top-0 z-40 h-(--seller-band-h)`} />
       {/* 聊聊對話頁在手機上整頁都是對話：自己有導覽列與輸入列，懸浮控制列藏起來（鍵盤開著時不吃高度），只留上面的色帶；桌機雙欄照常有 */}
       {!chatThreadFull && <SellerTopBar showHome={showsHomeButton(pathname, posture)} forceCollapse={SUB_HEADER_LAYOUT === 'collapse' && ownBack} />}
 
@@ -96,7 +96,7 @@ function SellerLayoutView() {
         </aside>
 
         {/* 底部預留：有分頁導覽的頁＝膠囊高＋底距（側邊姿態只留系統底緣）；新增／編輯商品頁由 ProductForm 自己依托盤預留；物流表單頁不顯示導覽 */}
-        <main className={`min-w-0 flex-1 ${chatThreadFull ? 'p-0' : `p-3 md:p-6 ${subTall ? 'pt-0' : 'pt-15'} md:pt-15 ${hideNav || hasSaveTray(pathname) ? 'pb-6' : 'pb-[max(var(--tabs-clearance),1.5rem)] md:pb-6'}`}`}>
+        <main className={`min-w-0 flex-1 ${chatThreadFull ? 'p-0' : `px-3 md:px-6 ${bandTall ? 'pt-0 md:pt-15' : 'pt-15'} ${hideNav || hasSaveTray(pathname) ? 'pb-6' : 'pb-[max(var(--tabs-clearance),1.5rem)] md:pb-6'}`}`}>
           <Outlet />
         </main>
       </div>

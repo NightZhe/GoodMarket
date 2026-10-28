@@ -285,5 +285,6 @@ html.native :is(textarea, select, input:not([type="checkbox"], [type="radio"], [
 @media (prefers-reduced-motion: reduce) { #ECPayPayment *, #ECPayPayment *::before, #ECPayPayment *::after { animation: none !important; transition: none !important; } }
 
 /* 賣家中心有 SubHeader 的三頁（物流兩張表單、收款帳戶；design.md U-8 方案 A）：頂部色帶加高到 --seller-band-h，SubHeader（買家「我的」子頁共用，不改它）黏在色帶正下方。
-   寫在 @layer 之外才蓋得過 Tailwind 的 top-0 與 native.css 的安全區規則；多一個 body 讓權重高於 native.css 那條 */
-body [data-seller-layout] header.material-grouped.sticky.top-0 { top: var(--seller-band-h, 0px); }
+   寫在 @layer 之外才蓋得過 Tailwind 的 top-0；native.css 那條（html.native header.material-grouped.sticky.top-0）權重是 (0,4,2)，
+   這裡加 html 與 body 兩個元素選擇器，權重 (0,4,3) 才真的高於它（不靠載入順序） */
+html body [data-seller-layout] header.material-grouped.sticky.top-0 { top: var(--seller-band-h, 0px); }

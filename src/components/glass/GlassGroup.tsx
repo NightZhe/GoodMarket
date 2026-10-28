@@ -94,7 +94,7 @@ export function GlassGroup({ label, items, collapseLabel = '更多', forceCollap
           >
             <Ellipsis size={22} strokeWidth={1.7} aria-hidden="true" />
           </button>
-          {open && <div aria-hidden="true" onClick={close} className="fixed inset-0 z-40" />}
+          {open && <div aria-hidden="true" onClick={() => { close(); triggerRef.current?.focus(); }} className="fixed inset-0 z-40" />}
           <div ref={popRef} id={popId} role="group" aria-label={label} data-open={open} inert={!open} className="glass-group-pop z-50">
             {items.map(item => (
               <Fragment key={item.key}>

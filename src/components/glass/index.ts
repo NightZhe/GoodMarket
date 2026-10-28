@@ -9,3 +9,4 @@ export { CountBadge } from './CountBadge';
 export type { TabItem } from './tabs';
 export { GlassGroup } from './GlassGroup';
 export type { GlassGroupItem, GlassGroupHandle } from './GlassGroup';
+export { useElementWidth } from './useElementWidth';

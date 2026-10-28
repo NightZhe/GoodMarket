@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, CircleUserRound, LogOut, Store, Truck } from 'lucide-react';
-import { GlassGroup, type GlassGroupHandle, type GlassGroupItem } from '../../components/glass';
-import { useElementWidth } from '../../components/glass/useElementWidth';
+import { GlassGroup, useElementWidth, type GlassGroupHandle, type GlassGroupItem } from '../../components/glass';
 import { useToast } from '../../components/Toast';
 import { useStore } from '../../store/StoreContext';
 import { HOME_BUTTON_CHROME, homeButtonCompact } from './sellerNav';

@@ -64,9 +64,12 @@ export const showsHomeButton = (pathname: string, posture: 'bottom' | 'side-left
 
 /**
  * 有 SubHeader 的三頁，頂部怎麼排（design.md U-8，使用者尚未回覆，照小u 預設 A）：
- *   'band'：A。色帶加高到「安全區＋52」改灰，右群組坐在這一列，SubHeader 緊接其下（SellerLayout 的 --seller-band-h 與 index.css 的 .seller-sub-top）。
- *   'collapse'：B。這三頁右上改收成「⋯」、SubHeader 加高到 52 垂直對齊。要切到 B：改這個常數，並把 SellerTopBar 的 forceCollapse 接上，
- *               SellerLayout 色帶不再加高（SUB_HEADER_LAYOUT !== 'band' 時 subTall 為 false），另補「SubHeader 52 高」的範圍 CSS（不改 components/account/ui.tsx）。
+ *   'band'：A（現況）。bandTall 為 true：SellerLayout 把 --seller-band-h 設成「安全區＋52」、色帶改灰，main 在手機 pt-0，
+ *            index.css 檔尾的 `html body [data-seller-layout] header…` 規則讓 SubHeader 黏在 --seller-band-h 下。右群組照常（forceCollapse 為 false）。
+ *   'collapse'：B（沒實作完）。目前切成 B 只會有這兩個效果：bandTall 變 false（色帶回一般高度、main 回 pt-15）、SellerLayout 傳 forceCollapse（右上收成「⋯」）。
+ *            還缺：(1) 這三頁的 SubHeader 要加高到 52 並垂直對齊「⋯」（範圍 CSS，不改 components/account/ui.tsx）；
+ *            (2) main 的 pt-15 會把 SubHeader 往下推 60，這三頁要改成 pt-0 並讓 SubHeader 黏頂位置回到安全區（現在 index.css 規則讀 --seller-band-h，B 下該變數是一般色帶高度，可沿用）；
+ *            (3) 刪掉或改寫 index.css 檔尾說明 A 的註解、並重新跑 AC-H15 截圖。
  */
 export const SUB_HEADER_LAYOUT: 'band' | 'collapse' = 'band';
 
