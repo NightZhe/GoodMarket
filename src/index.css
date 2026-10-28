@@ -261,6 +261,12 @@ html.native .animate-auth-panel { animation: sheet-up .28s cubic-bezier(.32,.72,
   .animate-sheet, .animate-auth-panel, html.native .animate-auth-panel { animation: fade-in .15s ease-out; }
 }
 
+/* App 內（WKWebView）輸入框字級不得小於 16px：iOS 聚焦字級小於 16px 的輸入框會把整頁自動放大（全站輸入框多用 text-sm＝14px），
+   放大後收鍵盤、換頁都不復原，內橫右側直立軌會被擠出畫面（QA 第二輪 B5）。不改 viewport meta（maximum-scale／user-scalable=no 會擋住使用者自己縮放，違反無障礙底線），改把字級提上來。
+   寫在 @layer 之外：Tailwind 的 text-sm 在 utilities 層，未分層規則一律勝過分層規則，不必拉高優先序。
+   已經 ≥16px 的 Tailwind 字級（text-lg 以上；text-base 本來就是 1rem）不動，免得把驗證碼欄（text-xl）縮小。用 rem：跟著使用者的文字大小設定放大，不會縮到 16px 以下。
+   不含勾選、單選、拉桿、按鈕、檔案、顏色等沒有文字游標的 type：它們不會觸發放大，改字級只會動到按鈕上的字。網頁版（非 native）不套用。 */
+html.native :is(textarea, select, input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"], [type="reset"], [type="file"], [type="image"], [type="color"], [type="hidden"])):not(.text-lg, .text-xl, .text-2xl, .text-3xl, .text-4xl) { font-size: 1rem; }
 /* 綠界綁卡欄位是站內付 SDK 畫進頁面的同頁 DOM（不是 iframe）。它預設字級 15px：輸入框小於 16px 時，iOS Safari 聚焦會自動放大頁面；預設高 41px，觸控目標要 ≥44 */
 #ECPayPayment input { font-size: 1rem; min-height: 2.75rem; }
 @media (prefers-reduced-motion: reduce) { #ECPayPayment *, #ECPayPayment *::before, #ECPayPayment *::after { animation: none !important; transition: none !important; } }
