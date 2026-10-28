@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Navigate, Outlet, useLocation, useMatch } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import ChatListView from '../../components/chat/ChatListView';
 import ConversationView from '../../components/chat/ConversationView';
 import SellerChatFrame from './SellerChatFrame';
@@ -69,6 +69,7 @@ export function SellerChatNew() {
 
 function SellerConversation({ target }: { target: OpenTarget }) {
   const split = useSplitLayout();
+  const navigate = useNavigate();
   const { getProduct, loading, shopOrders } = useStore();
   // 商品卡點了到買家前台的商品頁；訂單卡點了到賣家的訂單管理
   const cardTo = (c: ChatCard) => (c.type === 'product' ? `/product/${c.id}` : '/seller/orders');
@@ -90,6 +91,7 @@ function SellerConversation({ target }: { target: OpenTarget }) {
       ordersTo="/seller/orders"
       cardTo={cardTo}
       cardGone={cardGone}
+      onCreated={id => navigate(sellerConversationPath(id), { replace: true })}
       desktopHint={split}
       className={split ? 'h-full' : undefined}
     />

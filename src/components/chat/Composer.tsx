@@ -30,7 +30,6 @@ interface Props {
   onSend: (input: { text: string; photos: OutgoingPhoto[] }) => void;
   /** 父層要求把焦點放回輸入框（例如解除封鎖之後）；值改變就聚焦 */
   focusToken: number;
-  onFocusChange: (focused: boolean) => void;
   /** 賣家桌機的提示語「輸入訊息，Enter 傳送」 */
   desktopHint?: boolean;
 }
@@ -39,7 +38,7 @@ const MAX_ROWS_PX = 140;
 
 /** 輸入列（兩端共用）：待送出卡片、圖片預覽、文字框、圖片鈕、送出鈕。輸入列永遠存在，停用時只是換樣子，版面不跳 */
 export default function Composer({
-  block, reasonId, pendingCard, cardRemovable, onRemoveCard, onSend, focusToken, onFocusChange, desktopHint = false,
+  block, reasonId, pendingCard, cardRemovable, onRemoveCard, onSend, focusToken, desktopHint = false,
 }: Props) {
   const [text, setText] = useState('');
   const draft = usePhotoDraft();
@@ -180,8 +179,6 @@ export default function Composer({
           aria-describedby={[reasonId, over ? hintId : null].filter(Boolean).join(' ') || undefined}
           onChange={e => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          onFocus={() => onFocusChange(true)}
-          onBlur={() => onFocusChange(false)}
           className="min-h-11 min-w-0 flex-1 basis-30 resize-none rounded-[10px] bg-search px-3 py-2.5 text-body text-ink outline-none placeholder:text-muted disabled:bg-canvas @max-[15rem]:order-first @max-[15rem]:basis-full"
         />
         <button

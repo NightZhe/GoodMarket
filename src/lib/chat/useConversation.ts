@@ -6,7 +6,8 @@ import {
 } from './api';
 import { errorCodeOf, isUnavailable, openFailure, sendFailureText, type OpenFailure } from './errors';
 import {
-  buildSendArgs, confirmSent, createLocal, createSendQueue, incomingAnnouncement, markFailed, mergeLatest, mergeServer, rebindToConversation, restart, slotsReusable, visibleMessages,
+  buildSendArgs, confirmSent, createLocal, createSendQueue, incomingAnnouncement, markFailed, mergeLatest, mergeServer, pendingCardFor, rebindToConversation, restart, slotsReusable,
+  visibleMessages,
   type DisplayMessage, type LocalMessage, type OpenTarget,
 } from './outbox';
 import { peerView, type PeerView } from './nav';
@@ -25,11 +26,18 @@ export interface OutgoingPhoto { blob: Blob; previewUrl: string }
  * 送出（本機先顯示「傳送中」，client id 冪等，失敗可重送）→ 封鎖／隱藏。
  * 呼叫端用 key={target} 讓換對話時整個重來，所以 side／target 在這個 hook 的生命週期內不變
  */
-export function useConversation(side: ChatSide, target: OpenTarget) {
+export function useConversation(side: ChatSide, target: OpenTarget, onCreated?: (conversationId: string) => void) {
   const { user, authReady } = useStore();
+  // 用 id 當依賴：token 更新（例如回前景）會換 user 物件，但不需要重讀整條對話（B2）
+  const userId = user?.id ?? null;
   const { refresh: refreshSummary, markUnavailable } = useChat();
   const sideRef = useRef(side);
   const targetRef = useRef(target);
+  const onCreatedRef = useRef(onCreated);
+  onCreatedRef.current = onCreated;
+  /** 這次是由第一則訊息建立的對話，網址還停在「新對話」 */
+  const createdHere = useRef(false);
+  const mounted = useRef(true);
 
   const [phase, setPhase] = useState<ConversationPhase>('loading');
   const [convId, setConvId] = useState<string | null>(target.kind === 'conversation' ? target.id : null);
@@ -121,7 +129,7 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
   // ───────── 載入 ─────────
   useEffect(() => {
     if (!authReady) return;
-    if (!user) { setPhase('login'); return; }
+    if (!userId) { setPhase('login'); return; }
     let alive = true;
     const t = targetRef.current;
     setPhase('loading');
@@ -130,6 +138,7 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
       try {
         let id: string | null = t.kind === 'conversation' ? t.id : null;
         let page: MessagesPage | null = null;
+        let card: ChatCard | null = null;
         if (t.kind === 'conversation') {
           page = await chatMessages(t.id);
         } else if (t.kind === 'shop') {
@@ -138,7 +147,7 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
           setPeer(peerView({ kind: 'shop', deleted: o.counterpart_deleted, shop_id: o.shop.id, name: o.shop.name, avatar: o.shop.avatar }));
           setBlockedByMe(o.blocked_by_me);
           setPeerDeleted(o.counterpart_deleted);
-          setPendingCard(o.pending_card);
+          card = o.pending_card;
           id = o.conversation_id;
         } else {
           const o = await chatOpenForOrder(t.orderId);
@@ -146,7 +155,7 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
           setPeer(peerView({ kind: 'buyer', deleted: o.counterpart_deleted, nickname: o.buyer.nickname, short_code: o.buyer.short_code }));
           setBlockedByMe(o.blocked_by_me);
           setPeerDeleted(o.counterpart_deleted);
-          setPendingCard(o.order_card);
+          card = o.order_card;
           // 還沒有對話時，訂單卡是伺服器唯一能認出對象的依據，不能移除（§6.4）
           setCardRemovable(o.conversation_id !== null);
           id = o.conversation_id;
@@ -162,6 +171,8 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
         }
         if (!alive) return;
         applyConvId(id);
+        // 這條對話已經送過這張卡（回前景重讀、重新整理網址）就不再待送出
+        setPendingCard(pendingCardFor(card, page?.messages ?? [], [...entries.current.values()]));
         if (page) {
           applyMeta(page);
           applyServer(mergeServer([], page.messages));
@@ -177,7 +188,7 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
       }
     })();
     return () => { alive = false; };
-  }, [authReady, user, reload, applyConvId, applyHasMore, applyMeta, applyServer, markRead, markUnavailable]);
+  }, [authReady, userId, reload, applyConvId, applyHasMore, applyMeta, applyServer, markRead, markUnavailable]);
 
   const retryLoad = useCallback(() => setReload(n => n + 1), []);
 
@@ -206,6 +217,11 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
 
   // 離開頁面：釋放本機縮圖
   useEffect(() => () => { previewUrls.current.forEach(u => URL.revokeObjectURL(u)); }, []);
+  // 使用者已經離開就不要再替他換網址
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   // ───────── 往上載入更早 ─────────
   const loadMore = useCallback(async () => {
@@ -260,12 +276,21 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
         await Promise.all(slots.map((s, i) => uploadChatImage(s.path, files[i])));
       }
       const msg = await chatSend({ ...entry.args, ...(files.length > 0 && slots ? { p_photos: slots.map(s => s.path) } : {}) });
-      if (!convIdRef.current) applyConvId(msg.conversation_id);
+      if (!convIdRef.current) {
+        applyConvId(msg.conversation_id);
+        createdHere.current = true;
+      }
       applyServer(mergeServer(serverRef.current, [msg]));
       setLocal(l => confirmSent(l, entry.clientId));
       blobs.current.delete(entry.clientId);
       uploaded.current.delete(entry.clientId);
       entries.current.delete(entry.clientId);
+      // 第一則建立了對話：全部送完（沒有排隊中或失敗待重送的）再把網址換成這條對話，重新整理才不會又長出待送出卡片；
+      // 還有沒送完的就等它們，免得換頁重載把傳送中／失敗的狀態弄丟
+      if (createdHere.current && entries.current.size === 0 && mounted.current) {
+        createdHere.current = false;
+        onCreatedRef.current?.(msg.conversation_id);
+      }
     } catch (e) {
       const code = errorCodeOf(e);
       noteFailure(e);

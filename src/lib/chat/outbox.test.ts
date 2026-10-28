@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildSendArgs, canSubmit, confirmSent, createLocal, createSendQueue, dropConfirmed, incomingAnnouncement, markFailed, mergeLatest, mergeServer, rebindToConversation,
-  restart, slotsReusable, textLength, visibleMessages,
+  restart, slotsReusable, textLength, visibleMessages, pendingCardFor,
 } from './outbox';
 import type { ChatCard, ServerMessage } from './types';
 
@@ -181,5 +181,31 @@ describe('新訊息宣告（live region 只念一次，不重念整頁）', () =
     expect(incomingAnnouncement([msg(1, { text: null, card: { type: 'order', id: 'o', order_no: 'N', title: 't', image: '', item_count: 1, total: 1, status: 'to_ship' } })])).toBe('新訊息：訂單卡');
     expect(incomingAnnouncement([msg(1, { text: 'a'.repeat(50) })])).toBe(`新訊息：${'a'.repeat(40)}…`);
     expect(incomingAnnouncement([msg(1), msg(2), msg(3)])).toBe('收到 3 則新訊息');
+  });
+});
+
+describe('待送出卡片只在這張卡還沒送過時才出現（B2：回前景重讀、重新整理都不重複附卡）', () => {
+  const product: ChatCard = { type: 'product', id: 'p1', title: 'A', image: '', price: 100 };
+  const order: ChatCard = { type: 'order', id: 'o1', order_no: 'N1', title: 'A', image: '', item_count: 1, total: 100, status: 'to_ship' };
+  const sentLocal = (card: ChatCard) => createLocal({
+    clientId: 'k', side: 'buyer', text: 'hi', card, previews: [], at: '2026-10-28T00:00:00.000Z',
+    args: buildSendArgs({ target: { kind: 'shop', shopId: 's', productId: 'p1' }, conversationId: null, clientId: 'k', text: 'hi', card }),
+  });
+
+  it('對話裡沒有這張卡的訊息：照伺服器給的待送出卡片', () => {
+    expect(pendingCardFor(product, [msg(1), msg(2, { card: order })], [])).toEqual(product);
+  });
+  it('伺服器訊息裡已有同一張卡（種類與 id 都相同）：不再待送出', () => {
+    expect(pendingCardFor(product, [msg(1, { card: product })], [])).toBeNull();
+    expect(pendingCardFor(order, [msg(1, { card: order })], [])).toBeNull();
+  });
+  it('同 id 但種類不同不算同一張', () => {
+    expect(pendingCardFor({ ...product, id: 'x' }, [msg(1, { card: { ...order, id: 'x' } })], [])).not.toBeNull();
+  });
+  it('本機剛送出（傳送中或失敗待重送）的訊息帶著這張卡：也不再待送出', () => {
+    expect(pendingCardFor(product, [], [sentLocal(product)])).toBeNull();
+  });
+  it('伺服器沒給待送出卡片：維持沒有', () => {
+    expect(pendingCardFor(null, [msg(1)], [])).toBeNull();
   });
 });

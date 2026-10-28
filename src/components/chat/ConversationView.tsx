@@ -8,7 +8,7 @@ import { useAuth } from '../../store/AuthContext';
 import { useOnline } from '../../lib/useOnline';
 import { useConversation } from '../../lib/chat/useConversation';
 import { useSignedUrls } from '../../lib/chat/useSignedUrls';
-import { browserStore, dismissRules, rulesDismissed } from '../../lib/chat/rules';
+import { browserStore, dismissRules, rulesDismissed, rulesVisible } from '../../lib/chat/rules';
 import type { OpenTarget } from '../../lib/chat/outbox';
 import type { ChatCard, ChatSide } from '../../lib/chat/types';
 import type { DisplayMessage } from '../../lib/chat/outbox';
@@ -28,6 +28,8 @@ interface Props {
   cardGone: (card: ChatCard) => boolean;
   /** 隱藏成功之後（買家：回到列表）。賣家沒有隱藏，不傳 */
   onHidden?: () => void;
+  /** 第一則訊息建立了對話之後：呼叫端把網址從「新對話」換成這條對話（replace） */
+  onCreated?: (conversationId: string) => void;
   desktopHint?: boolean;
   className?: string;
 }
@@ -39,7 +41,7 @@ type Dialog = null | 'menu' | 'confirm-block';
  * 這裡負責把兩者接起來，加上選單、封鎖確認、全螢幕看圖、規則提示的本機記憶與各種 toast。
  */
 export default function ConversationView(p: Props) {
-  const convo = useConversation(p.side, p.target);
+  const convo = useConversation(p.side, p.target, p.onCreated);
   const online = useOnline();
   const toast = useToast();
   const { openLogin } = useAuth();
@@ -51,15 +53,13 @@ export default function ConversationView(p: Props) {
   const [busy, setBusy] = useState(false);
   const [unblockBusy, setUnblockBusy] = useState(false);
   const [focusToken, setFocusToken] = useState(0);
-  const [focused, setFocused] = useState(false);
   const [rulesGone, setRulesGone] = useState(() => rulesDismissed(browserStore()));
   const [viewer, setViewer] = useState<{ paths: string[]; local: boolean; index: number; trigger: HTMLElement } | null>(null);
 
   const closeDialog = useCallback(() => setDialog(null), []);
 
-  // 鍵盤開著又是矮螢幕（SE）時暫時收起規則提示，免得訊息區只剩一條縫；這不算關閉
-  const shortScreen = (window.visualViewport?.height ?? window.innerHeight) < 700;
-  const rulesVisible = !rulesGone && !(focused && shortScreen);
+  // 規則提示顯示到使用者按關閉（§8.2）；不依輸入框焦點收起，否則點「重送」時失焦會讓版面下推而點空（B1）
+  const rulesShown = rulesVisible(rulesGone);
 
   const unblock = async () => {
     setUnblockBusy(true);
@@ -91,7 +91,7 @@ export default function ConversationView(p: Props) {
     side: p.side, phase: convo.phase, online, peer: convo.peer, fallbackName: p.fallbackName,
     blockedByMe: convo.blockedByMe, peerDeleted: convo.peerDeleted, hasMenu: convo.convId !== null,
     messages: convo.messages, hasMore: convo.hasMore, loadingMore: convo.loadingMore, moreFailed: convo.moreFailed, messagesFailed: convo.messagesFailed,
-    pendingCard: convo.pendingCard, cardRemovable: convo.cardRemovable, rulesVisible,
+    pendingCard: convo.pendingCard, cardRemovable: convo.cardRemovable, rulesVisible: rulesShown,
     urls: signed.urls, signFailed: signed.failed, incoming: convo.incoming, failure: convo.failure,
     unblockBusy, focusToken, backTo: p.backTo, backLabel: p.backLabel, listTo: p.listTo, homeTo: p.homeTo, ordersTo: p.ordersTo,
     desktopHint: p.desktopHint, className: p.className,
@@ -108,7 +108,6 @@ export default function ConversationView(p: Props) {
     onRetryLoad: convo.retryLoad,
     onRetryMessages: () => { void convo.retryMessages(); },
     onLogin: () => openLogin({ trigger: { kind: 'goto' } }),
-    onFocusChange: setFocused,
     cardTo: p.cardTo,
     cardGone: p.cardGone,
     onCardGone: card => toast(card.type === 'product' ? '商品已下架' : '找不到訂單', 'info'),

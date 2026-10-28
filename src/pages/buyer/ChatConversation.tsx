@@ -2,7 +2,7 @@ import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import ConversationView from '../../components/chat/ConversationView';
 import { useStore } from '../../store/StoreContext';
 import { cardTargetGone } from '../../lib/chat/cards';
-import { CHAT_LIST_PATH, parseNewChat } from '../../lib/chat/nav';
+import { CHAT_LIST_PATH, conversationPath, parseNewChat } from '../../lib/chat/nav';
 import type { OpenTarget } from '../../lib/chat/outbox';
 import type { ChatCard } from '../../lib/chat/types';
 
@@ -45,6 +45,7 @@ function BuyerConversation({ target }: { target: OpenTarget }) {
       cardTo={cardTo}
       cardGone={cardGone}
       onHidden={() => navigate(CHAT_LIST_PATH, { replace: true })}
+      onCreated={id => navigate(conversationPath(id), { replace: true })}
     />
   );
 }
