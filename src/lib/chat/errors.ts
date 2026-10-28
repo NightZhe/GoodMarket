@@ -3,23 +3,21 @@
 //   - code null＝沒有資料庫錯誤碼，多半是網路中斷或逾時，可以重試
 //   - UNAVAILABLE＝資料庫還沒升級（RPC 不存在），聊聊整個降級（R-M24）
 
-export type ChatErrorCode =
-  | 'LOGIN_REQUIRED' | 'BAD_ARGS' | 'NOT_PARTICIPANT' | 'NOT_BUYER_SIDE' | 'NOT_BLOCKER'
-  | 'CANNOT_SEND' | 'TEXT_TOO_LONG' | 'EMPTY_MESSAGE' | 'PHOTO_LIMIT' | 'SLOT_INVALID'
-  | 'CARD_INVALID' | 'PRODUCT_NOT_IN_SHOP' | 'ORDER_NOT_YOURS' | 'ORDER_NOT_YOUR_SHOP'
-  | 'RATE_LIMITED' | 'SHOP_IS_OWN' | 'SHOP_NOT_FOUND'
-  | 'UNAVAILABLE';
-
-const KNOWN: ReadonlySet<string> = new Set<ChatErrorCode>([
+const KNOWN = [
   'LOGIN_REQUIRED', 'BAD_ARGS', 'NOT_PARTICIPANT', 'NOT_BUYER_SIDE', 'NOT_BLOCKER',
   'CANNOT_SEND', 'TEXT_TOO_LONG', 'EMPTY_MESSAGE', 'PHOTO_LIMIT', 'SLOT_INVALID',
   'CARD_INVALID', 'PRODUCT_NOT_IN_SHOP', 'ORDER_NOT_YOURS', 'ORDER_NOT_YOUR_SHOP',
   'RATE_LIMITED', 'SHOP_IS_OWN', 'SHOP_NOT_FOUND',
-]);
+] as const;
+
+/** 資料庫回的錯誤碼（清單只列在 KNOWN 一處）＋前端自己判出的 UNAVAILABLE */
+export type ChatErrorCode = (typeof KNOWN)[number] | 'UNAVAILABLE';
+
+const KNOWN_SET: ReadonlySet<string> = new Set(KNOWN);
 
 /** 資料庫的 hint → 錯誤碼；不認得的 hint（例如 PostgREST 自己的提示）一律當成沒有錯誤碼 */
 export const toErrorCode = (hint: unknown): ChatErrorCode | null =>
-  typeof hint === 'string' && KNOWN.has(hint) ? (hint as ChatErrorCode) : null;
+  typeof hint === 'string' && KNOWN_SET.has(hint) ? (hint as ChatErrorCode) : null;
 
 export interface RpcErrorLike { message?: string; code?: string; hint?: string | null; status?: number }
 
@@ -56,8 +54,11 @@ export function sendFailureText(code: ChatErrorCode | null): string {
   return code === 'RATE_LIMITED' ? '送太快了，稍後再試' : '無法傳送';
 }
 
-/** 開啟對話失敗時整頁要顯示哪一種（設計 4.6）。對話不存在與非參與者一律同一種，不透露對話是否存在 */
-export type OpenFailure = 'unavailable' | 'login' | 'noshop' | 'noorder' | 'error';
+/**
+ * 開啟對話失敗時整頁要顯示哪一種（設計 4.6）。對話不存在與非參與者一律同一種，不透露對話是否存在。
+ * offline＝沒有資料庫錯誤碼的聊聊錯誤（斷網、逾時）：不是對話本身有問題，畫面走離線版（離線列＋空訊息區，AC-M24），恢復連線後自動重讀
+ */
+export type OpenFailure = 'unavailable' | 'login' | 'noshop' | 'noorder' | 'offline' | 'error';
 
 export function openFailure(e: unknown): OpenFailure {
   if (isUnavailable(e)) return 'unavailable';
@@ -65,6 +66,15 @@ export function openFailure(e: unknown): OpenFailure {
     case 'LOGIN_REQUIRED': return 'login';
     case 'SHOP_NOT_FOUND': case 'SHOP_IS_OWN': case 'PRODUCT_NOT_IN_SHOP': case 'NOT_PARTICIPANT': return 'noshop';
     case 'ORDER_NOT_YOURS': case 'ORDER_NOT_YOUR_SHOP': case 'BAD_ARGS': return 'noorder';
+    case null: return e instanceof ChatError ? 'offline' : 'error';
     default: return 'error';
   }
+}
+
+/** 未讀摘要讀取失敗的三種：降級（RPC 不存在）／遊客（函式在、只是沒登入）／暫時的（斷網、逾時，下次時機再讀） */
+export type SummaryFailure = 'degraded' | 'guest' | 'transient';
+
+export function summaryFailure(e: unknown): SummaryFailure {
+  if (isUnavailable(e)) return 'degraded';
+  return errorCodeOf(e) === 'LOGIN_REQUIRED' ? 'guest' : 'transient';
 }

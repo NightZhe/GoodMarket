@@ -155,6 +155,29 @@ describe('封鎖、對方不存在、離線（D22、R-M17、AC-M24）', () => {
   });
 });
 
+describe('離線下開啟對話頁（AC-M24）', () => {
+  it('離線冷啟動：離線列＋空訊息區，輸入列停用，不是「無法開啟對話」整頁錯誤', () => {
+    const h = html({ phase: 'offline', online: false, peer: null, fallbackName: '好物小舖' });
+    expect(h).toContain('目前離線，無法傳送');
+    expect(h).toContain('好物小舖');
+    expect(h).toContain('aria-label="傳送訊息"');
+    expect(h).toMatch(/<textarea[^>]* disabled=""/);
+    expect(h).not.toContain('無法開啟對話');
+  });
+  it('瀏覽器說在線、請求卻失敗（網路不穩）：訊息區顯示失敗與重試，輸入列停用', () => {
+    const h = html({ phase: 'offline', online: true });
+    expect(h).toContain('訊息載入失敗');
+    expect(h).toContain('重試');
+    expect(h).toMatch(/<textarea[^>]* disabled=""/);
+    expect(h).not.toContain('無法開啟對話');
+  });
+  it('真正的錯誤（phase error）仍是整頁「無法開啟對話」，沒有輸入列', () => {
+    const h = html({ phase: 'error' });
+    expect(h).toContain('無法開啟對話');
+    expect(h).not.toContain('<textarea');
+  });
+});
+
 describe('規則提示（§10.2、AC-M38）', () => {
   it('還沒關閉：顯示全文與關閉鈕', () => {
     const h = html({ rulesVisible: true });

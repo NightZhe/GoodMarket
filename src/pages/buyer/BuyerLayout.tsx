@@ -5,6 +5,7 @@ import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
 import { useChat } from '../../store/ChatContext';
 import ChatIcon from '../../components/chat/ChatIcon';
+import UnreadPill from '../../components/chat/UnreadPill';
 import { buyerChatTab, isChatConversationPath } from '../../lib/chat/nav';
 import { badgeCount, chatNavLabel } from '../../lib/chat/unread';
 import { useToast } from '../../components/Toast';
@@ -325,7 +326,7 @@ function DesktopLinks({ className = '' }: { className?: string }) {
       <Link to="/orders" className="hover:text-brand">我的訂單</Link>
       <Link to="/chat" aria-label={chatNavLabel(unread)} className="hover:text-brand">
         聊聊
-        {unread > 0 && <span aria-hidden="true" className="ml-1 inline-block rounded-full bg-badge px-1.5 text-[12px] leading-[18px] text-white">{unread > 99 ? '99+' : unread}</span>}
+        {unread > 0 && <span className="ml-1 inline-block align-middle"><UnreadPill count={unread} /></span>}
       </Link>
       {user ? (
         <Link to="/account" className="hover:text-brand">我的帳號</Link>

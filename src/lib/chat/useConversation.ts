@@ -6,7 +6,7 @@ import {
 } from './api';
 import { errorCodeOf, isUnavailable, openFailure, sendFailureText, type OpenFailure } from './errors';
 import {
-  buildSendArgs, confirmSent, createLocal, incomingAnnouncement, markFailed, mergeLatest, mergeServer, restart, slotsReusable, visibleMessages,
+  buildSendArgs, confirmSent, createLocal, createSendQueue, incomingAnnouncement, markFailed, mergeLatest, mergeServer, rebindToConversation, restart, slotsReusable, visibleMessages,
   type DisplayMessage, type LocalMessage, type OpenTarget,
 } from './outbox';
 import { peerView, type PeerView } from './nav';
@@ -55,6 +55,8 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
 
   /** 送出過的訊息（重送沿用同一份參數與 client id） */
   const entries = useRef(new Map<string, LocalMessage>());
+  /** 對話建立之前送出的訊息排隊，一則一則來 */
+  const openingQueue = useRef(createSendQueue());
   const blobs = useRef(new Map<string, Blob[]>());
   const uploaded = useRef(new Map<string, UploadSlot[]>());
   const previewUrls = useRef<string[]>([]);
@@ -77,6 +79,9 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
     setPeer(peerView(page.conversation.counterpart));
   }, []);
 
+  /** 呼叫失敗時：發現資料庫沒有聊聊函式就全站降級（R-M24），其他錯誤不在這裡處理 */
+  const noteFailure = useCallback((e: unknown) => { if (isUnavailable(e)) markUnavailable(); }, [markUnavailable]);
+
   /** 頁面在前景時，把這條對話標已讀並更新角標（R-M14）。失敗不打擾使用者：未讀狀態沒變，下一次事件／回前景會再試 */
   const markRead = useCallback(async () => {
     const id = convIdRef.current;
@@ -84,11 +89,11 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
     try {
       await chatMarkRead(id);
     } catch (e) {
-      if (isUnavailable(e)) markUnavailable();
+      noteFailure(e);
       return;
     }
     void refreshSummary();
-  }, [markUnavailable, refreshSummary]);
+  }, [noteFailure, refreshSummary]);
 
   /** 重新讀最新一頁併進清單（收到事件、頻道重連、回前景、網路恢復）。失敗就保留畫面，下次時機再讀 */
   const refetch = useCallback(async () => {
@@ -109,9 +114,9 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
         void markRead();
       }
     } catch (e) {
-      if (isUnavailable(e)) markUnavailable();
+      noteFailure(e);
     }
-  }, [applyHasMore, applyMeta, applyServer, markRead, markUnavailable]);
+  }, [applyHasMore, applyMeta, applyServer, markRead, noteFailure]);
 
   // ───────── 載入 ─────────
   useEffect(() => {
@@ -176,6 +181,13 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
 
   const retryLoad = useCallback(() => setReload(n => n + 1), []);
 
+  // 開頁時就沒網路：恢復連線後自動重讀（AC-M24）
+  useEffect(() => {
+    if (phase !== 'offline') return;
+    window.addEventListener('online', retryLoad);
+    return () => window.removeEventListener('online', retryLoad);
+  }, [phase, retryLoad]);
+
   // ───────── 即時 ─────────
   useEffect(() => {
     if (phase !== 'ready' || !convId) return;
@@ -208,13 +220,13 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
       applyServer(mergeServer(serverRef.current, page.messages));
       applyHasMore(page.has_more);
     } catch (e) {
-      if (isUnavailable(e)) markUnavailable();
+      noteFailure(e);
       setMoreFailed(true);
     } finally {
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [applyHasMore, applyServer, markUnavailable]);
+  }, [applyHasMore, applyServer, noteFailure]);
 
   /** 第一頁訊息沒讀到（但對話存在）時的重試 */
   const retryMessages = useCallback(async () => {
@@ -228,12 +240,16 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
       setMessagesFailed(false);
       void markRead();
     } catch (e) {
-      if (isUnavailable(e)) markUnavailable();
+      noteFailure(e);
     }
-  }, [applyHasMore, applyMeta, applyServer, markRead, markUnavailable]);
+  }, [applyHasMore, applyMeta, applyServer, markRead, noteFailure]);
 
   // ───────── 送出 ─────────
-  const run = useCallback(async (entry: LocalMessage) => {
+  const run = useCallback(async (queued: LocalMessage) => {
+    // 排隊等到的：第一則已經建好對話，改走既有對話，不再帶 p_order_id／p_shop_id
+    const readyId = convIdRef.current;
+    const entry = readyId && !queued.args.p_conversation_id ? { ...queued, args: rebindToConversation(queued.args, readyId) } : queued;
+    if (entry !== queued) entries.current.set(entry.clientId, entry);
     const files = blobs.current.get(entry.clientId) ?? [];
     try {
       let slots = uploaded.current.get(entry.clientId) ?? null;
@@ -252,13 +268,13 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
       entries.current.delete(entry.clientId);
     } catch (e) {
       const code = errorCodeOf(e);
-      if (isUnavailable(e)) markUnavailable();
+      noteFailure(e);
       // 位置失效：下一次重送要重新申請並重傳
       if (code === 'SLOT_INVALID') uploaded.current.delete(entry.clientId);
       setLocal(l => markFailed(l, entry.clientId, code));
       setFailure({ key: ++tick.current, text: sendFailureText(code) });
     }
-  }, [applyConvId, applyServer, markUnavailable]);
+  }, [applyConvId, applyServer, noteFailure]);
 
   /** 送出：本機立刻出現「傳送中」。待送出卡片隨這一則送出（送出後從輸入列消失，失敗時由重送沿用） */
   const send = useCallback((input: { text: string; photos: OutgoingPhoto[] }) => {
@@ -274,7 +290,8 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
     entries.current.set(clientId, entry);
     setLocal(l => [...l, entry]);
     setPendingCard(null);
-    void run(entry);
+    if (convIdRef.current) void run(entry);
+    else void openingQueue.current.enqueue(() => run(entry));
   }, [pendingCard, run]);
 
   /** 重送：同一個 client id、同一份參數（冪等） */
@@ -296,10 +313,10 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
       setBlockedByMe(r.blocked_by_me);
       return true;
     } catch (e) {
-      if (isUnavailable(e)) markUnavailable();
+      noteFailure(e);
       return false;
     }
-  }, [markUnavailable]);
+  }, [noteFailure]);
 
   const hide = useCallback(async (): Promise<boolean> => {
     const id = convIdRef.current;
@@ -309,10 +326,10 @@ export function useConversation(side: ChatSide, target: OpenTarget) {
       void refreshSummary();
       return true;
     } catch (e) {
-      if (isUnavailable(e)) markUnavailable();
+      noteFailure(e);
       return false;
     }
-  }, [markUnavailable, refreshSummary]);
+  }, [noteFailure, refreshSummary]);
 
   const messages: DisplayMessage[] = useMemo(() => visibleMessages(server, local), [server, local]);
 

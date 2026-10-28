@@ -137,6 +137,31 @@ export function buildSendArgs(a: {
   return args;
 }
 
+/**
+ * 對話已經建立（第一則回來拿到 id）之後，還在排隊的訊息改走 p_conversation_id。
+ * 不然第二則仍帶 p_order_id，伺服器會再附一張訂單卡（買家的 p_shop_id 不會重複附卡，但一併統一）
+ */
+export function rebindToConversation(args: Omit<SendArgs, 'p_photos'>, conversationId: string): Omit<SendArgs, 'p_photos'> {
+  if (args.p_conversation_id) return args;
+  const { p_shop_id: _shop, p_order_id: _order, ...rest } = args;
+  return { ...rest, p_conversation_id: conversationId };
+}
+
+/**
+ * 對話還沒建立時送出的訊息排成一隊，一次只跑一則：前一則結束（成功或失敗）才輪到下一則。
+ * 選排隊而不是停用送出鈕：第一則可能在傳圖片、很慢，停用會讓人以為壞了；失敗的第一則也不該卡住輸入
+ */
+export function createSendQueue() {
+  let tail: Promise<unknown> = Promise.resolve();
+  return {
+    enqueue<T>(task: () => Promise<T>): Promise<T> {
+      const result = tail.then(task, task);
+      tail = result.catch(() => undefined);
+      return result;
+    },
+  };
+}
+
 // ───────── 輸入列 ─────────
 
 export const MAX_TEXT = 1000;
