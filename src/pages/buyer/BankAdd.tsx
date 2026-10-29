@@ -7,6 +7,7 @@ import { btnOutline, btnPrimary } from '../../components/import/ui';
 import { Bone, FieldError, SubHeader, SubPage, Spinner, fieldCls, helpCls, labelCls, pressCls, savingBtn } from '../../components/account/ui';
 import BankLogo from '../../components/payment/BankLogo';
 import { useBankFlow } from './BankFlow';
+import { useAuth } from '../../store/AuthContext';
 import {
   ADD_UNAVAILABLE_TEXT, ERROR_FIELD, STEP_UP_NOTICE_EXPIRED, account2Error, accountError, bankErrorText, firstErrorField, holderError, toAddRequest, validateDraft,
   type BankField, type FieldErrors,
@@ -16,7 +17,7 @@ import { addBankAccount, errorCodeOf, isAuthError, isBankUnavailable } from '../
 import { pageAPath, verifyPath } from '../../lib/payment/bankRoutes';
 
 type Branches = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; data: BranchData };
-type SubmitError = { title: string; body: string; toList?: boolean } | null;
+type SubmitError = { title: string; body: string; toList?: boolean; relogin?: boolean } | null;
 
 /** 頁 C「新增銀行帳號」（設計 5）。表單內容只在記憶體（BankFlow 的 draft）；帳號欄不用 password、不擋貼上 */
 export default function BankAdd() {
@@ -46,6 +47,7 @@ export default function BankAdd() {
 function AddForm({ bankName, bankCode }: { bankName: string; bankCode: string }) {
   const { origin, base, online, draft, setDraft, accounts, setList, leaveToA } = useBankFlow();
   const navigate = useNavigate();
+  const { openLogin } = useAuth();
   const uid = useId();
   const [branches, setBranches] = useState<Branches>({ kind: 'loading' });
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -117,7 +119,12 @@ function AddForm({ bankName, bankCode }: { bankName: string; bankCode: string })
 
   const handleError = (err: unknown) => {
     const code = errorCodeOf(err);
-    if (isAuthError(err)) { navigate(pageAPath(origin), { replace: true }); return; }
+    if (isAuthError(err)) {
+      // 登入過期：表單保留，提示重新登入；登入後按同一顆按鈕再送出（AC-45）
+      setSubmitError({ title: '登入已過期', body: '請重新登入後，再按一次「新增銀行帳號」。你填的內容還在。', relogin: true });
+      openLogin({ expired: true });
+      return;
+    }
     if (code === 'STEP_UP_REQUIRED' || code === 'PHONE_REQUIRED') {
       navigate(verifyPath(origin, 'add'), { replace: true, state: { notice: STEP_UP_NOTICE_EXPIRED } });
       return;
@@ -245,7 +252,10 @@ function AddForm({ bankName, bankCode }: { bankName: string; bankCode: string })
         )}
         {submitError && (
           <div className="mt-4">
-            <Banner kind="error" title={submitError.title} actions={submitError.toList ? <button type="button" className={btnOutline} onClick={() => leaveToA()}>回到列表</button> : undefined}>
+            <Banner kind="error" title={submitError.title} actions={
+              submitError.toList ? <button type="button" className={btnOutline} onClick={() => leaveToA()}>回到列表</button>
+                : submitError.relogin ? <button type="button" className={btnOutline} onClick={() => openLogin({ expired: true })}>重新登入</button> : undefined
+            }>
               {submitError.body}
             </Banner>
           </div>

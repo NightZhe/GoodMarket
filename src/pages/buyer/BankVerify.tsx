@@ -10,6 +10,9 @@ import { useStore } from '../../store/StoreContext';
 import { useToast } from '../../components/Toast';
 import { phoneOf } from '../../lib/auth/identity';
 import { errorCodeOf, isAuthError, setPayoutBankAccount } from '../../lib/payment/api';
+import { amrOfToken, otpIsFresh } from '../../lib/payment/stepUp';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../store/AuthContext';
 import {
   PHONE_REQUIRED_ADD_TEXT, PHONE_REQUIRED_PAYOUT_TEXT, bankErrorText, last4Spoken, type BankAccount,
 } from '../../lib/payment/bankAccount';
@@ -34,10 +37,16 @@ function VerifyView({ purpose, id }: { purpose: VerifyPurpose; id: string | null
   const { user } = useStore();
   const navigate = useNavigate();
   const toast = useToast();
+  const { openLogin } = useAuth();
   const { state } = useLocation() as { state: { notice?: string } | null };
   const national = user ? phoneOf(user) : null;
   const [finishing, setFinishing] = useState<'idle' | 'busy' | 'failed'>('idle');
   const [failText, setFailText] = useState('');
+  const [failAuth, setFailAuth] = useState(false);
+  // 這個 session 的 otp 10 分鐘內驗證過（例如剛用簡訊登入）：不再發一封簡訊（契約 §4）。伺服器擋下來（state.notice）或重新驗證時不跳過，避免繞圈
+  const [fresh, setFresh] = useState<'checking' | 'yes' | 'no'>('checking');
+  const [forceSms, setForceSms] = useState(false);
+  const skipped = useRef(false);
   const busyRef = useRef(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
@@ -53,13 +62,20 @@ function VerifyView({ purpose, id }: { purpose: VerifyPurpose; id: string | null
   }, [purpose, accounts, target, finishing, leaveToA, toast]);
 
   useEffect(() => { titleRef.current?.focus({ preventScroll: true }); }, []);
+  useEffect(() => {
+    let alive = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (alive) setFresh(otpIsFresh(amrOfToken(data.session?.access_token), Date.now()) ? 'yes' : 'no');
+    }, () => { if (alive) setFresh('no'); });
+    return () => { alive = false; };
+  }, []);
 
   const header = (
     <SubHeader to={pageAPath(origin)} backText="取消" backLabel="取消" title="驗證手機" onBack={e => { e.preventDefault(); clearFlow(flowStore()); leaveToA(); }} />
   );
 
-  // 新增也要知道目前筆數，才能判斷第一筆不用驗證
-  if (accounts === null) {
+  // 設為撥款帳號要先讀到列表才知道要設哪一個（新增不需要：每次新增含第一筆都要簡訊，契約 v2.2）
+  if (purpose === 'payout' && accounts === null) {
     return (
       <SubPage noTabBar>
         {header}
@@ -72,8 +88,6 @@ function VerifyView({ purpose, id }: { purpose: VerifyPurpose; id: string | null
     );
   }
 
-  // 第一筆不需要簡訊（Q6）：直接去選銀行
-  if (purpose === 'add' && accounts !== null && accounts.accounts.length === 0) return <Navigate to={`${base}/new/bank`} replace />;
   if (purpose === 'payout' && !target) return <SubPage noTabBar>{header}</SubPage>;
 
   const afterVerified = async () => {
@@ -89,9 +103,10 @@ function VerifyView({ purpose, id }: { purpose: VerifyPurpose; id: string | null
       leaveToA({ toast: '已設為撥款帳號', focusId: id });
     } catch (e) {
       const code = errorCodeOf(e);
-      if (isAuthError(e)) { leaveToA(); return; }
+      if (isAuthError(e)) { setFailText(bankErrorText('NOT_AUTHENTICATED', '')); setFailAuth(true); setFinishing('failed'); return; }
       if (code === 'BANK_ACCOUNT_NOT_FOUND') { toast('這個帳號已經不存在', 'info'); void reload(true); leaveToA(); return; }
       if (code === 'BANK_ACCOUNT_REJECTED') { toast(bankErrorText(code, ''), 'error'); void reload(true); leaveToA(); return; }
+      setFailAuth(false);
       setFailText(code === 'STEP_UP_REQUIRED' ? '驗證已過期，請重新驗證。' : bankErrorText(code, '設為撥款帳號失敗，請檢查網路後再試一次。'));
       setFinishing('failed');
     } finally {
@@ -109,7 +124,13 @@ function VerifyView({ purpose, id }: { purpose: VerifyPurpose; id: string | null
           ) : (
             <Banner kind="error" title="設為撥款帳號失敗" actions={
               <>
-                <button type="button" className={btnPrimary} onClick={() => void afterVerified()}>重試</button>
+                {failAuth
+                  ? <button type="button" className={btnPrimary} onClick={() => openLogin({ expired: true })}>重新登入</button>
+                  : failText.startsWith('驗證已過期')
+                    ? <button type="button" className={btnPrimary} onClick={() => { setForceSms(true); setFinishing('idle'); }}>重新驗證</button>
+                    : null}
+                {!failAuth && !failText.startsWith('驗證已過期') && <button type="button" className={btnPrimary} onClick={() => void afterVerified()}>重試</button>}
+                {failAuth && <button type="button" className={btnPrimary} onClick={() => void afterVerified()}>登入後重試</button>}
                 <button type="button" className={btnOutline} onClick={() => leaveToA()}>回到列表</button>
               </>
             }>{failText}</Banner>
@@ -144,7 +165,11 @@ function VerifyView({ purpose, id }: { purpose: VerifyPurpose; id: string | null
       {header}
       {(national || purpose === 'payout') && <div className="mt-3 rounded-card bg-white p-4">{summary}</div>}
       <section className="mt-2 rounded-card bg-white p-4">
-        {national ? (
+        {fresh === 'checking' ? (
+          <div aria-busy="true" role="status"><span className="sr-only">載入中</span><Bone className="h-24 w-full" /></div>
+        ) : fresh === 'yes' && !forceSms && !state?.notice ? (
+          <AutoProceed onGo={() => { if (!skipped.current) { skipped.current = true; void afterVerified(); } }} />
+        ) : national ? (
           <StepUpVerify
             national={national} notice={state?.notice} exitLabel="取消" hideTitle
             onVerified={() => void afterVerified()} onCancel={() => leaveToA()}
@@ -166,4 +191,10 @@ function VerifyView({ purpose, id }: { purpose: VerifyPurpose; id: string | null
       </section>
     </SubPage>
   );
+}
+
+/** 這個 session 10 分鐘內才用簡訊驗證過：不再發簡訊，直接繼續 */
+function AutoProceed({ onGo }: { onGo: () => void }) {
+  useEffect(onGo, [onGo]);
+  return <p role="status" className="flex items-center gap-2 text-sm"><Spinner />已確認是你本人，正在繼續…</p>;
 }

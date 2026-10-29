@@ -2,7 +2,7 @@ import { useEffect, useId, useReducer, useRef, useState } from 'react';
 import { ArrowLeft, Check, ChevronRight, LoaderCircle, X } from 'lucide-react';
 import { isIOS, type InAppKind } from '../../lib/auth/inapp';
 import type { PendingInput } from '../../lib/auth/pending';
-import { CODE_LENGTH, formatTwPhone, nationalFromAuthPhone, normalizeCode } from '../../lib/auth/phone';
+import { CODE_LENGTH, formatTwPhone, maskTwPhone, maskTwPhoneSpoken, nationalFromAuthPhone, normalizeCode } from '../../lib/auth/phone';
 import { sendBindCode, sendLoginCode, verifyBindCode, verifyLoginCode } from '../../lib/auth/phoneApi';
 import { classifyPhoneError, phoneErrorView, type PhoneErrorView } from '../../lib/auth/phoneErrors';
 import { clearFlow, flowStore, rememberSend, resendSecondsLeft, saveFlow, type PhoneFlow } from '../../lib/auth/phoneFlow';
@@ -91,7 +91,9 @@ export default function CodeStep({ mode, flow, trigger = null, inApp = null, tit
   const left = useResendSeconds(flow.sentAt);
 
   const national = nationalFromAuthPhone(flow.phone) ?? '';
-  const display = formatTwPhone(national);
+  // 已登入的再驗證（新增銀行帳號）：畫面上的門號遮罩（spec §5.1）；讀屏不念「星號」
+  const display = stepUp ? maskTwPhone(national) : formatTwPhone(national);
+  const spoken = stepUp ? maskTwPhoneSpoken(national) : display;
   const lead = flow.sentAt === null;
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -186,7 +188,7 @@ export default function CodeStep({ mode, flow, trigger = null, inApp = null, tit
   const description = lead
     ? <>請輸入傳到 <PhoneText>{display}</PhoneText> 的 {CODE_LENGTH} 位數驗證碼。驗證碼有效 5 分鐘，過期請重新傳送。</>
     : <>驗證碼已傳送到 <PhoneText>{display}</PhoneText>，{WINDOW_TEXT}。</>;
-  const srLead = lead ? `請輸入傳到 ${display} 的 ${CODE_LENGTH} 位數驗證碼` : `驗證碼已傳送到 ${display}`;
+  const srLead = lead ? `請輸入傳到 ${spoken} 的 ${CODE_LENGTH} 位數驗證碼` : `驗證碼已傳送到 ${spoken}`;
   const altExit = stepUp ? exitLabel : mode === 'bind' ? '取消綁定'
     : inApp ? `用${inApp === 'line' && ios ? ' Safari ' : '瀏覽器'}開啟後改用 Apple／Google 登入` : '改用 Apple／Google 登入';
 

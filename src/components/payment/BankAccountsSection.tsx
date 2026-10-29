@@ -5,6 +5,7 @@ import Banner from '../import/Banner';
 import LeaveDialog from '../import/LeaveDialog';
 import { btnOutline, btnPrimary } from '../import/ui';
 import { useToast } from '../Toast';
+import { useAuth } from '../../store/AuthContext';
 import { Bone, Spinner, pressCls, sectionTitleCls, textActionCls } from '../account/ui';
 import BankLogo from './BankLogo';
 import { PayoutChip, StatusChip } from './BankStatusChips';
@@ -14,7 +15,7 @@ import {
   bankErrorText, last4Spoken, lacksPayout, type BankAccount,
 } from '../../lib/payment/bankAccount';
 import { clearBankDone, peekBankDone } from '../../lib/payment/bankDone';
-import { FROM_A, flowBase, verifyPath, type BankOrigin } from '../../lib/payment/bankRoutes';
+import { FROM_A, verifyPath, type BankOrigin } from '../../lib/payment/bankRoutes';
 import { useBankAccounts } from '../../lib/payment/useBankAccounts';
 
 const READ_TIMEOUT_MS = 10_000;
@@ -23,6 +24,7 @@ const READ_TIMEOUT_MS = 10_000;
 export default function BankAccountsSection({ origin, online, focusTitle }: { origin: BankOrigin; online: boolean; focusTitle: boolean }) {
   const navigate = useNavigate();
   const toast = useToast();
+  const { openLogin } = useAuth();
   const { data, phase, reload, setList } = useBankAccounts({ timeoutMs: READ_TIMEOUT_MS, refreshOnReturn: true });
   const [retrying, setRetrying] = useState(false);
   const [hintId, setHintId] = useState<string | null>(null);
@@ -64,11 +66,11 @@ export default function BankAccountsSection({ origin, online, focusTitle }: { or
   const rows = data?.accounts ?? null;
   const limit = data?.limit ?? 5;
   const full = rows !== null && rows.length >= limit;
-  const base = flowBase(origin);
 
   const goAdd = () => {
     if (!online || full || rows === null) return;
-    navigate(rows.length === 0 ? `${base}/new/bank` : verifyPath(origin, 'add'), { state: FROM_A });
+    // 每次新增（含第一筆）都要先簡訊再驗證（契約 v2.2 T7）
+    navigate(verifyPath(origin, 'add'), { state: FROM_A });
   };
 
   const askDelete = (a: BankAccount) => {
@@ -90,7 +92,7 @@ export default function BankAccountsSection({ origin, online, focusTitle }: { or
       setFocusTarget({ id: neighbour?.id ?? null });
     } catch (e) {
       const code = errorCodeOf(e);
-      if (isAuthError(e)) toast(bankErrorText('NOT_AUTHENTICATED', ''), 'error');
+      if (isAuthError(e)) { toast(bankErrorText('NOT_AUTHENTICATED', ''), 'error'); openLogin({ expired: true }); }
       else if (code === 'BANK_ACCOUNT_NOT_FOUND') { toast('這個帳號已經不存在', 'info'); void reload(true); }
       else if (code === 'PAYOUT_ACCOUNT_CANNOT_DELETE') { toast(bankErrorText(code, ''), 'error'); void reload(true); }
       else toast('刪除失敗，請檢查網路後再試', 'error');

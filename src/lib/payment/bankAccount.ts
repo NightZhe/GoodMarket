@@ -220,7 +220,7 @@ export const ERROR_FIELD: Record<string, BankField> = {
 };
 
 export const STEP_UP_TEXT = '為了保護你的收款帳戶，新增銀行帳號或更換撥款帳號前，要先用簡訊驗證碼確認是你本人。';
-export const PHONE_REQUIRED_ADD_TEXT = '新增第二個銀行帳號前，要先用手機確認是你本人。';
+export const PHONE_REQUIRED_ADD_TEXT = '新增銀行帳號前，要先用手機確認是你本人。';
 export const PHONE_REQUIRED_PAYOUT_TEXT = '換撥款帳號前，要先用手機確認是你本人。';
 const BUSY_TEXT = '系統忙碌，請稍後再試。';
 

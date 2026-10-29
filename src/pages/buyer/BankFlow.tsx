@@ -41,7 +41,8 @@ function wasReload(): boolean {
  */
 export default function BankFlow({ origin }: { origin: BankOrigin }) {
   return (
-    <LoginRequired kind="account">
+    // sticky：登入過期時頁面不被換掉（表單草稿還在），改開登入面板蓋在上面，登入後原地繼續（AC-45）
+    <LoginRequired kind="account" sticky>
       <RequirePayment to={origin === 'seller' ? '/seller' : '/account'}>
         <FlowView origin={origin} />
       </RequirePayment>
