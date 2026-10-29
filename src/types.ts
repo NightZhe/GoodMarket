@@ -18,6 +18,8 @@ export interface Shop {
   location: string;
   rating: number;
   joinedAt: string;
+  /** 店主的使用者 id；null＝沒有店主（示範資料）。沒讀到時 undefined */
+  ownerId?: string | null;
 }
 
 export interface Variant {

@@ -99,7 +99,7 @@ describe('賣家退貨收件資料的揭露（AC-L38、AC-L39）', () => {
   });
   it('生效日不早於最近一筆舊修訂 2026/10/25（改生效日沒有改到舊紀錄）', () => {
     expect(PRIVACY_EFFECTIVE >= '2026/10/25').toBe(true);
-    const log = html(false).split('8. 修訂紀錄')[1];
+    const log = html(false).split('9. 修訂紀錄')[1];
     expect(log.match(/2026\/10\/25<\/dt>/g)).toHaveLength(String(PRIVACY_EFFECTIVE) === '2026/10/25' ? 2 : 1);
     expect(log.match(/2026\/10\/20<\/dt>/g)).toHaveLength(1);
   });
@@ -140,7 +140,7 @@ describe('刪除帳號申請與內容審核檢舉（AC-D33、D35、D36、K23、K
   });
   it('第 6 節「內容審核與檢舉」：人工審核、檢舉與 2 個工作天、封鎖只在裝置、聯絡信箱各有一句', () => {
     for (const on of [false, true]) {
-      const s6 = section(html(on), '6. 內容審核與檢舉', '7. 聯絡我們');
+      const s6 = section(html(on), '6. 內容審核與檢舉', '7. 聊聊');
       expect(s6).toContain('好物集上的商品、評價與照片由使用者刊登。我們以人工方式審核，發現或收到檢舉的違規內容（例如違禁品、仿冒品、詐騙、色情暴力、騷擾或洩露個人資料）會下架或移除。');
       expect(s6).toContain('每個商品、評價與店家都可以按『檢舉』告訴我們，我們會在 2 個工作天內處理，不會讓被檢舉的一方知道是誰檢舉。');
       expect(s6).toContain('封鎖只記在你這台裝置上，被封鎖店家的商品不會再出現在首頁與搜尋結果。');
@@ -152,21 +152,22 @@ describe('刪除帳號申請與內容審核檢舉（AC-D33、D35、D36、K23、K
     expect(s1).toContain('檢舉紀錄');
     expect(s1).toContain('你檢舉時選的原因、說明、被檢舉的內容與時間，跟著你的帳號識別碼保存，用來處理檢舉與防止濫用；不會提供給被檢舉的一方。');
   });
-  it('節次重新編號：聯絡我們是第 7 節、修訂紀錄是第 8 節', () => {
+  it('節次重新編號：聊聊是第 7 節、聯絡我們是第 8 節、修訂紀錄是第 9 節', () => {
     const page = html(false);
-    expect(page).toContain('>7. 聯絡我們<');
-    expect(page).toContain('>8. 修訂紀錄<');
+    expect(page).toContain('>7. 聊聊<');
+    expect(page).toContain('>8. 聯絡我們<');
+    expect(page).toContain('>9. 修訂紀錄<');
   });
-  it('修訂紀錄：這筆是固定日期 2026/10/26（銀行帳號那筆加入後不再是最新一筆），排在物流設定（2026/10/25）那筆之前', () => {
+  it('修訂紀錄：刪除帳號申請那筆維持固定日期 2026/10/26 與當時的原句（不跟著生效日走），排在聊聊那筆之後、MAAC Go（同日）之前', () => {
     const page = html(false);
     const entry = `2026/10/26</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${REVISION}`;
     expect(page).toContain(entry);
-    expect(page.indexOf(entry)).toBeLessThan(page.indexOf('2026/10/25</dt>'));
-    expect(page).toContain(`生效日期：${PRIVACY_EFFECTIVE}`);
+    expect(page.indexOf(entry)).toBeGreaterThan(page.indexOf(`${PRIVACY_EFFECTIVE}</dt>`));
+    expect(page.indexOf(entry)).toBeLessThan(page.indexOf(`2026/10/26</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${'驗證碼簡訊服務商由三竹'}`));
   });
   it('新句都不含付款字樣、不含 emoji（開關關著時整頁仍沒有付款字樣）', () => {
     const off = html(false);
-    const added = [section(off, '1. 我們收集的資料', '2. 怎麼使用').split('檢舉紀錄')[1], section(off, '5. 刪除你的資料', '7. 聯絡我們'), REVISION].join('');
+    const added = [section(off, '1. 我們收集的資料', '2. 怎麼使用').split('檢舉紀錄')[1], section(off, '5. 刪除你的資料', '7. 聊聊'), REVISION].join('');
     for (const w of PAY_WORDS) {
       expect(added, w).not.toContain(w);
       expect(off, w).not.toContain(w);
@@ -202,12 +203,54 @@ describe('銀行帳號（AC-49、AC-36、spec 7.1、N6）', () => {
     expect(off).not.toContain('你綁定的銀行帳號一併刪除');
     for (const w of PAY_WORDS) expect(off, w).not.toContain(w);
   });
-  it('修訂紀錄：最新一筆用生效日 2026/10/29、說明銀行帳號，且不含付款字樣、排在 2026/10/26 那筆之前', () => {
-    expect(PRIVACY_EFFECTIVE).toBe('2026/10/29');
+  it('修訂紀錄（AC-36）：銀行帳號那筆只在開關打開時出現，固定日期 2026/10/29，排在聊聊那筆之後、刪除帳號那筆之前；不含付款字樣', () => {
     for (const w of PAY_WORDS) expect(BANK_REVISION, w).not.toContain(w);
+    const entry = `2026/10/29</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${BANK_REVISION}`;
+    expect(html(false)).not.toContain(BANK_REVISION);
+    const on = html(true);
+    expect(on).toContain(entry);
+    expect(on.indexOf(entry)).toBeGreaterThan(on.indexOf('新增『聊聊』：'));
+    expect(on.indexOf(entry)).toBeLessThan(on.indexOf('刪除帳號改為在 App 或網站提出申請'));
+  });
+});
+
+describe('聊聊訊息（AC-M46、規格 §10.1）', () => {
+  // 規格 §10.1 全文，一字不改（不含開頭粗體的「聊聊訊息」與冒號）
+  const CHAT_SENTENCE = '你與店家在站內的對話內容（文字、圖片、商品與訂單卡片）會儲存在我們的資料庫與檔案儲存空間，用於提供對話功能與處理交易糾紛。對話不會自動刪除；你刪除帳號後，對方仍看得到既有對話，但你的名稱會顯示為『已刪除的帳號』。圖片只有對話雙方看得到。我們不會將對話內容用於廣告。';
+  const CHAT_REVISION = '新增『聊聊』：說明站內對話內容的儲存、保留與刪帳號後的顯示方式。';
+  const section = (page: string, from: string, to: string) => page.split(from)[1].split(to)[0];
+
+  it('第 7 節「聊聊」：粗體「聊聊訊息」＋「：」＋規格原文整句（開關開或關都在）', () => {
+    for (const on of [false, true]) {
+      const s7 = section(html(on), '>7. 聊聊<', '8. 聯絡我們');
+      expect(s7).toContain(`<strong class="font-semibold">聊聊訊息</strong>：${CHAT_SENTENCE}`);
+    }
+  });
+  it('第 7 節夾在「內容審核與檢舉」（6）與「聯絡我們」（8）之間', () => {
     const page = html(false);
-    const latest = `${PRIVACY_EFFECTIVE}</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${BANK_REVISION}`;
+    expect(page.indexOf('>6. 內容審核與檢舉<')).toBeLessThan(page.indexOf('>7. 聊聊<'));
+    expect(page.indexOf('>7. 聊聊<')).toBeLessThan(page.indexOf('>8. 聯絡我們<'));
+  });
+  it('第 5 節補一句：聊聊對話不隨帳號刪除而刪除，你的名稱改顯示為『已刪除的帳號』', () => {
+    for (const on of [false, true]) {
+      expect(section(html(on), '5. 刪除你的資料', '6. 內容審核與檢舉')).toContain('聊聊對話不隨帳號刪除而刪除，你的名稱改顯示為『已刪除的帳號』。');
+    }
+  });
+  it('生效日是 2026/10/29（上線日），修訂紀錄最新一筆用生效日、排在其他所有舊修訂之前', () => {
+    const page = html(false);
+    expect(PRIVACY_EFFECTIVE).toBe('2026/10/29');
+    const latest = `${PRIVACY_EFFECTIVE}</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${CHAT_REVISION}`;
     expect(page).toContain(latest);
-    expect(page.indexOf(latest)).toBeLessThan(page.indexOf('2026/10/26</dt>'));
+    expect(page.split('9. 修訂紀錄')[1].match(/<dt[^>]*>([^<]+)<\/dt>/)?.[1]).toBe(PRIVACY_EFFECTIVE);
+    expect(page).toContain(`生效日期：${PRIVACY_EFFECTIVE}`);
+  });
+  it('新句與修訂紀錄新句都不含付款字樣、不含 emoji（開關關著時整頁仍沒有）', () => {
+    const off = html(false);
+    for (const w of PAY_WORDS) {
+      expect(CHAT_SENTENCE, w).not.toContain(w);
+      expect(CHAT_REVISION, w).not.toContain(w);
+      expect(off, w).not.toContain(w);
+    }
+    expect(off).not.toMatch(/\p{Extended_Pictographic}/u);
   });
 });

@@ -19,7 +19,14 @@ export function nativeSessionStore(): AsyncStorageLike {
   return createSessionStore({
     secure: async () => {
       const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
-      return SecureStorage;
+      // 不能直接 return SecureStorage：Capacitor 的外掛物件是 Proxy，任何屬性名（包括 then）都回一個「原生方法包裝」，
+      // async 函式 resolve 時會把它當 thenable 去呼叫 then → 永遠不 resolve，supabase-js 第一次讀 session 就卡住，
+      // 整個 App 連商品都讀不到（TestFlight build 4 的事故）。所以包成只有三個方法的普通物件。
+      return {
+        getItem: key => SecureStorage.getItem(key),
+        setItem: (key, value) => SecureStorage.setItem(key, value),
+        removeItem: key => SecureStorage.removeItem(key),
+      };
     },
     fallback: webViewLocalStorage(),
     log: message => { console.warn(message); },

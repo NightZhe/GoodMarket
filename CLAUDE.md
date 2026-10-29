@@ -26,6 +26,8 @@
 
 - 開 worktree 時不要另裝套件：`ln -s /Users/ben/harryaiagent/GoodMarket/node_modules node_modules` 指向主 checkout。
 - main 拉新後若 `package.json` 有變，到主 checkout 跑 `npm install`，所有 worktree 一起生效。
+- **App 殼封存（TestFlight）不要在主 checkout 做**：Vite 以 `.env.local`（本機 Supabase `127.0.0.1:54321`）蓋過 `.env`，會把本機網址打包進 App
+  （2026-10-28 build 3 因此作廢）。在沒有 `.env.local` 的 worktree 封存，上傳前 `grep -c 127.0.0.1 ios/App/App/public/assets/*.js` 必須是 0。
 - CI（`.github/workflows/ci.yml`）在乾淨環境跑 lint／測試／build，會抓到「本機能跑、乾淨環境不能跑」的問題。
 
 ## 資料庫（2026-10-16 起）

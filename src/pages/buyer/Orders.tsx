@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronDown, Clock, Hourglass, LoaderCircle, Store, TriangleAlert, WifiOff } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
+import ChatEntryButton from '../../components/chat/ChatEntryButton';
+import { newChatPath } from '../../lib/chat/nav';
 import LoginRequired from '../../components/auth/LoginRequired';
 import { useToast } from '../../components/Toast';
 import { accountErrorText, toAccountError } from '../../lib/account/errors';
@@ -356,6 +358,11 @@ function OrdersView() {
                   <span className="block text-xs text-muted">{dateText(o.createdAt)}</span>
                   {/* 付款方式一行只在線上付款開關打開時出現；關著時與開關打開前的畫面逐字相同 */}
                   {paymentCfg.enabled && <span className="block text-xs text-muted">{orderPayLineIfOn(true, o.payment, pay)}</span>}
+                  {/* 任何訂單狀態都有「聯絡賣家」（§8.3）：進該店的對話，訂單卡待送出 */}
+                  <ChatEntryButton
+                    shopId={o.shopId} shopName={getShop(o.shopId)?.name ?? ''} to={newChatPath({ shopId: o.shopId, orderId: o.id })}
+                    variant="outline" ignoreLocalBlock text="聯絡賣家" label={`聯絡賣家，訂單 ${o.orderNo}`}
+                  />
                 </span>
                 <div className="flex flex-wrap items-center justify-end gap-3">
                   <span className="text-sm">訂單金額 <span className="text-lg text-brand">{money(o.total)}</span></span>

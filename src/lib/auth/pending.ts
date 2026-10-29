@@ -43,7 +43,8 @@ export type PendingAction =
 export type PendingInput =
   | { kind: 'add_to_cart' | 'buy_now'; productId: string; variantId: string; qty: number }
   | { kind: 'checkout'; items: CartItem[]; fromCart: boolean; payment: PaymentMethod; cardId?: string | null; address: CheckoutAddress }
-  | { kind: 'goto' };
+  /** to：登入後要去的站內頁（例如聊聊的對話頁）；沒給就回到按下登入時的那一頁 */
+  | { kind: 'goto'; to?: string };
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -129,7 +130,7 @@ export function buildPending(input: PendingInput, currentRoute: string, now: num
     case 'checkout':
       return { ...input, cardId: input.cardId ?? null, returnTo: '/checkout', createdAt: now };
     case 'goto':
-      return { kind: 'goto', returnTo: route, createdAt: now };
+      return { kind: 'goto', returnTo: isSafeRoute(input.to) ? input.to : route, createdAt: now };
   }
 }
 

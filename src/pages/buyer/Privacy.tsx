@@ -4,6 +4,9 @@ import { ExternalLink } from 'lucide-react';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { CONTACT_EMAIL, DELETION_WINDOW, PRIVACY_EFFECTIVE, PRIVACY_FIRST_PUBLISHED } from '../../lib/site';
 
+/** 刪除帳號改為申請制、新增內容審核與檢舉的修訂日（store-prereqs，2026-10-26 推上）：已發生的修訂，不會再變。
+ *  聊聊上線那筆（2026/10/29）接手 PRIVACY_EFFECTIVE，這筆依合併規則改成固定日期 */
+const PRIVACY_DELETE_REQUEST = '2026/10/26';
 /** 帳號頁 P-A（個人檔案、地址簿）上線日：已發生的修訂，不會再變 */
 const PRIVACY_P_A = '2026/10/18';
 /** 賣家『物流設定』（退貨收件資料的揭露）上線日：已發生的修訂，不會再變。
@@ -13,13 +16,13 @@ const PRIVACY_P_A = '2026/10/18';
 const PRIVACY_SELLER_LOGISTICS = '2026/10/25';
 /** 驗證碼簡訊服務商改為 MAAC Go（三竹備援）的修訂日（PR #8，2026-10-25 深夜推上、網站顯示 2026/10/26）：已發生的修訂，不會再變 */
 const PRIVACY_SMS_MAACGO = '2026/10/26';
-/** 刪除帳號改為 App 內申請、新增內容審核與檢舉（store-prereqs）的修訂日：已發生的修訂，不會再變（它曾是「最新一筆」而用 PRIVACY_EFFECTIVE，銀行帳號那筆加入後改成固定日期） */
-const PRIVACY_DELETION_REPORTS = '2026/10/26';
+/** 銀行帳號上線那筆（2026/10/29，與聊聊同日）：聊聊那筆是最新一筆用 PRIVACY_EFFECTIVE，這筆依合併規則用固定日期。只在線上付款開關打開時顯示（銀行帳號功能隨開關） */
+const PRIVACY_BANK_ACCOUNT = '2026/10/29';
 /** 驗證碼簡訊服務商由 Twilio 改為三竹的修訂日：已發生的修訂，不會再變（修訂紀錄的「最新一筆」用 PRIVACY_EFFECTIVE，舊的每筆各有自己的固定日期） */
 const PRIVACY_SMS_VENDOR = '2026/10/20';
 /** 手機號碼登入與綁定手機上線日：已發生的修訂，不會再變 */
 const PRIVACY_PHONE_LOGIN = '2026/10/19';
-/** 銀行帳號功能的修訂紀錄句子。不含付款相關字樣（開關關著時整頁仍不能出現），所以不論開關都顯示 */
+/** 銀行帳號功能的修訂紀錄句子（只在線上付款開關打開時顯示；句子本身仍不含付款字樣） */
 export const BANK_REVISION = '新增「銀行帳號」：說明綁定的銀行帳號如何保存、誰看得到，以及刪除帳號時如何處理。';
 const TURNSTILE_PRIVACY_URL = 'https://www.cloudflare.com/turnstile-privacy-policy/';
 
@@ -130,7 +133,7 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
           >
             申請刪除帳號
           </Link>
-          。我們會在申請後 {DELETION_WINDOW}人工處理；處理完成前你可以隨時取消。還有待出貨或運送中的訂單時，要等訂單完成或取消後才能申請。有開店的帳號，店、商品與店內的訂單會一併刪除。刪除完成後，再用同一個登入方式登入會是全新的空帳號。
+          。我們會在申請後 {DELETION_WINDOW}人工處理；處理完成前你可以隨時取消。還有待出貨或運送中的訂單時，要等訂單完成或取消後才能申請。有開店的帳號，店、商品與店內的訂單會一併刪除。刪除完成後，再用同一個登入方式登入會是全新的空帳號。聊聊對話不隨帳號刪除而刪除，你的名稱改顯示為『已刪除的帳號』。
         </div>
 
         <h2 className="mt-8 text-base font-bold">6. 內容審核與檢舉</h2>
@@ -140,20 +143,31 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
           。
         </p>
 
-        <h2 className="mt-8 text-base font-bold">7. 聯絡我們</h2>
+        <h2 className="mt-8 text-base font-bold">7. 聊聊</h2>
+        <p className="mt-2 text-base leading-7">
+          <strong className="font-semibold">聊聊訊息</strong>：你與店家在站內的對話內容（文字、圖片、商品與訂單卡片）會儲存在我們的資料庫與檔案儲存空間，用於提供對話功能與處理交易糾紛。對話不會自動刪除；你刪除帳號後，對方仍看得到既有對話，但你的名稱會顯示為『已刪除的帳號』。圖片只有對話雙方看得到。我們不會將對話內容用於廣告。
+        </p>
+
+        <h2 className="mt-8 text-base font-bold">8. 聯絡我們</h2>
         <p className="mt-2 text-base leading-7">
           關於你的資料有任何問題，請來信：
           <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>
         </p>
 
-        <h2 className="mt-8 text-base font-bold">8. 修訂紀錄</h2>
+        <h2 className="mt-8 text-base font-bold">9. 修訂紀錄</h2>
         <dl className="mt-2 rounded-md border border-line px-4">
           <div className="border-t border-line py-3 first:border-t-0">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_EFFECTIVE}</dt>
-            <dd className="mt-0.5 text-sm leading-6 text-muted">{BANK_REVISION}</dd>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">新增『聊聊』：說明站內對話內容的儲存、保留與刪帳號後的顯示方式。</dd>
           </div>
+          {payOn && (
+            <div className="border-t border-line py-3">
+              <dt className="text-sm font-medium tabular-nums">{PRIVACY_BANK_ACCOUNT}</dt>
+              <dd className="mt-0.5 text-sm leading-6 text-muted">{BANK_REVISION}</dd>
+            </div>
+          )}
           <div className="border-t border-line py-3">
-            <dt className="text-sm font-medium tabular-nums">{PRIVACY_DELETION_REPORTS}</dt>
+            <dt className="text-sm font-medium tabular-nums">{PRIVACY_DELETE_REQUEST}</dt>
             <dd className="mt-0.5 text-sm leading-6 text-muted">刪除帳號改為在 App 或網站提出申請、7 個工作天內處理，刪除時評價與照片一併刪除；新增『內容審核與檢舉』與檢舉紀錄的說明。</dd>
           </div>
           <div className="border-t border-line py-3">

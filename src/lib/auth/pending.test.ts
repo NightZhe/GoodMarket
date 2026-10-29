@@ -39,6 +39,11 @@ describe('buildPending', () => {
   it('目前網址不是站內路徑時退回首頁', () => {
     expect(buildPending({ kind: 'goto' }, '//evil.com', NOW).returnTo).toBe('/');
   });
+  it('純登入可以指定登入後要去的站內頁（聊聊：登入回來自動進入對話）；指定的不是站內路徑就退回目前頁面', () => {
+    expect(buildPending({ kind: 'goto', to: '/chat/new?shop=s1&product=p1' }, '/product/p1', NOW).returnTo).toBe('/chat/new?shop=s1&product=p1');
+    expect(buildPending({ kind: 'goto', to: '//evil.com' }, '/product/p1', NOW).returnTo).toBe('/product/p1');
+    expect(buildPending({ kind: 'goto', to: 'https://evil.com' }, '/product/p1', NOW).returnTo).toBe('/product/p1');
+  });
 });
 
 describe('存取：只執行一次', () => {

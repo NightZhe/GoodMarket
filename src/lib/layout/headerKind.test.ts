@@ -9,6 +9,13 @@ describe('headerFor：依路徑決定買家前台的頁首樣式', () => {
     expect(headerFor('/account')).toEqual({ kind: 'large', title: '我的', cart: false, search: false });
   });
 
+  it('聊聊列表是大標題（同「訂單」）；對話頁自己畫導覽列，外框只放安全區條', () => {
+    expect(headerFor('/chat')).toEqual({ kind: 'large', title: '聊聊', cart: false, search: false });
+    expect(headerFor('/chat/')).toEqual({ kind: 'large', title: '聊聊', cart: false, search: false });
+    expect(headerFor('/chat/c1')).toEqual({ kind: 'plain' });
+    expect(headerFor('/chat/new')).toEqual({ kind: 'plain' });
+  });
+
   it('商品頁：返回「首頁」，右側有分享與購物車，分享要帶商品編號', () => {
     expect(headerFor('/product/p001')).toEqual({
       kind: 'nav', back: { to: '/', label: '首頁' }, cart: true, share: { kind: 'product', id: 'p001' }, title: null,

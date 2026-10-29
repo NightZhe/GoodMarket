@@ -45,6 +45,11 @@ export function FieldError({ id, children }: { id: string; children?: string }) 
 /**
  * iOS 導覽列：44pt、材質底、貼頂；左「‹ 上一層名稱」brand 17pt，標題 17／600 置中。
  * 返回是確定的 Link（不用 history.back）。backText＝上一層的名稱（預設「我的」）；backLabel 是讀屏念的完整說法，要包含 backText。
+ * 左右欄用 minmax(0,1fr) 讓欄寬可縮，Link 加 max-w-full（nowrap 文字的 min-content 會撐開欄位）。
+ * 窄螢幕＋大字時返回字只有兩種樣子：完整顯示，或整個不見只剩「‹」（像 iOS 原生返回鈕），不會出現半個字或碎片，
+ * 也不疊到標題上（完整名稱在 aria-label）。做法：Link 允許換行（flex-wrap）並用 overflow-clip 把高度鎖在 44，
+ * 放不下的字會整個掉到第二行被裁掉；圖示包成 44 高的第一行，所以第一行的位置和不換行時完全一樣。
+ * 不用 truncate（欄寬比「…」還窄時只剩碎片）、不用寫死的容器查詢門檻（「我的」與「賣場總覽」需要的寬度不同，門檻跟字數有關）；正常字級下版面不變。
  * -mx-4 抵掉 SubPage 的左右內距，讓材質底填滿容器寬。onBack／titleRef 給有自己離開流程與焦點管理的頁（綁定手機）
  */
 export function SubHeader({ to, backLabel, backText = '我的', title, onBack, titleRef }: {
@@ -52,12 +57,12 @@ export function SubHeader({ to, backLabel, backText = '我的', title, onBack, t
 }) {
   return (
     <header className="material-grouped sticky top-0 z-30 -mx-4 mb-2 border-b-[0.5px] border-separator">
-      <div className="grid h-11 grid-cols-[1fr_auto_1fr] items-center">
+      <div className="grid h-11 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center">
         <Link
           to={to} onClick={onBack} aria-label={backLabel}
-          className="flex h-11 min-w-11 items-center justify-self-start pl-1 pr-3 text-body text-brand active:text-brand-dark"
+          className="flex h-11 min-w-11 max-w-full flex-wrap content-start items-center justify-self-start overflow-clip pl-1 pr-3 text-body text-brand active:text-brand-dark"
         >
-          <ChevronLeft size={28} strokeWidth={2.4} className="shrink-0" aria-hidden="true" />
+          <span className="flex h-11 shrink-0 items-center"><ChevronLeft size={28} strokeWidth={2.4} aria-hidden="true" /></span>
           <span className="whitespace-nowrap">{backText}</span>
         </Link>
         <h1 ref={titleRef} tabIndex={titleRef ? -1 : undefined} className="max-w-[55vw] min-w-0 truncate text-headline font-semibold outline-none">{title}</h1>
