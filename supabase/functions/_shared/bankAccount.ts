@@ -1,5 +1,5 @@
 // 銀行帳號：bank-account-add 的純邏輯（輸入正規化／檢查、AES-256-GCM、fingerprint、amr 解析、錯誤碼對應）。
-// 契約：.work/seller-bank-account/interface-bank-account-v2.md（v2.1）§3.2。
+// 契約：.work/seller-bank-account/interface-bank-account-v2.md（v2.2）§3.2。
 // 鐵則：完整帳號（原始或正規化後）不得出現在錯誤訊息、日誌或回應；這裡所有 throw 的訊息都是固定字串。
 // 只用 Web Crypto／atob／btoa，Deno 與 Node（vitest）都能跑。
 
@@ -13,8 +13,9 @@ export const STEP_UP_WINDOW_SEC = 600;
 
 export interface AddInput { bankCode: string; branchCode: string; account: string; holder: string; setPayout: boolean }
 
-/** 去掉所有空白（含全形空白、NBSP）與連字號。 */
-export const stripAccount = (s: string): string => s.replace(/[\s \u00a0\u3000-]/g, '');
+/** 全形數字 ０-９ 轉半形，再去掉所有空白（含全形空白、NBSP）與連字號。 */
+export const stripAccount = (s: string): string =>
+  s.replace(/[\uff10-\uff19]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/[\s \u00a0\u3000-]/g, '');
 /** 去頭尾空白（含全形空白、NBSP）。 */
 export const trimText = (s: string): string => s.replace(/^[\s \u00a0\u3000]+|[\s \u00a0\u3000]+$/g, '');
 
@@ -131,8 +132,8 @@ const MESSAGE: Record<string, string> = {
   ACCOUNT_NUMBER_INVALID: '帳號需為 8 到 16 位數字', ACCOUNT_HOLDER_INVALID: '戶名需為 1 到 50 個字，且不能含換行',
   BANK_ACCOUNT_LIMIT: '銀行帳號最多只能存 5 個，請先刪除不用的', BANK_ACCOUNT_DUPLICATE: '這個銀行帳號你已經綁過了',
   BANK_ACCOUNT_TAKEN: '這個銀行帳號已經被其他帳號綁定',
-  PHONE_REQUIRED: '新增第二個銀行帳號前，要先綁定手機',
-  STEP_UP_REQUIRED: '為了保護你的收款帳戶，新增銀行帳號前要先用簡訊驗證碼確認是你本人。',
+  PHONE_REQUIRED: '新增銀行帳號或更換撥款帳號前，要先綁定手機',
+  STEP_UP_REQUIRED: '為了保護你的收款帳戶，要先用簡訊驗證碼確認是你本人',
 };
 
 /** 資料庫 RPC 錯誤的 hint＝錯誤碼（message 是中文，不採用）。已知碼照表回；其他一律 INTERNAL（不回傳資料庫的原始訊息）。 */

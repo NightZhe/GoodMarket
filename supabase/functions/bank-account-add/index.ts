@@ -1,6 +1,6 @@
 // POST { bankCode, branchCode, account, holder, setPayout? } → { ok:true, id, limit, accounts:[…] }
 // 要登入。新增銀行帳號（掛人、最多 5 筆、不可修改；契約 .work/seller-bank-account/interface-bank-account-v2.md §3.2）。
-//   · 第一筆不需簡訊；已有 ≥1 筆時要 JWT 的 amr 有 10 分鐘內的 otp（資料庫 _add_bank_account 是最後一道）。
+//   · 每次新增（含第一筆，T7）都要 JWT 的 amr 有 10 分鐘內的 otp；沒手機 → PHONE_REQUIRED（資料庫 _add_bank_account 是最後一道）。
 //   · 帳號用 AES-256-GCM 加密後才進資料庫；密文與金鑰版本一起存；另算全站唯一的 fingerprint（T2）。
 //   · 以 --no-verify-jwt 部署：函式自己 auth.getUser(token)，才能回統一格式的 401。
 //   · 完整帳號（原始或正規化後）不得寫進 log、錯誤訊息或回應。這裡的 console.error 只寫固定字串與錯誤碼。

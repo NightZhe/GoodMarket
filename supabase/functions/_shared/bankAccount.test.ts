@@ -13,10 +13,14 @@ describe('parseAddBody：帳號正規化（AC-10、AC-11）', () => {
     expect(parseAddBody(good).account).toBe('001234567890');
     expect(stripAccount('00　12-34 56 78')).toBe('00123456' + '78');
   });
+  it('全形數字轉半形（含混用全形空白、ASCII 連字號）', () => {
+    expect(parseAddBody({ ...good, account: '００１２-３４５６　７８９０' }).account).toBe('001234567890');
+    expect(stripAccount('１２３４５６７８')).toBe('12345678');
+  });
   it('8 與 16 碼可、7 與 17 碼不可、含字母不可、全形數字不可', () => {
     expect(parseAddBody({ ...good, account: '12345678' }).account).toBe('12345678');
     expect(parseAddBody({ ...good, account: '1234567890123456' }).account).toHaveLength(16);
-    for (const a of ['1234567', '12345678901234567', '1234567a', '１２３４５６７８', '', '--- ---']) {
+    for (const a of ['1234567', '12345678901234567', '1234567a', '１２３４５６７Ａ', '', '--- ---']) {
       expect(codeOf(() => parseAddBody({ ...good, account: a }))).toBe('ACCOUNT_NUMBER_INVALID');
     }
   });

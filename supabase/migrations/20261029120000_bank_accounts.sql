@@ -3713,7 +3713,7 @@ begin
     when 'BANK_ACCOUNT_NOT_FOUND'       then '找不到這個銀行帳號'
     when 'BANK_ACCOUNT_REJECTED'        then '未通過的銀行帳號不能設為撥款帳號'
     when 'PAYOUT_ACCOUNT_CANNOT_DELETE' then '這是撥款帳號，要先把別的帳號設為撥款帳號才能刪除'
-    when 'PHONE_REQUIRED'               then '新增第二個銀行帳號或更換撥款帳號前，要先綁定手機'
+    when 'PHONE_REQUIRED'               then '新增銀行帳號或更換撥款帳號前，要先綁定手機'
     when 'STEP_UP_REQUIRED'             then '為了保護你的收款帳戶，要先用簡訊驗證碼確認是你本人'
     when 'STATUS_INVALID'               then '狀態只能是 pending、verified 或 rejected'
     when 'REASON_REQUIRED'              then '標為未通過必須填原因'
@@ -3850,7 +3850,7 @@ grant execute on function public.get_bank_ui_config() to anon, authenticated;
 -- 5. 內部：新增（只給 service_role；Edge Function bank-account-add 呼叫）
 -- ═══════════════════════════════════════════════════════════════════════
 -- 資料庫是最後一道。檢查順序：NOT_AUTHENTICATED → BANK_CODE → BRANCH_CODE → ACCOUNT_NUMBER（末四碼／fingerprint 格式）→ ACCOUNT_HOLDER
---   → （鎖）→ BANK_ACCOUNT_LIMIT → BANK_ACCOUNT_DUPLICATE（同人）→ PHONE_REQUIRED → STEP_UP_REQUIRED（後兩者只在已有 ≥1 筆時）→ BANK_ACCOUNT_TAKEN（他人）
+--   → （鎖）→ BANK_ACCOUNT_LIMIT → BANK_ACCOUNT_DUPLICATE（同人）→ PHONE_REQUIRED → STEP_UP_REQUIRED（T7：第一筆也檢查）→ BANK_ACCOUNT_TAKEN（他人）
 create or replace function public._add_bank_account(
   p_user        uuid,
   p_bank_code   text,
@@ -3896,11 +3896,10 @@ begin
   if exists (select 1 from public.bank_accounts a where a.user_id = p_user and a.bank_code = p_bank_code and a.account_fingerprint = p_fingerprint) then
     perform public._bank_err('BANK_ACCOUNT_DUPLICATE');
   end if;
-  if v_count >= 1 then
-    if not public._bank_has_phone(p_user) then perform public._bank_err('PHONE_REQUIRED'); end if;
-    if not public._bank_otp_fresh(p_otp_at) then perform public._bank_err('STEP_UP_REQUIRED'); end if;
-  end if;
-  -- TAKEN 放在簡訊檢查之後：已有帳號的人沒通過簡訊就不能探測某個帳號是否被別人占用（第一筆仍可探測，見回報）
+  -- T7：每次新增（含第一筆）都要簡訊再驗證；沒手機 → PHONE_REQUIRED
+  if not public._bank_has_phone(p_user) then perform public._bank_err('PHONE_REQUIRED'); end if;
+  if not public._bank_otp_fresh(p_otp_at) then perform public._bank_err('STEP_UP_REQUIRED'); end if;
+  -- TAKEN 放在簡訊檢查之後：沒通過簡訊就不能探測某個帳號是否被別人占用
   if exists (select 1 from public.bank_accounts a where a.bank_code = p_bank_code and a.account_fingerprint = p_fingerprint) then
     perform public._bank_err('BANK_ACCOUNT_TAKEN');
   end if;
@@ -3921,7 +3920,7 @@ begin
     perform public._bank_err('BANK_ACCOUNT_TAKEN');
   end;
   insert into public.bank_account_events (user_id, account_id, actor, action, bank_code, account_last4, status, is_payout, step_up)
-  values (p_user, v_id, p_user, 'add', p_bank_code, p_last4, 'pending', v_payout, v_count >= 1);
+  values (p_user, v_id, p_user, 'add', p_bank_code, p_last4, 'pending', v_payout, true);
   return public._bank_accounts_json(p_user) || jsonb_build_object('id', v_id);
 end $$;
 revoke all on function public._add_bank_account(uuid, text, text, text, smallint, text, text, text, boolean, timestamptz) from public, anon, authenticated;
