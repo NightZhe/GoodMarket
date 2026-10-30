@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ONLINE_SHOP_LIMIT, payButtonLabel, planCheckout, preselectChoice, preselectRetryCard, type PlanShop } from './plan';
+import { ONLINE_SHOP_LIMIT, payButtonLabel, planCheckout, preselectChoice, preselectRetryCard, type PlanShop, codReasonText } from './plan';
 
 const A: PlanShop = { shopId: 'A', total: 1010 };
 const B: PlanShop = { shopId: 'B', total: 480 };
@@ -114,5 +114,19 @@ describe('preselectRetryCard：重新付款頁的預選', () => {
   });
   it('系統問題（沒有失敗的卡）時預選同一張預設卡', () => {
     expect(preselectRetryCard([card('a'), card('b', { is_default: true })], null)).toBe('b');
+  });
+});
+
+describe('codReasonText：貨到付款組的原因句依平台收款開關切換（PR-乙 IN-B6、E3＝A）', () => {
+  it('開關關：逐字維持現在的句子', () => {
+    expect(codReasonText('not_enrolled', false)).toBe('這家店還沒開通線上付款，只能貨到付款。');
+    expect(codReasonText('over_limit', false)).toBe('這家店的金額超過線上付款的單筆上限（$200,000），只能貨到付款。');
+  });
+  it('開關開：not_enrolled 改成 E3 句（不洩漏店主有沒有綁帳號）；over_limit 不變', () => {
+    expect(codReasonText('not_enrolled', true)).toBe('這家店目前只能貨到付款。');
+    expect(codReasonText('over_limit', true)).toBe('這家店的金額超過線上付款的單筆上限（$200,000），只能貨到付款。');
+  });
+  it('開關開的句子不提「開通」「特約商店」', () => {
+    expect(codReasonText('not_enrolled', true)).not.toMatch(/開通|特約商店/);
   });
 });

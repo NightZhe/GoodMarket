@@ -30,7 +30,7 @@ import { errorCodeOf, fetchShopsOnlinePayable, isAuthError, payErrorText, payGro
 import type { PaymentErrorCode } from '../../lib/payment/types';
 import { brandLabel, cardBrandOf } from '../../lib/payment/cards';
 import { rememberPayCard } from '../../lib/payment/lastCard';
-import { ONLINE_SHOP_LIMIT, payButtonLabel, planCheckout, preselectChoice, type CodReason, type PayChoice } from '../../lib/payment/plan';
+import { codReasonText, payButtonLabel, planCheckout, preselectChoice, type CodReason, type PayChoice } from '../../lib/payment/plan';
 import { destinationOfPayError, SLOW_PAY_MS, WAIT_PAY_MS } from '../../lib/payment/screens';
 import { refreshPaymentConfig, usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useCards } from '../../lib/payment/useCards';
@@ -437,7 +437,7 @@ function CheckoutView() {
       {reason && (
         <p className="flex items-start gap-1.5 border-t border-line bg-subtle px-4 py-2.5 text-sm md:px-6">
           <Info size={16} className="mt-0.5 shrink-0 text-info-text" aria-hidden="true" />
-          {reason === 'not_enrolled' ? '這家店還沒開通線上付款，只能貨到付款。' : `這家店的金額超過線上付款的單筆上限（${money(ONLINE_SHOP_LIMIT)}），只能貨到付款。`}
+          {codReasonText(reason, paymentCfg.platformCollectEnabled)}
         </p>
       )}
     </section>

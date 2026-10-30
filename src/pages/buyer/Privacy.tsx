@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
+import { PLATFORM_COLLECT_REVISION, PLATFORM_COLLECT_USE_SENTENCE, privacyEffectiveDate, taipeiDate } from '../../lib/payment/platformCollect';
 import { CONTACT_EMAIL, DELETION_WINDOW, PRIVACY_EFFECTIVE, PRIVACY_FIRST_PUBLISHED } from '../../lib/site';
 
 /** 刪除帳號改為申請制、新增內容審核與檢舉的修訂日（store-prereqs，2026-10-26 推上）：已發生的修訂，不會再變。
@@ -70,17 +71,22 @@ const dataItems = (payOn: boolean): { name: string; detail: ReactNode }[] => [
   { name: '檢舉紀錄', detail: '你檢舉時選的原因、說明、被檢舉的內容與時間，跟著你的帳號識別碼保存，用來處理檢舉與防止濫用；不會提供給被檢舉的一方。' },
 ];
 
-/** 隱私政策 #/privacy。日期、保存期間、信箱集中在 lib/site.ts。付款相關的段落隨線上付款開關顯示（關著時與上線前逐字相同） */
+/** 隱私政策 #/privacy。日期、保存期間、信箱集中在 lib/site.ts。付款相關的段落隨線上付款開關顯示（關著時與上線前逐字相同）。
+ *  平台收款（PR-乙 IN-B8）：第 2 節付款那句、生效日與修訂紀錄新的一筆隨平台收款開關與打開日切換（關著時三處逐字不變） */
 export default function Privacy() {
-  return <PrivacyView payOn={usePaymentConfig().enabled} />;
+  const cfg = usePaymentConfig();
+  return <PrivacyView payOn={cfg.enabled} platformOn={cfg.platformCollectEnabled} platformOnDate={taipeiDate(cfg.platformCollectEnabledAt)} />;
 }
 
-export function PrivacyView({ payOn }: { payOn: boolean }) {
+export function PrivacyView({ payOn, platformOn = false, platformOnDate = null }: { payOn: boolean; platformOn?: boolean; platformOnDate?: string | null }) {
+  // 平台收款的句子只在線上付款開關也開時出現（付款開關關著時整頁零付款字樣的不變量不能破）；修訂紀錄那筆要有打開日才顯示（design.md §3.7）
+  const collectOn = payOn && platformOn;
+  const collectDate = collectOn ? platformOnDate : null;
   return (
     <div className="mx-auto max-w-3xl md:px-4 md:pt-6">
       <article className="bg-white px-4 py-6 md:rounded-md md:p-10">
         <h1 className="text-2xl font-bold">隱私政策</h1>
-        <p className="mt-1 text-xs text-muted">生效日期：{PRIVACY_EFFECTIVE}（修訂紀錄在文末）</p>
+        <p className="mt-1 text-xs text-muted">生效日期：{privacyEffectiveDate(PRIVACY_EFFECTIVE, collectDate)}（修訂紀錄在文末）</p>
         <p className="mt-4 text-base leading-7">
           好物集是讓人開店、也讓人購物的網站。要購買商品，你需要用 Google、Apple 或手機號碼登入；這份政策說明我們收集哪些資料、怎麼使用、誰看得到、保存多久，以及你怎麼請我們刪除。
         </p>
@@ -99,7 +105,8 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
         <ul className="mt-2 list-disc space-y-1 pl-5 text-base leading-7">
           <li>讓你登入、保存購物車與收件地址、下單、查詢訂單與撰寫評價。</li>
           <li>下單時，把你選的那一筆收件資料交給你下單的賣家，讓賣家出貨。</li>
-          {payOn && <li>你按下付款時，向綠界科技請求用你選的卡付款；款項由綠界科技處理並撥給賣家。</li>}
+          {/* 平台收款開關開：款項先進好物集（甲 spec §7.2 原句，待律師定稿）；關：維持原句 */}
+          {payOn && <li>{collectOn ? PLATFORM_COLLECT_USE_SENTENCE : '你按下付款時，向綠界科技請求用你選的卡付款；款項由綠界科技處理並撥給賣家。'}</li>}
           <li>寫評價時，暱稱會先預填你在個人檔案設定的暱稱；沒設定時，預填你的 Google 名稱。你可以自行修改或清空，改的只影響那則評價。</li>
         </ul>
 
@@ -156,6 +163,13 @@ export function PrivacyView({ payOn }: { payOn: boolean }) {
 
         <h2 className="mt-8 text-base font-bold">9. 修訂紀錄</h2>
         <dl className="mt-2 rounded-md border border-line px-4">
+          {/* 平台收款那筆：日期＝開關打開日（執行期才知道），放最上面；關著時不渲染，下面那筆仍是第一個子元素（first:border-t-0 照舊） */}
+          {collectDate && (
+            <div className="border-t border-line py-3 first:border-t-0">
+              <dt className="text-sm font-medium tabular-nums">{collectDate}</dt>
+              <dd className="mt-0.5 text-sm leading-6 text-muted">{PLATFORM_COLLECT_REVISION}</dd>
+            </div>
+          )}
           <div className="border-t border-line py-3 first:border-t-0">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_EFFECTIVE}</dt>
             <dd className="mt-0.5 text-sm leading-6 text-muted">新增『聊聊』：說明站內對話內容的儲存、保留與刪帳號後的顯示方式。</dd>

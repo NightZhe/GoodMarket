@@ -254,3 +254,48 @@ describe('聊聊訊息（AC-M46、規格 §10.1）', () => {
     expect(off).not.toMatch(/\p{Extended_Pictographic}/u);
   });
 });
+
+describe('平台收款開關（PR-乙 IN-B8；AC-58、AC-63；§7.2 文字待律師定稿）', () => {
+  const OLD = '你按下付款時，向綠界科技請求用你選的卡付款；款項由綠界科技處理並撥給賣家。';
+  const NEW = '你按下付款時，向綠界科技請求用你選的卡付款；款項先付給好物集，由好物集撥給賣家。';
+  const REV = '線上付款改由好物集代收：你付的款項先付給好物集，再由好物集撥給賣家。';
+  const page = (payOn: boolean, platformOn: boolean, platformOnDate: string | null) =>
+    renderToStaticMarkup(<MemoryRouter><PrivacyView payOn={payOn} platformOn={platformOn} platformOnDate={platformOnDate} /></MemoryRouter>);
+
+  it('開關關（不帶新 prop）＝現在：舊句在、新句與新修訂都不在、生效日是常數', () => {
+    const off = html(true);
+    expect(off).toContain(OLD);
+    expect(off).not.toContain(NEW);
+    expect(off).not.toContain(REV);
+    expect(off).toContain(`生效日期：${PRIVACY_EFFECTIVE}`);
+    expect(page(true, false, '2026/11/02')).toBe(off);
+  });
+  it('開關開：新句取代舊句（AC-58）、修訂紀錄最上面多一筆打開日、生效日改成打開日', () => {
+    const on = page(true, true, '2026/11/02');
+    expect(on).toContain(NEW);
+    expect(on).not.toContain('款項由綠界科技處理並撥給賣家');
+    expect(on).toContain(`2026/11/02</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${REV}`);
+    expect(on.split('9. 修訂紀錄')[1].match(/<dt[^>]*>([^<]+)<\/dt>/)?.[1]).toBe('2026/11/02');
+    expect(on).toContain('生效日期：2026/11/02');
+    expect(on).not.toContain('用特約商店編號與狀態判斷');
+    expect(on).not.toContain('好物集不會收到，也不會儲存完整銀行帳號');
+    // 聊聊那筆仍用常數日期、排在乙那筆之後
+    expect(on.indexOf('2026/11/02</dt>')).toBeLessThan(on.indexOf(`${PRIVACY_EFFECTIVE}</dt>`));
+  });
+  it('打開日早於常數：生效日維持常數，修訂紀錄那筆仍放最上面', () => {
+    const on = page(true, true, '2026/10/20');
+    expect(on).toContain(`生效日期：${PRIVACY_EFFECTIVE}`);
+    expect(on.split('9. 修訂紀錄')[1].match(/<dt[^>]*>([^<]+)<\/dt>/)?.[1]).toBe('2026/10/20');
+  });
+  it('開關開但沒有打開日（不該發生）：第 2 節換新句，但不加修訂紀錄、生效日維持常數', () => {
+    const on = page(true, true, null);
+    expect(on).toContain(NEW);
+    expect(on).not.toContain(REV);
+    expect(on).toContain(`生效日期：${PRIVACY_EFFECTIVE}`);
+  });
+  it('付款開關關著時，平台收款開關開也不出現任何付款字樣（既有不變量）', () => {
+    const off = page(false, true, '2026/11/02');
+    for (const w of PAY_WORDS) expect(off, w).not.toContain(w);
+    expect(off).toBe(html(false));
+  });
+});
