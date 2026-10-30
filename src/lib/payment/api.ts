@@ -10,6 +10,7 @@ import type {
   BindConfirmResponse, BindStartResponse, BindStatusResponse, BuyerCancelReason, MethodDeleteResponse, OrderPaymentRow, OrderRefundRow, PayResponse,
   PaymentGroupView, PaymentMethodRow, PaymentStatusResponse, PlaceOnlineOrderArgs, PlaceOnlineOrderOk, RequestCancelResult, RespondCancelResult,
   SellerCancelReason, SellerEcpayMerchantRow, SellerOrderPayoutRow, ShopCancelSummary, ShopOnlinePayable, ShopOrderRefundRow,
+  PaymentConfig,
 } from './types';
 import { chunkIds } from './payoutView';
 import { parseLogosEnabled } from '../../data/bankLogos';
@@ -43,6 +44,25 @@ export async function fetchPaymentConfig(): Promise<boolean> {
   const { data, error } = await supabase.rpc('get_payment_config');
   if (error) return fail(error);
   return Boolean((data as { onlinePaymentEnabled?: boolean } | null)?.onlinePaymentEnabled);
+}
+
+/** 把 get_payment_config 的回應整理成固定形狀：舊資料庫（只有 onlinePaymentEnabled）→ 平台收款當關、時間 null；
+ *  不是明確的 true 一律當 false，時間不是字串一律 null（PR-乙 AC-61）。純函式，給測試用 */
+export function parsePaymentConfig(data: unknown): PaymentConfig {
+  const d = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+  const at = d.platformCollectEnabledAt;
+  return {
+    onlinePaymentEnabled: d.onlinePaymentEnabled === true,
+    platformCollectEnabled: d.platformCollectEnabled === true,
+    platformCollectEnabledAt: typeof at === 'string' && at !== '' ? at : null,
+  };
+}
+
+/** 完整的付款開關（線上付款＋平台收款＋打開時間）。既有的 fetchPaymentConfig() 只回線上付款開關、簽名不變（舊呼叫端不動） */
+export async function fetchPaymentConfigFull(): Promise<PaymentConfig> {
+  const { data, error } = await supabase.rpc('get_payment_config');
+  if (error) return fail(error);
+  return parsePaymentConfig(data);
 }
 
 /** 銀行 logo 的伺服器端開關（get_bank_ui_config）。讀不到、舊資料庫、不是明確的 true：一律當作關（純文字） */

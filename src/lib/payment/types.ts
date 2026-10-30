@@ -176,5 +176,19 @@ export interface SellerOrderPayoutRow {
   clawback_date: string | null;         // 只有 clawed_back，而且可能 null（綠界還沒排撥款日）
   data_updated_at: string | null;       // ISO；updating 時 null
   has_ledger_rows: boolean;             // §3.3：已取消且 false → 不顯示撥款區塊
+  /** 這張單刷進誰（PR-乙 S-2；migration 20261031120000 起才有，舊資料庫沒有這欄→undefined）：
+   *  'platform'＝刷進好物集自己的綠界帳戶（IN-B7：不顯示對帳檔的撥款狀態）；'seller'＝刷進賣家自己的特約商店（舊授權；維持現在的畫面） */
+  collector?: PaymentCollector;
 }
 export const PAYOUT_IDS_LIMIT = 200;    // 超過回 TOO_MANY_IDS
+
+// ── 平台收款（PR-乙，.work/platform-collect/interface-platform-collect.md）──
+export type PaymentCollector = 'seller' | 'platform';
+/** RPC get_payment_config 的完整形狀（AC-61：舊欄位 onlinePaymentEnabled 不變，另外兩欄是 20261031120000 之後才有） */
+export interface PaymentConfig {
+  onlinePaymentEnabled: boolean;
+  /** 平台收款開關（IN-B1）。舊資料庫沒有這欄→false */
+  platformCollectEnabled: boolean;
+  /** 最近一次打開平台收款的時間（ISO；S-3）。沒開過或舊資料庫→null。隱私政策的生效日與修訂紀錄用它（IN-B8） */
+  platformCollectEnabledAt: string | null;
+}
