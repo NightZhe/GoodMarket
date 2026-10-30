@@ -3,7 +3,7 @@
 從 `CLAUDE.md` 搬來（2026-10-25）。新功能上線後更新本檔，不要寫回 `CLAUDE.md`。
 各功能的決策、規格、驗收報告、上線紀錄都在 `.work/<功能>/`（不進版控）。
 
-## 目前狀態（2026-10-19 更新）
+## 目前狀態（2026-10-30 更新）
 
 已上線：商品評價（含照片、賣家回覆）；買家已取貨自動完成＋訂單狀態鎖定；**買家帳號**（遊客只能瀏覽，
 加購物車／下單／訂單／評價都要 Google 或 Apple 登入；購物車與訂單綁帳號；舊訂單憑證機制已移除）；
@@ -83,17 +83,25 @@ Xcode 的 Apple ID 階段過期時上傳會回 DVTPortalServiceErrorDomain 1100�
 **帳號刪除 App 內入口（Apple 5.1.1(v) 硬門檻，10/18 拿掉的區塊要加回，可人工處理但不能只叫人寄信）**、檢舉／封鎖（Apple 1.2，待拍板）、審查用賣家示範帳號（待拍板）、App Privacy／Data safety 填寫。
 使用者側前置（Google Play 帳號、App ID、Play 簽章、商店圖文）見 `prereqs-user.md`。
 
-**聊聊（買家↔店家一對一訊息）**（`.work/chat/`，PR #23 分支 `feat/chat`，2026-10-29 開 PR；**正式站尚未套 migration、PR 尚未 merge**）：
+**聊聊（買家↔店家一對一訊息）**（`.work/chat/`，PR #23，**2026-10-29 上線完成**：資料庫、前端、Realtime 授權都驗過，紀錄 `prod-apply-log.md`）：
 買家從商品頁／店家頁「聊聊」、我的訂單「聯絡賣家」進入；賣家只從賣家中心訂單卡片「聯絡買家」發起。文字（≤1000 字）＋商品卡／訂單卡（快照）＋相簿圖片（一則 ≤5 張、壓縮後 ≤5MB、私有 bucket `chat-images`、簽名網址只給雙方）；
 Supabase Realtime **Broadcast from Database** 私有頻道 `conversation:<id>`／`user:<uid>` 只推事件，表零直接權限、11 支 RPC（`chat_*`）、錯誤碼走 hint；每分鐘 20 則；對話與訊息不隨刪帳號／刪店 cascade（對方顯示「已刪除的帳號」／「已關閉的賣場」）。
 買家 tab 第 4 格「我要賣」換成「聊聊」（入口改為「我的」頁既有「賣家中心」列）；賣家底欄改五格「總覽／聊聊／商品／新增／訂單」（評價管理退出底欄，從總覽與桌機側欄進）；總覽「你有 N 則未讀訊息」卡。
 伺服器端雙向封鎖（被封鎖方只看到「無法傳送」、拿不到封鎖狀態）、買家隱藏對話；**不做**檢舉、站外聯絡方式過濾、推播、Email、已讀回條、回覆率、相機（使用者決策 D20／D27，Apple 1.2 風險已知）。新前端對未升級資料庫降級（聊聊頁「暫時無法使用」、入口鈕隱藏）。
 新增 `@capacitor/camera`（App 內相簿選擇器、`NSPhotoLibraryUsageDescription`），`ios/`／`android/` 有變更，下一個 TestFlight build 才帶入。隱私政策新增「7. 聊聊」、第 5 節補句、生效日常數 `PRIVACY_EFFECTIVE` 寫死 2026/10/29（**merge 當天若不是這天要先改**）。
 規格 `spec.md` v0.4、決策 `decisions.md` D1～D30＋N1～N3、介面 `interface-chat.md`、設計 `design-chat.md`、隔離實例整合測試 `t-local-tests.*`（345 PASS）、小q `qa-report.md`（47 項 43 PASS、擋上線 0）、`prod-runbook.md`（30 步＋回滾，第 13 節 10 項要使用者在後台確認）、`tools/metrics/ch-m1～m3.sql`＋`ops-check.sql`。
-上線順序：使用者看 runbook 前置檢查（正式站 `realtime.messages`／`storage.objects` 既有 policy、探針）→ 套 `20261028231648_chat.sql` → verify → merge PR（部署前端）→ 下一個 TestFlight。
+上線後待做：下一個 TestFlight 帶入 camera 外掛；`metrics-log.md` 第 1 週回看。
 已知待辦：刪帳號／刪店工具不認綠界 migration 的外鍵（既有，與聊聊無關，另開工單，要在有人送刪帳號申請前修好）；遊客登入回來自動進對話（AC-M1）本機無法驗，待真機；真機 VoiceOver／兩支真機對聊待使用者。
 
-下一個該做的：付款上線收尾（金流商＝綠界；等綠界平台商資格與金鑰 → `prod-runbook-pb.md` §5 secrets → §6 部署函式與排程 → 實刷）。
+**賣家中心頂部改版**（2026-10-30 上線，PR #25）：拿掉白色頂欄，改安全區色帶＋懸浮「‹ 首頁」與右上玻璃膠囊；登出改二次確認、只登出這台裝置。
+
+**銀行帳號（平台收款第一刀・甲）**（`.work/seller-bank-account/`，2026-10-30 上線，PR #26，merge commit `3673130`）：所有登入者可在「銀行帳號／信用卡」頁綁銀行帳號，掛在人身上、每人最多 5 筆、一個撥款帳號，只能新增與刪除；新增與換撥款帳號都要 10 分鐘內簡訊驗證。
+完整帳號只在瀏覽器到 Edge Function `bank-account-add` 之間出現，由函式以 AES-256-GCM 加密後存入；資料表對 anon／authenticated 零權限，前端只拿得到末四碼。銀行與分行清單由 `scripts/gen-banks.mts` 產生；銀行 logo 有伺服器端開關。
+正式站已套 `20261029120000_bank_accounts.sql`（verify all_ok、既有物件指紋前後相同）、已部署 `bank-account-add`、金鑰 secret 已設並由使用者離線備份。**金鑰遺失＝已存帳號永久解不開；有資料後不得重設，輪替要走離線腳本。**
+使用者本人已線上綁定冒煙通過（2026-10-30）：密文格式與 `key_version` 正常、新增與改狀態事件都有留下；驗證狀態目前靠人工 `admin_set_bank_account_status`（決策 N5），操作見 `prod-runbook.md` §8。刪帳號工具白名單已補這兩張表，測試通過，但工具的 SQL 未對資料庫演練。
+這一刀不改結帳與付款流程；舊「填綠界特約商店編號」表單已從畫面拿掉（資料表與 RPC 不動）。未驗：真機 VoiceOver、iOS 模擬器、綠界綁卡。
+
+下一個該做的：PR-乙 `feat/platform-collect`（付款改進平台帳戶，規格在 `.work/seller-bank-account/spec.md`，含 N1／N2 決策；開工前要確認 `.work/platform-collect/` 是否要獨立成一份）。之後才是綠界的線上付款收尾（等平台商資格與金鑰 → `prod-runbook-pb.md` §5 secrets → §6 部署函式與排程 → 實刷）。
 
 維運提醒：
 - **Apple 登入 client secret 2027-04-15 到期**，2027-04-01 前用 Supabase 文件頁工具＋原 `.p8` 重做並更新後台。
