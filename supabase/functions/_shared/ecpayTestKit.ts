@@ -3,7 +3,7 @@ import { decryptData, encryptData } from './ecpayCrypto.ts';
 import type { EcpayConfig } from './ecpayClient.ts';
 
 export const TEST_CFG: EcpayConfig = {
-  env: 'stage', platformId: '3003008', hashKey: 'pwFHCqoQZGmho4w6', hashIv: 'EkRm7iFT261dpevs',
+  env: 'stage', merchantId: '3002607', platformId: '3003008', hashKey: 'pwFHCqoQZGmho4w6', hashIv: 'EkRm7iFT261dpevs',
   ecpgBase: 'https://ecpg-stage.ecpay.com.tw', ecpaymentBase: 'https://ecpayment-stage.ecpay.com.tw',
 };
 

@@ -33,9 +33,10 @@ export async function groupView(user: AuthedUser, groupId: string) {
   return data;
 }
 
-export async function startPay(db: SupabaseClient, ecpay: EcpayClient, user: AuthedUser, groupId: unknown, paymentMethodId: unknown) {
+/** collectMerchantId：本站收款用的商店編號（cfg.ecpay.merchantId）。每筆授權都刷進它並快照到 payment_auths.merchant_id（PR-乙 IN-B3／S-2）。 */
+export async function startPay(db: SupabaseClient, ecpay: EcpayClient, user: AuthedUser, groupId: unknown, paymentMethodId: unknown, collectMerchantId: string) {
   if (!isUuid(groupId) || !isUuid(paymentMethodId)) throw new PayError('REQUEST_INVALID', '請求格式不正確');
-  const { data, error } = await db.rpc('pay_begin_attempt', { p_group: groupId, p_user: user.id, p_method: paymentMethodId });
+  const { data, error } = await db.rpc('pay_begin_attempt', { p_group: groupId, p_user: user.id, p_method: paymentMethodId, p_collect_merchant_id: collectMerchantId });
   if (error) throw new Error('pay_begin_attempt: ' + error.message);
   if (!data.ok) throw new PayError(data.code, data.message, STATUS_FOR[data.code] ?? 400);
 
