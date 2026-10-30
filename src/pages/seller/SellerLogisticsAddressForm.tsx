@@ -91,7 +91,7 @@ export default function SellerLogisticsAddressForm() {
     }
   };
 
-  const header = <SubHeader to={BACK} backLabel="回到物流設定" title={editing ? '編輯個人地址' : settings ? '新增個人地址' : '個人地址'} />;
+  const header = <SubHeader to={BACK} backLabel="回到物流設定" backText="物流設定" title={editing ? '編輯個人地址' : settings ? '新增個人地址' : '個人地址'} />;
   const shell = (children: React.ReactNode) => (
     <div className="mx-auto max-w-2xl">
       {header}

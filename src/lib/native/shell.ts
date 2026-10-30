@@ -4,6 +4,7 @@ import { initNativeAuth } from './auth';
 import { initNativeDeepLinks } from './deeplink';
 import { NATIVE_BACK_EVENT } from './callback';
 import { refreshPosture, startPosture } from '../layout/posture';
+import { SELLER_LAYOUT_MARK, needsShellInset } from './shellInset';
 
 // 原生殼的啟動：只在 App 內由 main.tsx 動態載入（網頁 bundle 不含這些外掛）。
 //   - <html> 加 class native／native-ios／native-android，殼專用樣式（native.css，由 main.tsx 靜態載入）靠它生效
@@ -23,13 +24,12 @@ export async function initNativeShell(): Promise<void> {
   void import('@capacitor/status-bar').then(({ StatusBar, Style }) => StatusBar.setStyle({ style: Style.Light })).catch(() => { /* 外掛不在就算了 */ });
   await initNativeAuth();
   await initNativeDeepLinks();
-  // 狀態列安全區：買家前台（安全區色帶＋sticky top-[env(...)] 頂欄）與賣家中心（SellerLayout 頂欄自己長高、吃四邊安全區）都自己處理，殼不插手；
-  // 殼只補沒有黏頂頂欄的賣家頁（賣家登入頁）：把 body 往下推。
+  // 狀態列安全區：買家前台（安全區色帶＋sticky top-[env(...)] 頂欄）與賣家中心（SellerLayout 自己的安全區色帶與懸浮控制列）都自己處理，殼不插手；
+  // 殼只補沒有賣家外框（SellerLayout 掛 data-seller-layout）的賣家頁（賣家登入頁、開店表單）：把 body 往下推。
   // 用 MutationObserver 看 DOM（路由切換是 pushState，不會發 hashchange）；不用 CSS :has()（WKWebView 上實測沒有命中，原因未查明）。
-  const sellerRoute = () => /^#\/seller(\/|$)/.test(window.location.hash);
   const syncStickyClass = () => {
-    const noSticky = sellerRoute() && !document.querySelector('header.sticky');
-    document.documentElement.classList.toggle('native-no-sticky', noSticky);
+    const needsInset = needsShellInset(window.location.hash, document.querySelector(`[${SELLER_LAYOUT_MARK}]`) !== null);
+    document.documentElement.classList.toggle('native-no-sticky', needsInset);
   };
   new MutationObserver(syncStickyClass).observe(document.body, { childList: true, subtree: true });
   syncStickyClass();

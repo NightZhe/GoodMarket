@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { hasSaveTray, hidesNav, isChatThreadPath, sellerTabRoutes } from './sellerNav';
+import { hasOwnBackHeader, hasSaveTray, hidesNav, homeButtonCompact, isChatThreadPath, sellerTabRoutes, showsHomeButton, subPageOwnsPadding } from './sellerNav';
+import { needsShellInset } from '../../lib/native/shellInset';
 
 describe('hidesNav：哪些賣家頁不出現分頁導覽（膠囊與直立軌）', () => {
   it('物流店到店與地址表單頁有鍵盤，導覽隱藏（AC-25）', () => {
@@ -99,5 +100,70 @@ describe('sellerTabRoutes：5 個分頁的導覽目標與選中', () => {
   it('編輯商品頁沒有任何分頁代選中', () => {
     const tabs = sellerTabRoutes('/seller/products/p1/edit');
     expect(tabs.every(t => t.to === t.goTo)).toBe(true);
+  });
+});
+
+describe('hasOwnBackHeader／showsHomeButton：哪些頁不顯示左上「‹ 首頁」（C2＝a）', () => {
+  it('物流兩張表單、收款帳戶頁自己有 SubHeader 返回', () => {
+    for (const p of ['/seller/logistics/stores/new', '/seller/logistics/stores/s1', '/seller/logistics/address', '/seller/payout']) {
+      expect(hasOwnBackHeader(p)).toBe(true);
+      expect(showsHomeButton(p, 'bottom')).toBe(false);
+    }
+  });
+
+  it('其餘賣家頁（總覽、商品、新增、編輯、匯入、訂單、評價、物流列表、聊聊）一般姿態都顯示', () => {
+    for (const p of ['/seller', '/seller/products', '/seller/products/new', '/seller/products/p1/edit', '/seller/products/import', '/seller/orders', '/seller/reviews', '/seller/logistics', '/seller/chat', '/seller/chat/c1']) {
+      expect(hasOwnBackHeader(p)).toBe(false);
+      expect(showsHomeButton(p, 'bottom')).toBe(true);
+    }
+  });
+
+  it('側邊姿態（外蓋、展開橫向、書本）任何頁都不顯示：直立軌已有「回到買家首頁」（X5）', () => {
+    expect(showsHomeButton('/seller', 'side-right')).toBe(false);
+    expect(showsHomeButton('/seller/orders', 'side-left')).toBe(false);
+  });
+
+  it('只比對路徑段，不會誤傷 /seller/payoutx 或 /seller/logistics', () => {
+    expect(hasOwnBackHeader('/seller/payoutx')).toBe(false);
+    expect(hasOwnBackHeader('/seller/logistics')).toBe(false);
+  });
+});
+
+describe('homeButtonCompact：左鈕連「⋯」都放不下才縮成只有「‹」的圓鈕', () => {
+  it('390 寬（列寬 358）與 188 寬（列寬 156）一般字級都不縮', () => {
+    expect(homeButtonCompact(358, 78)).toBe(false);
+    expect(homeButtonCompact(156, 78)).toBe(false);
+  });
+  it('文字 200%（左鈕 112）在 188 寬放不下：縮成圓鈕', () => {
+    expect(homeButtonCompact(156, 112)).toBe(true);
+  });
+  it('剛好放得下（左鈕＋間距 8＋「⋯」44）不縮', () => {
+    expect(homeButtonCompact(78 + 8 + 44, 78)).toBe(false);
+    expect(homeButtonCompact(78 + 8 + 44 - 1, 78)).toBe(true);
+  });
+  it('還沒量到（Infinity）不縮', () => {
+    expect(homeButtonCompact(Number.POSITIVE_INFINITY, 0)).toBe(false);
+  });
+});
+
+describe('shouldShellInset：App 殼只補沒有賣家外框的賣家頁（AC-H9）', () => {
+  it('賣家登入頁（沒有外框）→ 殼推 body', () => {
+    expect(needsShellInset('#/seller', false)).toBe(true);
+  });
+  it('賣家外框在（頂欄拿掉後不再有 header.sticky，也不能誤判）→ 不推', () => {
+    expect(needsShellInset('#/seller/orders', true)).toBe(false);
+    expect(needsShellInset('#/seller', true)).toBe(false);
+  });
+  it('非賣家路由一律不推（買家前台自己處理）', () => {
+    expect(needsShellInset('#/account', false)).toBe(false);
+    expect(needsShellInset('#/sellerx', false)).toBe(false);
+  });
+});
+
+describe('subPageOwnsPadding：收款帳戶頁 main 不留左右內距（B4）', () => {
+  it('只有收款帳戶頁', () => {
+    expect(subPageOwnsPadding('/seller/payout')).toBe(true);
+    expect(subPageOwnsPadding('/seller/logistics/address')).toBe(false);
+    expect(subPageOwnsPadding('/seller/orders')).toBe(false);
   });
 });
