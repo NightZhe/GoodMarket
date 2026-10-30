@@ -7,6 +7,14 @@ import { ecpayBases, type EcpayConfig } from './ecpayClient.ts';
 
 export type Getter = (k: string) => string | undefined;
 
+/** 設定缺失或格式錯（E1 fail closed）。message 只寫「缺哪個名稱」給日誌，不含值；對外一律統一格式 503 PAYMENT_DISABLED（http.ts serve 負責映射） */
+export class ConfigError extends Error {
+  readonly code = 'PAYMENT_DISABLED';
+  readonly status = 503;
+  readonly userMessage = '線上付款暫時無法使用';
+  constructor(message: string) { super(message); this.name = 'ConfigError'; }
+}
+
 export interface AppConfig {
   supabaseUrl: string;
   serviceKey: string;
@@ -25,22 +33,22 @@ export interface AppConfig {
 
 export const MERCHANT_ID_RE = /^[0-9]{7,10}$/;
 
-/** 純函式：從任一 getter 讀設定（測試用假的 env；正式用 Deno.env）。任何缺設或格式錯都丟 Error，呼叫端回 500／503，不打綠界。 */
+/** 純函式：從任一 getter 讀設定（測試用假的 env；正式用 Deno.env）。任何缺設或格式錯都丟 ConfigError → serve() 回 503 PAYMENT_DISABLED，不打綠界。 */
 export function parseConfig(get: Getter): AppConfig {
   const need = (k: string): string => {
     const v = get(k);
-    if (!v) throw new Error(`missing env ${k}`);
+    if (!v) throw new ConfigError(`missing env ${k}`);
     return v;
   };
   const opt = (k: string): string | undefined => get(k) || undefined;
   const env = (opt('ECPAY_ENV') ?? 'stage') as 'stage' | 'prod';
-  if (env !== 'stage' && env !== 'prod') throw new Error('ECPAY_ENV must be stage or prod');
+  if (env !== 'stage' && env !== 'prod') throw new ConfigError('ECPAY_ENV must be stage or prod');
   const accountType = get('ECPAY_ACCOUNT_TYPE');
-  if (accountType !== 'merchant' && accountType !== 'platform') throw new Error('ECPAY_ACCOUNT_TYPE must be merchant or platform');
+  if (accountType !== 'merchant' && accountType !== 'platform') throw new ConfigError('ECPAY_ACCOUNT_TYPE must be merchant or platform');
   const merchantId = need('ECPAY_MERCHANT_ID');
-  if (!MERCHANT_ID_RE.test(merchantId)) throw new Error('ECPAY_MERCHANT_ID must be 7-10 digits');
+  if (!MERCHANT_ID_RE.test(merchantId)) throw new ConfigError('ECPAY_MERCHANT_ID must be 7-10 digits');
   const platformId = accountType === 'platform' ? need('ECPAY_PLATFORM_ID') : undefined;
-  if (platformId !== undefined && !MERCHANT_ID_RE.test(platformId)) throw new Error('ECPAY_PLATFORM_ID must be 7-10 digits');
+  if (platformId !== undefined && !MERCHANT_ID_RE.test(platformId)) throw new ConfigError('ECPAY_PLATFORM_ID must be 7-10 digits');
   const functionsBaseUrl = need('PAYMENT_FUNCTIONS_BASE_URL').replace(/\/$/, '');
   return {
     supabaseUrl: need('SUPABASE_URL'),

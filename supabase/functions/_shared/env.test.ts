@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseConfig } from './env.ts';
+import { ConfigError, parseConfig } from './env.ts';
 
 // 平台收款（PR-乙）：綠界帳戶類型由 secret 決定（spec §4 S-5；decisions E1＝A：缺設或值錯一律拒絕啟動，fail closed）
 const BASE: Record<string, string> = {
@@ -50,5 +50,25 @@ describe('parseConfig：綠界帳戶類型（E1 fail closed）', () => {
     expect(c.ecpay.env).toBe('stage');
     expect(c.bindAmount).toBe(500);
     expect(() => parseConfig(get({ ...BASE, ECPAY_ACCOUNT_TYPE: 'merchant', ECPAY_ENV: 'live' }))).toThrow(/ECPAY_ENV/);
+  });
+});
+
+describe('ConfigError（E1：設定缺失對外是 503 PAYMENT_DISABLED，日誌只寫名稱不含值）', () => {
+  it('缺 ECPAY_ACCOUNT_TYPE → ConfigError：status 503、code PAYMENT_DISABLED、使用者訊息固定、message 只有名稱', () => {
+    let err: unknown;
+    try { parseConfig(get(BASE)); } catch (e) { err = e; }
+    expect(err).toBeInstanceOf(ConfigError);
+    const c = err as ConfigError;
+    expect(c.status).toBe(503);
+    expect(c.code).toBe('PAYMENT_DISABLED');
+    expect(c.userMessage).toBe('線上付款暫時無法使用');
+    expect(c.message).toBe('ECPAY_ACCOUNT_TYPE must be merchant or platform');
+  });
+  it('缺 HashKey → message 是 missing env <名稱>，不含任何其他 secret 的值', () => {
+    let err: unknown;
+    try { parseConfig(get({ ...BASE, ECPAY_ACCOUNT_TYPE: 'merchant', ECPAY_HASH_KEY: undefined })); } catch (e) { err = e; }
+    expect(err).toBeInstanceOf(ConfigError);
+    expect((err as Error).message).toBe('missing env ECPAY_HASH_KEY');
+    expect((err as Error).message).not.toContain('EkRm7iFT261dpevs');
   });
 });

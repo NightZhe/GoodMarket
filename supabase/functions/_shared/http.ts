@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 // HTTP 共用：CORS、統一的回應格式 { ok:true, ... } / { ok:false, error:{ code, message } }、登入驗證。
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
-import { loadConfig } from './env.ts';
+import { ConfigError, loadConfig } from './env.ts';
 
 export class PayError extends Error {
   /** extra：放進 error 物件的附加欄位（例如 retryAfter），不得含卡號、BindCardID、金鑰 */
@@ -10,7 +10,9 @@ export class PayError extends Error {
 
 export function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') ?? '';
-  const allowed = loadConfig().allowedOrigins;
+  // 設定讀不到時（ConfigError）仍要能回統一格式的錯誤，所以這裡不讓它再丟一次：退回 '*'
+  let allowed: string[] = [];
+  try { allowed = loadConfig().allowedOrigins; } catch (e) { if (!(e instanceof ConfigError)) throw e; }
   const allow = allowed.length === 0 ? '*' : allowed.includes(origin) ? origin : allowed[0];
   return {
     'Access-Control-Allow-Origin': allow,
@@ -59,6 +61,11 @@ export function serve(name: string, handler: (req: Request) => Promise<Response>
       return await handler(req);
     } catch (e) {
       if (e instanceof PayError) return json(req, { ok: false, error: { ...e.extra, code: e.code, message: e.message } }, e.status);
+      // E1 fail closed：secrets 缺設或格式錯 → 503 PAYMENT_DISABLED（統一 JSON 格式）；日誌只寫缺哪個名稱，不含值
+      if (e instanceof ConfigError) {
+        console.error(`[${name}] config`, e.message);
+        return json(req, { ok: false, error: { code: e.code, message: e.userMessage } }, e.status);
+      }
       console.error(`[${name}] unexpected`, e instanceof Error ? `${e.name}: ${e.message}` : 'unknown');
       return json(req, { ok: false, error: { code: 'INTERNAL', message: '系統忙碌，請稍後再試' } }, 500);
     }

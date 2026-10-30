@@ -1,6 +1,6 @@
 -- 付款改進平台帳戶（PR-乙，.work/platform-collect/spec.md v0.1；decisions E1～E4、甲 Q3＝B／N1＝A／N4＝A）
 --
--- 只做相容的新增與 create or replace，不改任何既有欄位的語意；整個檔案一個交易、可重複執行、末尾自我檢查。
+-- 只做相容的新增與 create or replace，不改任何既有欄位的語意；整個檔案一個交易、可重複執行（開關開著時重套也不會改動開關值與打開時間）、末尾自我檢查。
 --   · payment_config 加兩欄：platform_collect_enabled（平台收款開關，預設關）、platform_collect_enabled_at（最近一次打開的時間；關掉不清）。
 --   · 新 helper _platform_collect_enabled()；維運函式 admin_set_platform_collect(boolean)（只給 service_role）。
 --   · get_payment_config() 多回 platformCollectEnabled／platformCollectEnabledAt（舊欄位 onlinePaymentEnabled 不變，AC-61）。
@@ -264,8 +264,17 @@ grant execute on function public.get_seller_order_payouts(uuid[]) to anon, authe
 do $$
 declare r text; t text; p text;
 begin
-  if coalesce((select platform_collect_enabled from public.payment_config where id), true) then
-    raise exception '平台收款自我檢查失敗：開關不是關的（預設必須關），整個交易回滾';
+  -- 開關欄位要存在、預設 false（不檢查目前的值：開關打開後重套本檔也要能過，而且不得改動開關值與打開時間；AC-62）
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'payment_config'
+                  and column_name = 'platform_collect_enabled' and is_nullable = 'NO' and column_default = 'false') then
+    raise exception '平台收款自我檢查失敗：payment_config.platform_collect_enabled 不是 not null default false，整個交易回滾';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'payment_config' and column_name = 'platform_collect_enabled_at') then
+    raise exception '平台收款自我檢查失敗：payment_config.platform_collect_enabled_at 不存在，整個交易回滾';
+  end if;
+  -- 賣家訂單頁的撥款 RPC 重建後，回傳欄位仍不得含商店編號與交易編號（D42＝C；AC-61 的精神）
+  if pg_get_function_result(to_regprocedure('public.get_seller_order_payouts(uuid[])')) ~ '(merchant_id|merchant_trade_no|ecpay_trade_no)' then
+    raise exception '平台收款自我檢查失敗：get_seller_order_payouts 回傳了商店編號或交易編號，整個交易回滾';
   end if;
   foreach r in array array['anon', 'authenticated'] loop
     foreach p in array array['select', 'insert', 'update', 'delete'] loop
