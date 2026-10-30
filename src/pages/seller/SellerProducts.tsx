@@ -359,7 +359,7 @@ export default function SellerProducts() {
                 };
                 return (
                   <li key={p.id} className={`grid grid-cols-1 items-center gap-x-4 gap-y-2 px-4 py-3 min-[320px]:grid-cols-[1fr_auto] lg:grid-cols-[1fr_150px_80px_80px_120px] ${multi && here && here !== 'sheet' ? 'lg:items-start' : ''}`}>
-                    <div className={`flex min-w-0 items-center gap-3 max-[319px]:flex-col max-[319px]:items-start ${multi && here && here !== 'sheet' ? 'lg:sticky lg:top-[4.5rem] lg:self-start' : ''}`}>
+                    <div className={`flex min-w-0 items-center gap-3 max-[319px]:flex-col max-[319px]:items-start ${multi && here && here !== 'sheet' ? 'lg:sticky lg:top-19 lg:self-start' : ''}`}>
                       <ProductImage src={p.images[0]} alt="" size="sm" className={`w-14 shrink-0 rounded-sm ${p.status === 'hidden' ? 'opacity-40' : ''}`} />
                       <div className="min-w-0">
                         <p className="line-clamp-2 text-sm">{p.title}</p>
