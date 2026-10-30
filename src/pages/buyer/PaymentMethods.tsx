@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { CreditCard, Info, Plus } from 'lucide-react';
 import LoginRequired from '../../components/auth/LoginRequired';
 import Banner from '../../components/import/Banner';
@@ -7,6 +7,7 @@ import LeaveDialog from '../../components/import/LeaveDialog';
 import { btnOutline, btnPrimary } from '../../components/import/ui';
 import { useToast } from '../../components/Toast';
 import { Bone, SubHeader, SubPage, Spinner, pressCls, sectionTitleCls, textActionCls } from '../../components/account/ui';
+import BankAccountsSection from '../../components/payment/BankAccountsSection';
 import CardLabel from '../../components/payment/CardLabel';
 import { CARD_LIMIT } from '../../lib/payment/limits';
 import { deleteMethod, errorCodeOf, setDefaultMethod } from '../../lib/payment/api';
@@ -15,23 +16,35 @@ import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useCards } from '../../lib/payment/useCards';
 import type { PaymentMethodRow } from '../../lib/payment/types';
 import { useOnline } from '../../lib/useOnline';
+import type { BankOrigin } from '../../lib/payment/bankRoutes';
 
 const READ_TIMEOUT_MS = 10_000;
 const NO_FULL_CARD = '卡號只輸入在綠界科技的畫面，好物集不會儲存完整卡號。';
 
-/** 付款方式 #/account/payment-methods（S-2）。本版只有信用卡 */
-export default function PaymentMethods() {
+/**
+ * 銀行帳號／信用卡 #/account/payment-methods（S-2）：一頁兩區，信用卡在上、銀行帳號在下。
+ * origin＝從哪個入口進來：帳號頁（預設）或賣家中心 #/seller/payout，只差返回的地方與是否直接捲到銀行帳號區
+ */
+export default function PaymentMethods({ origin = 'account' }: { origin?: BankOrigin }) {
   return (
     <LoginRequired kind="account">
-      <MethodsView />
+      <MethodsView origin={origin} />
     </LoginRequired>
   );
 }
 
 const cardText = (c: PaymentMethodRow) => `${brandLabel(cardBrandOf(c))} 末四碼 ${c.card4}`;
 
-function MethodsView() {
+function MethodsView({ origin }: { origin: BankOrigin }) {
   const toast = useToast();
+  const navigate = useNavigate();
+  const { state, pathname, search } = useLocation() as { state: { bound?: string } | null; pathname: string; search: string };
+  const toBank = origin === 'seller' || new URLSearchParams(search).get('section') === 'bank';
+  // 綁定手機成功會帶著遮罩門號回到這頁：頂端橫幅，只顯示一次
+  const [boundNote] = useState(() => (typeof state?.bound === 'string' ? state.bound : null));
+  useEffect(() => {
+    if (boundNote !== null) navigate({ pathname, search }, { replace: true, state: null });
+  }, [boundNote, navigate, pathname, search]);
   const online = useOnline();
   const { enabled, ready } = usePaymentConfig();
   const { rows, phase, reload } = useCards({ timeoutMs: READ_TIMEOUT_MS, refreshOnReturn: true });
@@ -106,11 +119,20 @@ function MethodsView() {
 
   return (
     <SubPage>
-      <SubHeader to="/account" backLabel="回到我的帳號" title="付款方式" />
+      {origin === 'seller'
+        ? <SubHeader to="/seller" backLabel="回到賣場總覽" backText="賣場總覽" title="銀行帳號／信用卡" />
+        : <SubHeader to="/account" backLabel="回到我的帳號" title="銀行帳號／信用卡" />}
+
+      {boundNote && (
+        <div className="mt-2">
+          <Banner kind="success" role="status" title={boundNote ? `已綁定 ${boundNote}` : '已綁定手機'}>現在可以繼續新增銀行帳號或更換撥款帳號。</Banner>
+        </div>
+      )}
+
+      <h2 className={sectionTitleCls}>信用卡</h2>
 
       {rows === null && phase === 'loading' && (
         <>
-          <h2 className="sr-only">信用卡</h2>
           <ul aria-busy="true" aria-label="我的信用卡" className="mt-2 divide-y divide-line bg-white md:mt-3 rounded-card">
             <li className="sr-only" role="status">載入中</li>
             {[0, 1, 2].map(i => (
@@ -160,7 +182,6 @@ function MethodsView() {
 
       {rows !== null && rows.length > 0 && (
         <>
-          <h2 className={sectionTitleCls}>信用卡</h2>
           {!online && (
             <div className="mb-2 md:mb-3">
               <Banner kind="warning" role="status" title="目前沒有網路">連上網路後才能新增、刪除或設為預設。</Banner>
@@ -226,6 +247,8 @@ function MethodsView() {
           </div>
         </>
       )}
+
+      <BankAccountsSection origin={origin} online={online} focusTitle={toBank} />
 
       {deleting && (
         <LeaveDialog

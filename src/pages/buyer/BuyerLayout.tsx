@@ -68,7 +68,7 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
   const hideTabBar = pathname.startsWith('/product/') || pathname === '/checkout' || pathname === '/cart'
     || /^\/orders\/[^/]+\/review$/.test(pathname) || pathname.startsWith('/account/addresses/')
     // 綁卡頁有鍵盤（綠界欄位）、付款結果頁要專心看結果
-    || pathname === '/account/payment-methods/new' || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/')
+    || pathname === '/account/payment-methods/new' || pathname.startsWith('/account/bank-accounts/') || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/')
     // 聊聊的對話頁有自己的輸入列與鍵盤（列表頁 /chat 仍顯示）
     || isChatConversationPath(pathname);
 

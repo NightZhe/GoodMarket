@@ -1,10 +1,13 @@
 import type { ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ClipboardList, LayoutDashboard, Package, PlusCircle, Star, Truck } from 'lucide-react';
+import { ChevronLeft, ClipboardList, Landmark, LayoutDashboard, Package, PlusCircle, Star, Truck } from 'lucide-react';
 import ChatIcon from '../../components/chat/ChatIcon';
 import { useStore } from '../../store/StoreContext';
 import { useChat } from '../../store/ChatContext';
 import { CancelSummaryProvider, pendingCount, useCancelSummary } from '../../store/CancelSummaryContext';
+import { usePayoutState } from '../../lib/payment/useBankAccounts';
+import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
+import PayoutBadge from '../../components/payment/PayoutBadge';
 import { badgeCount, chatNavLabel, formatUnread } from '../../lib/chat/unread';
 import { SELLER_CHAT_LIST_PATH } from '../../lib/chat/sellerPaths';
 import { useSplitLayout } from '../../lib/layout/splitLayout';
@@ -25,6 +28,8 @@ const NAV: { to: string; label: string; icon: ComponentType<{ size?: number }>; 
   { to: '/seller/reviews', label: '評價管理', icon: Star, end: true },
   // 物流設定的新增／編輯表單是 /seller/logistics 底下的子路由，側欄要保持選中（end: false）
   { to: '/seller/logistics', label: '物流設定', icon: Truck, end: false },
+  // 銀行帳號只在線上付款開關打開時出現；新增流程是 /seller/payout 底下的子路由（end: false）
+  { to: '/seller/payout', label: '銀行帳號', icon: Landmark, end: false },
 ];
 
 export default function SellerLayout() {
@@ -44,6 +49,8 @@ function SellerLayoutView() {
   const isOn = (to: string, isActive: boolean) =>
     isActive || (to === '/seller/products' && pathname.startsWith('/seller/products/import'));
   const hideNav = hidesNav(pathname);
+  const { enabled: payEnabled } = usePaymentConfig();
+  const payoutState = usePayoutState(payEnabled);
   const toShip = shopOrders.filter(o => o.status === 'to_ship').length;
   const chatBadge = badgeCount(useChat().summary, 'shop');
   const split = useSplitLayout();
@@ -75,11 +82,12 @@ function SellerLayoutView() {
 
       <div className="app-shell flex">
         <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 border-r border-line bg-white p-3 pt-15 md:block">
-          {NAV.map(n => (
+          {NAV.filter(n => n.to !== '/seller/payout' || payEnabled).map(n => (
             <NavLink key={n.to} to={n.to} end={n.end} aria-label={n.to === SELLER_CHAT_LIST_PATH ? chatNavLabel(chatBadge) : undefined}
               className={({ isActive }) => `mb-1 flex ${n.to === '/seller/orders' && pending > 0 ? 'flex-wrap ' : ''}items-center gap-2.5 rounded-md px-3 py-2.5 text-sm transition ${isOn(n.to, isActive) ? 'bg-brand-soft font-medium text-brand' : 'hover:bg-canvas'}`}>
               <n.icon size={18} />
               {n.label}
+              {n.to === '/seller/payout' && payoutState && <PayoutBadge state={payoutState} className="ml-auto" />}
               {n.to === SELLER_CHAT_LIST_PATH && chatBadge > 0 && (
                 <span aria-hidden="true" className="ml-auto rounded-full bg-brand px-1.5 text-xs leading-5 text-white">{formatUnread(chatBadge)}</span>
               )}

@@ -18,18 +18,18 @@ const TABS: { key: SellerTabKey; to: string }[] = [
 export const isChatThreadPath = (pathname: string): boolean => /^\/seller\/chat\/[^/]+/.test(pathname);
 
 /**
- * 物流店到店與地址表單頁、聊聊對話頁會跳出鍵盤，固定在底部的導覽在 iOS 鍵盤開關時會跳，所以這幾頁不顯示分頁導覽（含直立軌，AC-25）
+ * 物流店到店與地址表單頁、新增銀行帳號與簡訊驗證頁、聊聊對話頁會跳出鍵盤，固定在底部的導覽在 iOS 鍵盤開關時會跳，所以這幾頁不顯示分頁導覽（含直立軌，AC-25）
  */
 export const hidesNav = (pathname: string): boolean =>
-  /^\/seller\/logistics\/(stores|address)(\/|$)/.test(pathname) || isChatThreadPath(pathname);
+  /^\/seller\/logistics\/(stores|address)(\/|$)/.test(pathname) || /^\/seller\/payout\/bank-accounts\/(new|verify)/.test(pathname) || isChatThreadPath(pathname);
 
 /** 新增與編輯商品：底部有懸浮儲存托盤（內容底部要為它預留空間）。匯入精靈（/products/import）不算 */
 export const hasSaveTray = (pathname: string): boolean => /^\/seller\/products\/(new|[^/]+\/edit)$/.test(pathname);
 
-/** 不在自己分頁路徑上、但屬於某分頁的流程：匯入精靈屬「我的商品」，物流設定與評價管理屬「賣場總覽」，聊聊對話屬「聊聊」 */
+/** 不在自己分頁路徑上、但屬於某分頁的流程：匯入精靈屬「我的商品」，物流設定、銀行帳號與評價管理屬「賣場總覽」，聊聊對話屬「聊聊」 */
 function proxyTab(pathname: string): SellerTabKey | null {
   if (pathname.startsWith('/seller/products/import')) return 'products';
-  if (pathname.startsWith('/seller/logistics') || pathname.startsWith('/seller/reviews')) return 'overview';
+  if (pathname.startsWith('/seller/logistics') || pathname.startsWith('/seller/payout') || pathname.startsWith('/seller/reviews')) return 'overview';
   if (isChatThreadPath(pathname)) return 'chat';
   return null;
 }

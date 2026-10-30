@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { PrivacyView } from './Privacy';
 import { CONTACT_EMAIL, PRIVACY_EFFECTIVE } from '../../lib/site';
+import { BANK_REVISION } from './Privacy';
 
 const html = (payOn: boolean) => renderToStaticMarkup(<MemoryRouter><PrivacyView payOn={payOn} /></MemoryRouter>);
 
@@ -20,10 +21,10 @@ describe('隱私政策隨線上付款開關顯示付款段落', () => {
     expect(off).toContain('訂單等交易紀錄，依相關法規規定的期間保存。');
     expect(off).toContain('收件地址可以隨時在「我的帳號 › 地址」刪除；暱稱可以在「個人檔案」清空。');
   });
-  it('開關打開：出現付款資料與收款帳戶兩項，與「不會儲存完整卡號」', () => {
+  it('開關打開：出現付款資料與銀行帳號兩項，與「不會儲存完整卡號」', () => {
     const on = html(true);
     expect(on).toContain('付款資料（信用卡）');
-    expect(on).toContain('收款帳戶（賣家）');
+    expect(on).toContain('>銀行帳號<');
     expect(on).toContain('不會儲存完整卡號');
     expect(on).toContain('綠界科技');
   });
@@ -33,7 +34,7 @@ describe('隱私政策隨線上付款開關顯示付款段落', () => {
     expect(on).toContain('你下單的賣家看得到訂單是否已付款，看不到你的卡片資料');
     expect(on).toContain('通知綠界科技撤銷綁定');
     expect(on).toContain('刪除帳號時，我們會先請綠界科技刪除你綁定的所有信用卡。');
-    expect(on).toContain('信用卡可以隨時在「我的帳號 › 付款方式」刪除');
+    expect(on).toContain('信用卡與銀行帳號可以隨時在「我的帳號 › 銀行帳號／信用卡」刪除');
   });
 });
 
@@ -172,6 +173,44 @@ describe('刪除帳號申請與內容審核檢舉（AC-D33、D35、D36、K23、K
       expect(off, w).not.toContain(w);
     }
     expect(off).not.toMatch(/\p{Extended_Pictographic}/u);
+  });
+});
+
+describe('銀行帳號（AC-49、AC-36、spec 7.1、N6）', () => {
+  const ITEM = '你在「銀行帳號／信用卡」綁定的銀行代碼、分行代碼、銀行帳號與戶名，用來在你開店收款時把貨款撥給你。完整銀行帳號以加密方式保存，畫面上只顯示銀行名稱與帳號末四碼；只有撥款流程會解密使用，你本人與其他使用者都無法從網站或 App 讀取完整帳號。我們也保存每個帳號的驗證狀態、未通過的原因，以及每次新增、刪除或更換撥款帳號的時間與帳號末四碼，用來處理帳號遭盜用的爭議。';
+  const section = (page: string, from: string, to: string) => page.split(from)[1].split(to)[0];
+
+  it('開關打開：資料項目有銀行帳號那段（含用途句）與簡訊再驗證句', () => {
+    const s1 = section(html(true), '1. 我們收集的資料', '2. 怎麼使用');
+    expect(s1).toContain(ITEM);
+    expect(s1).toContain('新增銀行帳號或更換撥款帳號時，我們會傳送驗證碼簡訊到你帳號上綁定的手機，簡訊服務商同「驗證碼簡訊」一項。');
+  });
+  it('開關打開：誰看得到、保存與刪除各補一句', () => {
+    const page = html(true);
+    expect(section(page, '3. 誰看得到', '4. 保存多久')).toContain('你的銀行帳號不會顯示給買家或其他賣家。');
+    expect(section(page, '4. 保存多久', '5. 刪除你的資料')).toContain('刪除帳號時，你綁定的銀行帳號一併刪除。');
+  });
+  it('不再出現舊字句：「不會儲存完整銀行帳號」「用特約商店編號與狀態判斷」「收款帳戶（賣家）」', () => {
+    for (const on of [false, true]) {
+      const page = html(on);
+      for (const old of ['不會儲存完整銀行帳號', '用特約商店編號與狀態判斷', '收款帳戶（賣家）', '特約商店']) expect(page, old).not.toContain(old);
+    }
+  });
+  it('開關關著：沒有銀行帳號的資料項目、也沒有付款字樣（既有不變量）', () => {
+    const off = html(false);
+    expect(off).not.toContain('>銀行帳號<');
+    expect(off).not.toContain('不會顯示給買家或其他賣家');
+    expect(off).not.toContain('你綁定的銀行帳號一併刪除');
+    for (const w of PAY_WORDS) expect(off, w).not.toContain(w);
+  });
+  it('修訂紀錄（AC-36）：銀行帳號那筆只在開關打開時出現，固定日期 2026/10/29，排在聊聊那筆之後、刪除帳號那筆之前；不含付款字樣', () => {
+    for (const w of PAY_WORDS) expect(BANK_REVISION, w).not.toContain(w);
+    const entry = `2026/10/29</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${BANK_REVISION}`;
+    expect(html(false)).not.toContain(BANK_REVISION);
+    const on = html(true);
+    expect(on).toContain(entry);
+    expect(on.indexOf(entry)).toBeGreaterThan(on.indexOf('新增『聊聊』：'));
+    expect(on.indexOf(entry)).toBeLessThan(on.indexOf('刪除帳號改為在 App 或網站提出申請'));
   });
 });
 

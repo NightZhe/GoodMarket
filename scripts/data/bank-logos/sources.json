@@ -1,0 +1,80 @@
+[
+  {
+    "bankCode": "822",
+    "bankName": "中國信託商業銀行",
+    "sourceUrl": "https://www.ctbcbank.com/content/dam/twrbo/images/touch/apple-touch-icon-180x180.png",
+    "sourcePage": "https://www.ctbcbank.com/twrbo/zh_tw/index.html（官網首頁 `<link rel=\"apple-touch-icon\">`）",
+    "acquiredAt": "2026-10-29",
+    "acquiredBy": "小u",
+    "file": "822.png",
+    "format": "PNG，180×180（RGBA）",
+    "sha256": "72bf5f5afdb3324d6fa7b375fb2a2d460b468c4496d7da84eb6a7f464cfe73c0",
+    "modified": "原檔，未修改",
+    "license": "未取得授權（Q25 使用者決定直接用）"
+  },
+  {
+    "bankCode": "013",
+    "bankName": "國泰世華商業銀行",
+    "sourceUrl": "https://www.cathay-cube.com.tw/content/dam/cub-aem-cs/Image/Common/cub-icons/logo.svg",
+    "sourcePage": "https://www.cathaybk.com.tw/cathaybk/（導向 cathay-cube.com.tw 官網首頁，頁首 logo）",
+    "acquiredAt": "2026-10-29",
+    "acquiredBy": "小u",
+    "file": "013.svg",
+    "format": "SVG，54×39（viewBox）",
+    "sha256": "0c677c01d786dbddfb5dcd4c498f7992e23ced70da5d2f8e3f33594e7c5b7f16",
+    "modified": "**裁切**：原檔是「樹形標誌＋中英文字」橫式 212×39，只改 `width`／`viewBox` 為 54×39 只留樹形；路徑與顏色一字未動",
+    "license": "未取得授權（Q25 使用者決定直接用）"
+  },
+  {
+    "bankCode": "808",
+    "bankName": "玉山商業銀行",
+    "sourceUrl": "https://www.esunbank.com/zh-tw/-/media/New-ESUNBANK/icon/apple-touch-icon/esun-icon.png",
+    "sourcePage": "https://www.esunbank.com/zh-tw/personal（官網首頁 `<link rel=\"apple-touch-icon\">`）",
+    "acquiredAt": "2026-10-29",
+    "acquiredBy": "小u",
+    "file": "808.png",
+    "format": "PNG，180×180（RGB）",
+    "sha256": "82ca7a21ed1865fe2f42123278ae409eeaa1cd381535a0d598c9a2d82067d8e3",
+    "modified": "原檔，未修改",
+    "license": "未取得授權（Q25 使用者決定直接用）"
+  },
+  {
+    "bankCode": "012",
+    "bankName": "台北富邦商業銀行",
+    "sourceUrl": "https://www.fubon.com/banking/common_content/images/favicon.ico",
+    "sourcePage": "https://www.fubon.com/banking/personal（官網首頁 `<link rel=\"icon\">`）",
+    "acquiredAt": "2026-10-29",
+    "acquiredBy": "小u",
+    "file": "012.png",
+    "format": "PNG，64×64",
+    "sha256": "836a0356a41b3cbf83983ddbb011f583dbd7e1de731dfc4923fd303fe67d31b7",
+    "modified": "**格式轉換**：ICO 的 64×64 影格轉成 PNG，像素未動。**解析度偏低**（顯示在 40pt 的格子 3x 螢幕會略糊）；官網沒找到更大的單獨標誌檔，只有橫式 420×65 的 `logo.png`（含字）",
+    "license": "未取得授權（Q25 使用者決定直接用）"
+  },
+  {
+    "bankCode": "700",
+    "bankName": "中華郵政股份有限公司",
+    "sourceUrl": "https://www.post.gov.tw/post/internet/Group/images/Logo.jpg",
+    "sourcePage": "https://www.post.gov.tw/post/internet/Group/default.jsp（官網首頁頁首 logo）",
+    "acquiredAt": "2026-10-29",
+    "acquiredBy": "小u",
+    "file": "700.png",
+    "format": "PNG，54×48",
+    "sha256": "9a3950d7e33f7ac778c580c0a74b80d22463721c97919d7aff921d64c55d4ecb",
+    "modified": "**裁切**：原檔是「郵字圓標＋文字」橫式 JPG 242×66，取左上 54×48 只留圓標（JPG 轉 PNG，像素未動）。**解析度低**，且圓標下緣仍帶一點原檔的倒影殘影；官網 favicon 只有 20×20，更小",
+    "license": "未取得授權（Q25 使用者決定直接用）"
+  },
+  {
+    "bankCode": "017",
+    "bankName": "兆豐國際商業銀行",
+    "sourceUrl": "https://www.megabank.com.tw/themes/project/cms/media/assets/touch/icon-192x192.png",
+    "sourcePage": "https://www.megabank.com.tw/personal（官網首頁 `<link rel=\"apple-touch-icon\">`）",
+    "acquiredAt": "2026-10-29",
+    "acquiredBy": "小u",
+    "file": "017.png",
+    "format": "PNG，192×192（RGBA）",
+    "sha256": "5cf1563626241b342d420c24bc9d9cba6fe87d50df69e913d31c8d292cee153e",
+    "modified": "原檔，未修改",
+    "license": "未取得授權（Q25 使用者決定直接用）"
+  }
+]

@@ -30,7 +30,10 @@ import BindPhone from './pages/buyer/BindPhone';
 import PaymentMethods from './pages/buyer/PaymentMethods';
 import PaymentMethodNew from './pages/buyer/PaymentMethodNew';
 import PaymentBindResult from './pages/buyer/PaymentBindResult';
-import AccountPayout from './pages/buyer/AccountPayout';
+import BankFlow from './pages/buyer/BankFlow';
+import BankPickBank from './pages/buyer/BankPickBank';
+import BankAdd from './pages/buyer/BankAdd';
+import BankVerify from './pages/buyer/BankVerify';
 import PayResult from './pages/buyer/PayResult';
 import Privacy from './pages/buyer/Privacy';
 import AccountDelete from './pages/buyer/AccountDelete';
@@ -45,7 +48,6 @@ import ProductForm from './pages/seller/ProductForm';
 import SellerOrders from './pages/seller/SellerOrders';
 import SellerReviews from './pages/seller/SellerReviews';
 import SellerChatShell, { SellerChatNew, SellerChatThread } from './pages/seller/SellerChat';
-import SellerPayout from './pages/seller/SellerPayout';
 import SellerLogistics from './pages/seller/SellerLogistics';
 import SellerLogisticsStoreForm from './pages/seller/SellerLogisticsStoreForm';
 import SellerLogisticsAddressForm from './pages/seller/SellerLogisticsAddressForm';
@@ -107,7 +109,14 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
       <Route path="account/payment-methods" element={<RequirePayment to="/account"><PaymentMethods /></RequirePayment>} />
       <Route path="account/payment-methods/new" element={<RequirePayment to="/account"><PaymentMethodNew /></RequirePayment>} />
       <Route path="account/payment-methods/result" element={<RequirePayment to="/account"><PaymentBindResult /></RequirePayment>} />
-      <Route path="account/payout" element={<RequirePayment to="/account"><AccountPayout /></RequirePayment>} />
+      {/* 銀行帳號流程（選銀行、填資料、簡訊驗證）：表單草稿放在 BankFlow 的記憶體 */}
+      <Route path="account/bank-accounts" element={<BankFlow origin="account" />}>
+        <Route path="new" element={<BankAdd />} />
+        <Route path="new/bank" element={<BankPickBank />} />
+        <Route path="verify" element={<BankVerify />} />
+      </Route>
+      {/* 舊的「收款帳戶」網址（特約商店編號表單已拿掉）：轉到銀行帳號區 */}
+      <Route path="account/payout" element={<RequirePayment to="/account"><Navigate to="/account/payment-methods?section=bank" replace /></RequirePayment>} />
       <Route path="pay/:paymentId" element={<PayResult />} />
       <Route path="privacy" element={<Privacy />} />
     </Route>
@@ -131,7 +140,13 @@ const createRouter = () => createHashRouter(createRoutesFromElements(
         <Route path="logistics/stores/new" element={<SellerLogisticsStoreForm />} />
         <Route path="logistics/stores/:id" element={<SellerLogisticsStoreForm />} />
         <Route path="logistics/address" element={<SellerLogisticsAddressForm />} />
-        <Route path="payout" element={<RequirePayment to="/seller"><SellerPayout /></RequirePayment>} />
+        {/* 賣家入口的銀行帳號：同一頁（頁 A）放在賣家中心版面裡，側欄選中它、手機底欄代選中賣場總覽 */}
+        <Route path="payout" element={<RequirePayment to="/seller"><PaymentMethods origin="seller" /></RequirePayment>} />
+        <Route path="payout/bank-accounts" element={<BankFlow origin="seller" />}>
+          <Route path="new" element={<BankAdd />} />
+          <Route path="new/bank" element={<BankPickBank />} />
+          <Route path="verify" element={<BankVerify />} />
+        </Route>
       </Route>
     </Route>
 
