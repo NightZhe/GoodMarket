@@ -2,6 +2,7 @@ import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import ConversationView from '../../components/chat/ConversationView';
 import { useStore } from '../../store/StoreContext';
 import { cardTargetGone } from '../../lib/chat/cards';
+import { orderDeepLink } from '../../lib/orders/deeplink';
 import { CHAT_LIST_PATH, conversationPath, parseNewChat } from '../../lib/chat/nav';
 import type { OpenTarget } from '../../lib/chat/outbox';
 import type { ChatCard } from '../../lib/chat/types';
@@ -24,7 +25,8 @@ function BuyerConversation({ target }: { target: OpenTarget }) {
   const navigate = useNavigate();
   const fallbackName = target.kind === 'shop' ? getShop(target.shopId)?.name : undefined;
 
-  const cardTo = (c: ChatCard) => (c.type === 'product' ? `/product/${c.id}` : '/orders');
+  // 商品卡到商品頁；訂單卡直達我的訂單裡那一筆（D2）
+  const cardTo = (c: ChatCard) => (c.type === 'product' ? `/product/${c.id}` : orderDeepLink('/orders', c.id));
   const cardGone = (c: ChatCard) => cardTargetGone(c, {
     productsLoaded: !loading,
     product: id => getProduct(id)?.status,

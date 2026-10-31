@@ -7,6 +7,7 @@ import { isChatThreadPath } from './sellerNav';
 import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
 import { cardTargetGone } from '../../lib/chat/cards';
+import { orderDeepLink } from '../../lib/orders/deeplink';
 import { SELLER_CHAT_LIST_PATH, parseSellerNewChat, sellerConversationPath } from '../../lib/chat/sellerPaths';
 import { useChatList } from '../../lib/chat/useChatList';
 import { useSplitLayout } from '../../lib/layout/splitLayout';
@@ -71,8 +72,8 @@ function SellerConversation({ target }: { target: OpenTarget }) {
   const split = useSplitLayout();
   const navigate = useNavigate();
   const { getProduct, loading, shopOrders } = useStore();
-  // 商品卡點了到買家前台的商品頁；訂單卡點了到賣家的訂單管理
-  const cardTo = (c: ChatCard) => (c.type === 'product' ? `/product/${c.id}` : '/seller/orders');
+  // 商品卡點了到買家前台的商品頁；訂單卡直達訂單管理裡那一筆（D2）
+  const cardTo = (c: ChatCard) => (c.type === 'product' ? `/product/${c.id}` : orderDeepLink('/seller/orders', c.id));
   const cardGone = (c: ChatCard) => cardTargetGone(c, {
     productsLoaded: !loading,
     product: id => getProduct(id)?.status,

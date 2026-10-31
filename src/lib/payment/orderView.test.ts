@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Order } from '../../types';
 import type { CancelRequestView, OrderPaymentRow } from './types';
-import { BUYER_PAY_LABEL, SELLER_PAY_LABEL, orderPayLine, buyerCancelUi, ordersTabFromQuery, orderPayLineIfOn, orderPayState, hasBatchSiblings, pendingBatch, sellerCancelUi, sellerPayLabel } from './orderView';
+import { BUYER_PAY_LABEL, SELLER_PAY_LABEL, orderPayLine, buyerCancelUi, orderPayLineIfOn, orderPayState, hasBatchSiblings, pendingBatch, sellerCancelUi, sellerPayLabel } from './orderView';
 
 const req = (status: CancelRequestView['status']): CancelRequestView => ({
   status, reason: 'no_longer_wanted', note: null, requested_at: '2026-10-20T06:00:00Z', respond_by: '2026-10-22T06:00:00Z', decided_at: status === 'pending' ? null : '2026-10-20T07:00:00Z', reject_reason: null,
@@ -167,15 +167,5 @@ describe('賣家端付款標籤隨退款狀態變（設計 5.1）', () => {
     expect(sellerPayLabel('ecpay_card', false, 'refunded')).toBe('信用卡・已退款');
     expect(sellerPayLabel('ecpay_card', true, null)).toBe('信用卡・已付款');
     expect(sellerPayLabel('cod', true, 'refunded')).toBe('貨到付款');
-  });
-});
-
-describe('ordersTabFromQuery：#/orders?tab=pending 進來要切到待付款分頁', () => {
-  it('tab=pending 是待付款，其餘（沒有、亂寫）是全部', () => {
-    expect(ordersTabFromQuery('pending')).toBe('pending');
-    expect(ordersTabFromQuery(null)).toBe('all');
-    expect(ordersTabFromQuery('')).toBe('all');
-    expect(ordersTabFromQuery('cancelled')).toBe('all');
-    expect(ordersTabFromQuery('<script>')).toBe('all');
   });
 });
