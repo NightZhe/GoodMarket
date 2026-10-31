@@ -4,6 +4,7 @@ export { GlassButton } from './GlassButton';
 export { GlassCapsule } from './GlassCapsule';
 export type { RailLevel } from './railLevel';
 export { TabPill } from './TabPill';
+export { DesktopRail } from './DesktopRail';
 export { GlassTray, TrayButton } from './GlassTray';
 export { CountBadge } from './CountBadge';
 export type { TabItem } from './tabs';

@@ -5,13 +5,13 @@ import { useStore } from '../../store/StoreContext';
 import { useAuth } from '../../store/AuthContext';
 import { useChat } from '../../store/ChatContext';
 import ChatIcon from '../../components/chat/ChatIcon';
-import UnreadPill from '../../components/chat/UnreadPill';
 import { buyerChatTab, isChatConversationPath } from '../../lib/chat/nav';
-import { badgeCount, chatNavLabel } from '../../lib/chat/unread';
+import { badgeCount } from '../../lib/chat/unread';
 import { useToast } from '../../components/Toast';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useOnline } from '../../lib/useOnline';
 import { headerFor, inlineTitle, type HeaderKind, type ShareTarget } from '../../lib/layout/headerKind';
+import { hideBuyerTabBar, reserveForTabBar, showBuyerRail } from '../../lib/layout/buyerNav';
 import { OwnTitleProvider } from '../../lib/layout/pageTitle';
 import { isNative } from '../../lib/native/platform';
 import { publicUrl } from '../../lib/share/publicUrl';
@@ -19,7 +19,7 @@ import { pillButtonPrimary } from '../../components/pillButton';
 import { scrollPageToTop } from '../../lib/ui/scroll';
 import { usePosture } from '../../lib/layout/posture';
 import { trayReserveStyle } from '../../lib/layout/trayReserve';
-import { CountBadge, GlassButton, GlassCapsule, TabPill, type TabItem } from '../../components/glass';
+import { CountBadge, DesktopRail, GlassButton, GlassCapsule, TabPill, type TabItem } from '../../components/glass';
 import { PurchaseTray } from './PurchaseTray';
 import { TWO_COLUMN_GRID, TWO_COLUMN_TOP, useTwoColumn } from './productColumns';
 
@@ -62,15 +62,9 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
     navigate(`/search?q=${encodeURIComponent(q.trim())}`);
   };
 
-  // 商品頁、結帳頁在手機上有自己的底部操作列，不顯示全站導覽
-  // 評價表單（/orders/:id/review）手機底部有自己的送出列，也不顯示全站導覽
-  // 地址新增／編輯頁（/account/addresses/new、/account/addresses/:id）有鍵盤，固定的底部分頁在 iOS Safari 鍵盤開關時會跳
-  const hideTabBar = pathname.startsWith('/product/') || pathname === '/checkout' || pathname === '/cart'
-    || /^\/orders\/[^/]+\/review$/.test(pathname) || pathname.startsWith('/account/addresses/')
-    // 綁卡頁有鍵盤（綠界欄位）、付款結果頁要專心看結果
-    || pathname === '/account/payment-methods/new' || pathname.startsWith('/account/bank-accounts/') || pathname === '/account/payment-methods/result' || pathname.startsWith('/pay/')
-    // 聊聊的對話頁有自己的輸入列與鍵盤（列表頁 /chat 仍顯示）
-    || isChatConversationPath(pathname);
+  // 手機底部膠囊（與 Duo 直立軌）、桌機右側浮動軌各自的顯示規則在 lib/layout/buyerNav.ts（純函式有測試）
+  const hideTabBar = hideBuyerTabBar(pathname);
+  const showRail = showBuyerRail(pathname);
 
   const header = headerFor(pathname);
   // 側邊姿態（系統欄在左右側直立）：控制搬進直立軌，第二層頁不顯示頂部導覽列，改成內容頂端的行內標題（design-spec §3.3）
@@ -85,7 +79,10 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
   const grouped = pathname === '/account' || pathname.startsWith('/account/');
   const material = grouped ? 'material-grouped' : 'material';
 
-  const tabs = buyerTabs(pathname === '/', badgeCount(chat.summary, 'buyer'));
+  const chatBadge = badgeCount(chat.summary, 'buyer');
+  // 手機五格（首頁／購物車／訂單／聊聊／我的，D15；Duo 直立軌用同一份）；桌機軌多一格「逛逛」（D6）
+  const tabs = buyerTabs({ atHome: pathname === '/', chatBadge, cartCount, browse: false });
+  const railTabs = buyerTabs({ atHome: pathname === '/', chatBadge, cartCount, browse: true });
   // 對話頁有自己的離線提示（「目前離線，無法傳送」），外框那一條不再出現，免得兩條並存
   const inConversation = isChatConversationPath(pathname);
 
@@ -101,7 +98,10 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
       {header.kind === 'large' && (
         <header className="mx-auto w-full max-w-6xl">
           <div className="flex h-[52px] items-end justify-between px-5">
-            <h1 className="text-large-title font-bold">{header.title}</h1>
+            {/* 首頁的 Logo「好物集」全站都是回首頁的連結（工單 C6）；其他分頁根頁的大標題只是標題 */}
+            <h1 className="text-large-title font-bold">
+              {pathname === '/' ? <Link to="/" className="rounded-sm">{header.title}</Link> : header.title}
+            </h1>
             <div className="flex items-end gap-5">
               <DesktopLinks className="mb-2.5" />
               {header.cart && !side && <CartTool count={cartCount} />}
@@ -131,7 +131,8 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
             <div className="flex items-center">
               <DesktopLinks className="mr-4" />
               {header.share && <ShareButton target={header.share} />}
-              {header.cart && <CartNavLink count={cartCount} />}
+              {/* 桌機軌上已有購物車格，有軌的頁桌機不再重複放（D14）；手機維持 */}
+              {header.cart && <CartNavLink count={cartCount} className={showRail ? 'md:hidden' : ''} />}
             </div>
           </div>
         </header>
@@ -151,7 +152,8 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
         )}
       </div>
 
-      <main className={`flex-1 ${hideTabBar ? '' : 'pb-(--tabs-clearance) md:pb-0'}`}>
+      {/* 桌機有浮動軌的頁，內容右側讓出 --rail-clearance（夠寬時為 0），文字與右側按鈕不被軌蓋住（工單 C3） */}
+      <main className={`flex-1 ${reserveForTabBar(pathname) ? 'pb-(--tabs-clearance) md:pb-0' : ''} ${showRail ? 'md:pr-(--rail-clearance)' : ''}`}>
         {loadError && needsProducts ? (
           <div role="alert" className="mx-auto max-w-md px-5 py-24 text-center">
             <p className="text-title3 font-bold">載入商品失敗</p>
@@ -171,7 +173,7 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
         )}
       </main>
 
-      <footer className={`mt-10 hidden border-t border-line bg-white ${inConversation ? '' : 'md:block'}`}>
+      <footer className={`mt-10 hidden border-t border-line bg-white ${inConversation ? '' : 'md:block'} ${showRail ? 'md:pr-(--rail-clearance)' : ''}`}>
         <div className="mx-auto grid max-w-6xl grid-cols-3 gap-8 px-4 py-10 text-sm text-muted">
           <div>
             <p className="mb-3 font-semibold text-ink">客服中心</p>
@@ -188,13 +190,15 @@ function BuyerLayoutView({ pageOwnsTitle }: { pageOwnsTitle: boolean }) {
         </div>
       </footer>
 
-      {/* 水平姿態＝置中懸浮膠囊，側邊姿態＝右（左）側直立軌；兩個元件自己看姿態，同一時間只有一個出現。桌機網頁（md 以上）沒有分頁導覽 */}
+      {/* 主要分頁導覽同一時間只有一組在 DOM 中可見（AC-C8）：
+          水平姿態＝置中懸浮膠囊（md 以下）、側邊姿態＝右（左）側直立軌（只在 App 內，兩個元件自己看姿態）、桌機網頁（md 以上、非 App）＝右側浮動軌 */}
       {!hideTabBar && (
         <>
           <TabPill items={tabs} label="主要分頁" className="md:hidden" />
           <GlassCapsule label="主要分頁" tabs={tabs} />
         </>
       )}
+      {showRail && <DesktopRail tabs={railTabs} label="主要分頁" className="hidden md:flex" />}
     </div>
   );
 }
@@ -205,20 +209,17 @@ const PRESS_FADE = 'transition-opacity duration-200 active:opacity-50 active:dur
 /**
  * 首頁、逛逛的購物車（Q2）：水平姿態是 44pt 懸浮玻璃鈕，捲動時不捲走，固定在右上
  * （env(top)＋4、離右緣 16，靜止時在大標題列右側）。側邊姿態的購物車在直立軌的工具組（RailTools），不走這裡。
- * 桌機網頁（md 以上）維持原本頁首裡的 36pt 灰圓鈕。
+ * 桌機網頁（md 以上）不顯示：購物車在右側浮動軌上（D14 拿掉了頁首的灰圓鈕）。
  */
 function CartTool({ count }: { count: number }) {
   return (
-    <>
-      <GlassButton
-        to="/cart"
-        label={`購物車，${count} 件`}
-        icon={<ShoppingCart size={22} strokeWidth={1.7} />}
-        badge={count}
-        className="fixed right-[calc(var(--inset-r)+16px)] top-[calc(env(safe-area-inset-top)+4px)] md:hidden"
-      />
-      <CartCircle count={count} />
-    </>
+    <GlassButton
+      to="/cart"
+      label={`購物車，${count} 件`}
+      icon={<ShoppingCart size={22} strokeWidth={1.7} />}
+      badge={count}
+      className="fixed right-[calc(var(--inset-r)+16px)] top-[calc(env(safe-area-inset-top)+4px)] md:hidden"
+    />
   );
 }
 
@@ -240,23 +241,11 @@ function RailTools({ header, count }: { header: HeaderKind; count: number }) {
   );
 }
 
-/** 桌機（md 以上）頁首的購物車圓鈕：視覺 36、熱區 44。App 內不顯示 */
-function CartCircle({ count }: { count: number }) {
-  return (
-    <Link to="/cart" aria-label={`購物車，${count} 件`} className="group -mb-px -mr-1 hidden size-11 shrink-0 items-center justify-center md:flex">
-      <span className="relative flex size-9 items-center justify-center rounded-full bg-canvas text-brand transition-colors duration-200 group-active:bg-press group-active:duration-0">
-        <ShoppingCart size={20} strokeWidth={1.7} aria-hidden="true" />
-        <CountBadge count={count} className="-right-1.5 -top-[3px]" />
-      </span>
-    </Link>
-  );
-}
-
 const NAV_ICON_BTN = `${PRESS_FADE} relative flex size-11 items-center justify-center text-brand`;
 
-function CartNavLink({ count }: { count: number }) {
+function CartNavLink({ count, className = '' }: { count: number; className?: string }) {
   return (
-    <Link to="/cart" aria-label={`購物車，${count} 件`} className={NAV_ICON_BTN}>
+    <Link to="/cart" aria-label={`購物車，${count} 件`} className={`${NAV_ICON_BTN} ${className}`}>
       <ShoppingCart size={22} strokeWidth={1.7} aria-hidden="true" />
       <CountBadge count={count} className="right-1 top-1.5" />
     </Link>
@@ -315,24 +304,17 @@ function RailShareButton({ target }: { target: ShareTarget }) {
   return <GlassButton label="分享" icon={<Share size={22} strokeWidth={1.7} />} onClick={() => void share()} />;
 }
 
-/** 桌機（md 以上）沒有 tab bar，常用入口放在頁首右側。手機不顯示 */
+/**
+ * 桌機（md 以上）頁首右側只剩「賣家中心」入口（D7、D14）；未登入時旁邊多一顆「登入」（現有行為）。
+ * 訂單、聊聊、我的帳號、購物車都搬到右側浮動軌（DesktopRail）。手機不顯示
+ */
 function DesktopLinks({ className = '' }: { className?: string }) {
   const { user } = useStore();
   const { openLogin } = useAuth();
-  const unread = badgeCount(useChat().summary, 'buyer');
   return (
     <div className={`hidden items-center gap-5 text-subhead text-muted md:flex ${className}`}>
       <Link to="/seller" className="hover:text-brand">賣家中心</Link>
-      <Link to="/orders" className="hover:text-brand">我的訂單</Link>
-      <Link to="/chat" aria-label={chatNavLabel(unread)} className="hover:text-brand">
-        聊聊
-        {unread > 0 && <span className="ml-1 inline-block align-middle"><UnreadPill count={unread} /></span>}
-      </Link>
-      {user ? (
-        <Link to="/account" className="hover:text-brand">我的帳號</Link>
-      ) : (
-        <button type="button" onClick={() => openLogin()} className="hover:text-brand">登入</button>
-      )}
+      {!user && <button type="button" onClick={() => openLogin()} className="hover:text-brand">登入</button>}
     </div>
   );
 }
@@ -435,13 +417,18 @@ function ProductSkeleton() {
   );
 }
 
-/** 買家 5 格分頁（順序與第 5 格「我的」沿用 UI 改版 D4）。onReselect：在首頁再點一次捲回頂端 */
-function buyerTabs(atHome: boolean, chatBadge: number): TabItem[] {
+/**
+ * 買家主要分頁（合夥人回饋 10/31 D6、D15）：手機五格 首頁／購物車／訂單／聊聊／我的（逛逛拿掉，搜尋從首頁搜尋框進）；
+ * browse＝true 是桌機軌的六格，在首頁後多一格「逛逛」。購物車格帶件數角標（0 不顯示），朗讀「購物車，N 件」。
+ * onReselect：在首頁再點一次捲回頂端
+ */
+function buyerTabs({ atHome, chatBadge, cartCount, browse }: { atHome: boolean; chatBadge: number; cartCount: number; browse: boolean }): TabItem[] {
   const line = { size: 24, strokeWidth: 1.7 } as const;
   const bold = { size: 24, strokeWidth: 2.5 } as const;
   return [
     { to: '/', label: '首頁', end: true, onReselect: atHome ? scrollPageToTop : undefined, icon: <House {...line} />, iconActive: <HouseFilled /> },
-    { to: '/search', label: '逛逛', icon: <SearchIcon {...line} />, iconActive: <SearchIcon {...bold} /> },
+    ...(browse ? [{ to: '/search', label: '逛逛', icon: <SearchIcon {...line} />, iconActive: <SearchIcon {...bold} /> }] : []),
+    { to: '/cart', label: '購物車', ariaLabel: `購物車，${cartCount} 件`, badge: cartCount, icon: <ShoppingCart {...line} />, iconActive: <ShoppingCart {...bold} /> },
     { to: '/orders', label: '訂單', icon: <ClipboardList {...line} />, iconActive: <ClipboardList {...bold} /> },
     // 第 4 格「聊聊」取代「我要賣」（D14）；賣家中心的入口是「我的」頁既有的「賣家中心」列。選中只加粗線寬、不填色（內部兩行字反白在 24pt 太擠）
     { ...buyerChatTab(chatBadge), icon: <ChatIcon {...line} />, iconActive: <ChatIcon {...bold} /> },

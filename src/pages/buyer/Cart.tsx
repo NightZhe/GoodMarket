@@ -15,6 +15,7 @@ import { GlassTray, TrayButton } from '../../components/glass';
 import { money } from '../../lib/format';
 import type { CartItem } from '../../types';
 import { TRAY_RIGHT_HALF } from '../../lib/layout/trayPlacement';
+import { usePosture } from '../../lib/layout/posture';
 import { trayReserveStyle, useTrayHeightReport } from '../../lib/layout/trayReserve';
 
 const keyOf = (c: Pick<CartItem, 'productId' | 'variantId'>) => `${c.productId}|${c.variantId}`;
@@ -28,12 +29,18 @@ export default function Cart() {
   );
 }
 
+/** 水平姿態（手機）結帳托盤疊在分頁膠囊正上方、內容底部預留 --stack-clearance；側邊姿態（Duo）沒有膠囊，托盤落在右半（D13）。md 以上由 index.css 退回單托盤 */
+function useStackedTray(): boolean {
+  return usePosture() === 'bottom';
+}
+
 function CartSkeleton() {
   // 骨架的托盤也會隨文字放大換行變高：預留跟實測高度走，載入完成換成 CartView 時內容底部不跳
   const [trayHeight, setTrayHeight] = useState(0);
   const trayRef = useTrayHeightReport(setTrayHeight);
+  const stacked = useStackedTray();
   return (
-    <div aria-busy="true" style={trayReserveStyle(false, trayHeight)} className="mx-auto max-w-[600px] pb-(--tray-reserve) md:max-w-6xl md:px-4 md:pt-6">
+    <div aria-busy="true" style={trayReserveStyle(stacked, trayHeight)} className="mx-auto max-w-[600px] pb-(--tray-reserve) md:max-w-6xl md:px-4 md:pt-6">
       <p role="status" className="sr-only">載入中</p>
       <div className="space-y-2 md:space-y-4" aria-hidden="true">
         {[0, 1].map(i => (
@@ -51,8 +58,8 @@ function CartSkeleton() {
         ))}
       </div>
       {/* 結帳托盤照常顯示，但總額不用粗黑字：避免讓人以為購物車真的是 0 */}
-      <div ref={trayRef} className={`lg:hidden ${TRAY_RIGHT_HALF}`}>
-        <GlassTray label="結帳" variant="checkout">
+      <div ref={trayRef} className={`lg:hidden ${stacked ? '' : TRAY_RIGHT_HALF}`}>
+        <GlassTray label="結帳" variant="checkout" abovePill={stacked}>
           <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-between gap-x-2" aria-hidden="true">
             <span className="flex min-h-11 items-center gap-2 text-callout text-muted-2">
               <input type="checkbox" disabled className="size-5" tabIndex={-1} />全選
@@ -78,6 +85,7 @@ function CartView() {
   const [retrying, setRetrying] = useState(false);
   const [trayHeight, setTrayHeight] = useState(0);
   const trayRef = useTrayHeightReport(setTrayHeight);
+  const stacked = useStackedTray();
 
   // 別台裝置改了購物車、這裡背景重讀後有變：畫面已經會更新，另外對讀屏宣告一聲（只在進頁之後發生的變動）
   const firstTick = useRef(cartUpdateTick);
@@ -191,7 +199,7 @@ function CartView() {
   const allOn = allKeys.every(k => selected.has(k));
 
   return (
-    <div style={trayReserveStyle(false, trayHeight)} className="mx-auto max-w-[600px] pb-(--tray-reserve) md:max-w-6xl md:px-4 md:pt-6 lg:pb-10">
+    <div style={trayReserveStyle(stacked, trayHeight)} className="mx-auto max-w-[600px] pb-(--tray-reserve) md:max-w-6xl md:px-4 md:pt-6 lg:pb-10">
       {liveRegion}
       <h1 className="hidden text-xl font-medium md:block">購物車</h1>
 
@@ -329,9 +337,9 @@ function CartView() {
         </aside>
       </div>
 
-      {/* 手機：底部懸浮結帳托盤（C5）。桌機（lg 以上）用右側訂單摘要卡 */}
-      <div ref={trayRef} className={`lg:hidden ${TRAY_RIGHT_HALF}`}>
-        <GlassTray label="結帳" variant="checkout">
+      {/* 手機：底部懸浮結帳托盤（C5），疊在分頁膠囊正上方（購物車成為分頁後膠囊照常顯示，工單 C4）。桌機（lg 以上）用右側訂單摘要卡 */}
+      <div ref={trayRef} className={`lg:hidden ${stacked ? '' : TRAY_RIGHT_HALF}`}>
+        <GlassTray label="結帳" variant="checkout" abovePill={stacked}>
           {/* 全選與總金額合成一格橫跨前兩欄：文字放大到放不下時它們自己換行，按鈕留在右側不被擠出托盤 */}
           <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-between gap-x-2">
             <label className="flex min-h-11 items-center gap-2 text-callout text-ink">
