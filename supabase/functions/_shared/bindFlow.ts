@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 // 綁卡流程（35586）：bind-start → 前端 SDK 填卡 → bind-confirm（CreateBindCard）→（3D）→ OrderResultURL／ReturnURL → bind-status。
 // 卡號從頭到尾不進本站；BindCardID 只存在 payment_methods，只有這裡（service role）讀得到，也不寫進日誌。
+// 綁卡掛在本站收款用的商店編號（cfg.ecpay.merchantId）底下，跟授權同一組（PR-乙 IN-B3；舊的 ECPAY_BIND_MERCHANT_ID 不再使用）。
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type { AppConfig } from './env.ts';
 import { bindFromData, twDateTime, type BindResult, type EcpayClient } from './ecpayClient.ts';
@@ -23,7 +24,7 @@ export async function startBind(db: SupabaseClient, cfg: AppConfig, ecpay: Ecpay
   if (!data.ok) throw new PayError(data.code, data.message, data.code === 'CARD_LIMIT' ? 409 : data.code === 'BIND_RATE_LIMIT' ? 429 : 400);
 
   const t = await ecpay.getBindToken({
-    bindMerchantId: cfg.bindMerchantId, memberId: data.memberId, email: user.email ?? undefined, phone: phone || undefined,
+    bindMerchantId: cfg.ecpay.merchantId, memberId: data.memberId, email: user.email ?? undefined, phone: phone || undefined,
     merchantTradeNo: data.merchantTradeNo, tradeDate: ecpay.now(), amount: cfg.bindAmount,
     returnUrl: `${cfg.functionsBaseUrl}/payment-bind-return`, orderResultUrl: `${cfg.functionsBaseUrl}/payment-bind-result`,
   });
@@ -46,7 +47,7 @@ async function loadAttempt(db: SupabaseClient, merchantTradeNo: string, userId?:
 
 /** 綁卡用的最低金額授權要放棄（35591）；失敗留給 sweep 重試 */
 export async function voidBindTransaction(db: SupabaseClient, cfg: AppConfig, ecpay: EcpayClient, merchantTradeNo: string) {
-  const r = await ecpay.abandon({ merchantId: cfg.bindMerchantId, merchantTradeNo, amount: cfg.bindAmount });
+  const r = await ecpay.abandon({ merchantId: cfg.ecpay.merchantId, merchantTradeNo, amount: cfg.bindAmount });
   if (r.kind === 'done') {
     await db.from('ecpay_bind_attempts').update({ void_state: 'done', updated_at: new Date().toISOString() }).eq('merchant_trade_no', merchantTradeNo);
   } else {
@@ -68,7 +69,7 @@ export async function applyBound(db: SupabaseClient, cfg: AppConfig, ecpay: Ecpa
   if (error) throw new Error('bind_apply_success: ' + error.message);
   if (!data.ok) {
     if (data.deleteBindCardId) {
-      await ecpay.deleteBindCard({ bindMerchantId: cfg.bindMerchantId, bindCardId: data.deleteBindCardId });
+      await ecpay.deleteBindCard({ bindMerchantId: cfg.ecpay.merchantId, bindCardId: data.deleteBindCardId });
       await voidBindTransaction(db, cfg, ecpay, merchantTradeNo);
     }
     return { status: 'failed', code: data.code, message: data.message };
@@ -85,7 +86,7 @@ export async function confirmBind(db: SupabaseClient, cfg: AppConfig, ecpay: Ecp
   if (a.status === 'bound') return { status: 'bound', paymentMethodId: a.payment_method_id, duplicate: !!a.is_same_card };
   if (a.status === 'failed') return { status: 'failed', code: 'BIND_FAILED', message: declineText(a.rtn_code) };
   await db.from('ecpay_bind_attempts').update({ status: 'confirming', updated_at: new Date().toISOString() }).eq('id', a.id).in('status', ['created', 'confirming']);
-  const r = await ecpay.createBindCard({ bindMerchantId: cfg.bindMerchantId, memberId: a.merchant_member_id, bindCardPayToken });
+  const r = await ecpay.createBindCard({ bindMerchantId: cfg.ecpay.merchantId, memberId: a.merchant_member_id, bindCardPayToken });
   if (r.kind === 'need3d') return { status: 'need3d', url: r.url };
   if (r.kind === 'bound') return applyBound(db, cfg, ecpay, r, merchantTradeNo);
   if (r.kind === 'failed') {
@@ -113,7 +114,7 @@ export async function handleBindNotification(db: SupabaseClient, cfg: AppConfig,
 
 /** 用綁卡清單反查（ReturnURL 沒收到、結果不明時）。回 true＝有進展 */
 export async function syncBindByQuery(db: SupabaseClient, cfg: AppConfig, ecpay: EcpayClient, a: any): Promise<boolean> {
-  const q = await ecpay.queryBindCards({ bindMerchantId: cfg.bindMerchantId, memberId: a.merchant_member_id, merchantTradeNo: a.merchant_trade_no });
+  const q = await ecpay.queryBindCards({ bindMerchantId: cfg.ecpay.merchantId, memberId: a.merchant_member_id, merchantTradeNo: a.merchant_trade_no });
   if (!q.ok) return false;
   const { data: known } = await db.from('payment_methods').select('bind_card_id').eq('user_id', a.user_id);
   const have = new Set((known ?? []).map((r: any) => r.bind_card_id));
@@ -148,7 +149,7 @@ export async function deleteMethod(db: SupabaseClient, cfg: AppConfig, ecpay: Ec
 }
 
 export async function finishDelete(db: SupabaseClient, cfg: AppConfig, ecpay: EcpayClient, id: string, bindCardId: string) {
-  const r = await ecpay.deleteBindCard({ bindMerchantId: cfg.bindMerchantId, bindCardId });
+  const r = await ecpay.deleteBindCard({ bindMerchantId: cfg.ecpay.merchantId, bindCardId });
   if (r.kind === 'done') {
     await db.rpc('method_finish_delete', { p_id: id });
     return { status: 'deleted' as const };

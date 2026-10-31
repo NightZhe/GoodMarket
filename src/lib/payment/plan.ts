@@ -53,6 +53,14 @@ export function planCheckout({ shops, choice, enabled, payable }: PlanInput): Ch
   };
 }
 
+/** 貨到付款組裡「不能線上付款」的店底下的原因句（PR-乙 IN-B6；decisions E3＝A）。
+ *  平台收款開關關著時逐字維持現在的句子（AC-50）；開著時 not_enrolled 不解釋原因（能不能線上付款取決於店主有沒有撥款帳號，
+ *  那是店主的私人狀態），over_limit 不變 */
+export function codReasonText(reason: CodReason, platformOn: boolean): string {
+  if (reason === 'over_limit') return `這家店的金額超過線上付款的單筆上限（${money(ONLINE_SHOP_LIMIT)}），只能貨到付款。`;
+  return platformOn ? '這家店目前只能貨到付款。' : '這家店還沒開通線上付款，只能貨到付款。';
+}
+
 /** 底欄按鈕：全貨到付款＝「下訂單」；線上付款寫「現在會被請款的金額」，多家店再加店數 */
 export const payButtonLabel = (p: CheckoutPlan): string =>
   p.onlineCount === 0 ? '下訂單' : `付款 ${money(p.onlineTotal)}${p.onlineCount > 1 ? `（${p.onlineCount} 家店）` : ''}`;

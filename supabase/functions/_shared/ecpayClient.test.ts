@@ -348,3 +348,39 @@ describe('refund（已付款訂單全額退款：依綠界狀態選 N／E＋N／
     expect(t.actions).toEqual(['R']);
   });
 });
+
+// ── 平台收款（PR-乙，IN-B3／R12）：一般特店模式不帶 PlatformID，外層與 Data 的 MerchantID 都是本站商店編號 ──
+describe('一般特店模式（platformId 不設）', () => {
+  const MERCHANT_CFG = { ...TEST_CFG, platformId: undefined, merchantId: '3002607' };
+  const mkM = (h: Parameters<typeof fakeEcpay>[0]) => { const f = fakeEcpay(h); return { ...f, client: createEcpayClient(MERCHANT_CFG, f.fetchFn, () => 1_700_000_000_000) }; };
+  it('authorize：外層 MerchantID＝本站商店編號，Data 沒有 PlatformID', async () => {
+    const { client, calls } = mkM(() => AUTH_OK);
+    expect((await client.authorize(authArgs)).kind).toBe('authorized');
+    expect(calls[0].outerMerchantId).toBe('3002607');
+    expect(calls[0].data).not.toHaveProperty('PlatformID');
+    expect(calls[0].data).toMatchObject({ MerchantID: '3002607', BindCardID: 'BC1' });
+  });
+  it('getBindToken／createBindCard／deleteBindCard：同樣不帶 PlatformID', async () => {
+    const { client, calls } = mkM((p) => p.includes('GetToken') ? { RtnCode: 1, Token: 'tok', TokenExpireDate: 'x' } : { RtnCode: 1 });
+    await client.getBindToken({ bindMerchantId: '3002607', memberId: 'm1', merchantTradeNo: 'B1', tradeDate: 'd', amount: 500, returnUrl: 'https://f/r', orderResultUrl: 'https://f/o' });
+    await client.deleteBindCard({ bindMerchantId: '3002607', bindCardId: 'BC1' });
+    for (const c of calls) {
+      expect(c.outerMerchantId).toBe('3002607');
+      expect(c.data).not.toHaveProperty('PlatformID');
+      expect(c.data.MerchantID).toBe('3002607');
+    }
+  });
+  it('inquire／DoAction：查詢與請退款也不帶 PlatformID', async () => {
+    const { client, calls } = mkM((p) => p.includes('DoAction') ? { RtnCode: 1 }
+      : p.includes('Cashier') ? { RtnCode: 1, OrderInfo: { TradeNo: 'E9', TradeAmt: 120 } } : { RtnMsg: '', RtnValue: { Status: 'Captured', Amount: 120 }, CloseData: {} });
+    expect((await client.refund({ merchantId: '3002607', merchantTradeNo: 'T1', amount: 120 })).kind).toBe('done');
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    for (const c of calls) { expect(c.outerMerchantId).toBe('3002607'); expect(c.data).not.toHaveProperty('PlatformID'); }
+  });
+  it('平台商模式（對照）：外層是平台商、Data 帶 PlatformID、MerchantID 是傳入的收款特店', async () => {
+    const { client, calls } = mk(() => AUTH_OK);
+    await client.authorize({ ...authArgs, merchantId: '3002607' });
+    expect(calls[0].outerMerchantId).toBe('3003008');
+    expect(calls[0].data).toMatchObject({ PlatformID: '3003008', MerchantID: '3002607' });
+  });
+});

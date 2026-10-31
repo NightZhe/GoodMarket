@@ -74,3 +74,14 @@ describe('classifyEcpayMessage：綠界回錯的訊息 → 代碼（§7.2）', (
     expect(classifyEcpayMessage('Your IP address 1.2.3.4 is not in whitelist')).toBe('ECPAY_DENIED');
   });
 });
+
+describe('一般特店模式（PR-乙 IN-B3）：外層 MerchantID＝本站商店編號、Data 不帶 PlatformID', () => {
+  it('download：platformId 不設時外層是 merchantId，Data 只有 MerchantID', async () => {
+    const f = fakeMedia(() => csvResponse(fx('ac-r6.csv')));
+    const c = createPayoutClient({ ...TEST_CFG, platformId: undefined, merchantId: '3002607' }, f.fetchFn, () => NOW);
+    await c.download({ merchantId: '3002607', dateType: 'settle', from: '2026-10-07', to: '2026-10-21' });
+    expect(f.calls[0].outer).toBe('3002607');
+    expect(f.calls[0].data).not.toHaveProperty('PlatformID');
+    expect(f.calls[0].data).toMatchObject({ MerchantID: '3002607', DateType: '1' });
+  });
+});

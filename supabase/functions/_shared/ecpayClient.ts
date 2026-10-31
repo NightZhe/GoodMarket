@@ -1,11 +1,16 @@
 // 綠界 API 用戶端（站內付 2.0 綁卡、幕後授權、請退款、查詢）。所有 HTTP 都經由注入的 fetch，時間由注入的 now，
-// 所以可以不連網測試。平台商金鑰只從 EcpayConfig 進來（呼叫端從環境變數／secrets 讀）。
+// 所以可以不連網測試。金鑰只從 EcpayConfig 進來（呼叫端從環境變數／secrets 讀）。
+// 兩種帳戶模式（PR-乙 IN-B3，R12）：platformId 有值＝平台商模式（外層 MerchantID＝平台商、Data 帶 PlatformID、Data.MerchantID＝交易特店）；
+// platformId 不設＝一般特店模式（外層 MerchantID＝本站商店編號、Data 不帶 PlatformID）。每個方法的 merchantId 參數都是「這筆交易掛在哪個商店編號」（授權快照）。
 import { buildRequest, parseEnvelope, type EcpayEnvelope } from './ecpayCrypto.ts';
 import { classifyAuthCode } from './ecpayCodes.ts';
 
 export interface EcpayConfig {
   env: 'stage' | 'prod';
-  platformId: string;
+  /** 本站用來收款（與綁卡）的商店編號 */
+  merchantId: string;
+  /** 平台商編號；只有平台商模式才設。沒設＝一般特店模式，請求不帶 PlatformID */
+  platformId?: string;
   hashKey: string;
   hashIv: string;
   ecpgBase: string;        // 綁卡與幕後授權：https://ecpg(-stage).ecpay.com.tw
@@ -98,7 +103,9 @@ export const twDateTime = tw;
 export function createEcpayClient(cfg: EcpayConfig, fetchFn: typeof fetch = fetch, nowMs: () => number = Date.now) {
   async function post(base: string, path: string, data: Raw): Promise<Posted> {
     try {
-      const req = await buildRequest(cfg.platformId, { PlatformID: cfg.platformId, ...data }, cfg.hashKey, cfg.hashIv, Math.floor(nowMs() / 1000));
+      const outer = cfg.platformId ?? cfg.merchantId;
+      const payload = cfg.platformId ? { PlatformID: cfg.platformId, ...data } : data;
+      const req = await buildRequest(outer, payload, cfg.hashKey, cfg.hashIv, Math.floor(nowMs() / 1000));
       const res = await fetchFn(base + path, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req), signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       });

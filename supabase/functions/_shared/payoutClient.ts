@@ -31,11 +31,12 @@ export function classifyEcpayMessage(msg: string): PayoutErrorCode {
 export function createPayoutClient(cfg: PayoutClientConfig, fetchFn: typeof fetch = fetch, nowMs: () => number = Date.now) {
   async function download(q: DownloadRequest): Promise<DownloadResult> {
     if (dayCount(q.from, q.to) > MAX_RANGE_DAYS) throw new Error(`查詢範圍 ${q.from}～${q.to} 超過 ${MAX_RANGE_DAYS} 天，要先拆段`);
-    const data = { PlatformID: cfg.platformId, MerchantID: q.merchantId, DateType: q.dateType === 'settle' ? '1' : '2', BeginDate: q.from, EndDate: q.to, PaymentType: '01' };
+    // 帳戶模式同 ecpayClient：平台商模式帶 PlatformID、外層是平台商；一般特店模式不帶、外層是本站商店編號（PR-乙 IN-B3）
+    const data = { ...(cfg.platformId ? { PlatformID: cfg.platformId } : {}), MerchantID: q.merchantId, DateType: q.dateType === 'settle' ? '1' : '2', BeginDate: q.from, EndDate: q.to, PaymentType: '01' };
     const url = (cfg.payoutBase ?? cfg.ecpaymentBase).replace(/\/$/, '') + '/1.0.0/Cashier/QueryTradeMedia';
     let res: Response;
     try {
-      const req = await buildRequest(cfg.platformId, data, cfg.hashKey, cfg.hashIv, Math.floor(nowMs() / 1000));
+      const req = await buildRequest(cfg.platformId ?? cfg.merchantId, data, cfg.hashKey, cfg.hashIv, Math.floor(nowMs() / 1000));
       res = await fetchFn(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req), signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
     } catch (e) {
       return { kind: 'error', code: 'ECPAY_UNAVAILABLE', message: e instanceof Error && e.name === 'TimeoutError' ? 'timeout' : 'network error' };

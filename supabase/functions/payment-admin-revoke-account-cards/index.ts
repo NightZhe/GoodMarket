@@ -17,7 +17,7 @@ serve('payment-admin-revoke-account-cards', async (req) => {
   const b = await readJson(req);
   if (!isUuid(b.userId)) throw new PayError('REQUEST_INVALID', '請求格式不正確（userId 要是 uuid）');
   try {
-    const r = await revokeAccountCards({ store: createRevokeStore(admin()), gateway: createEcpayClient(cfg.ecpay), bindMerchantId: cfg.bindMerchantId, now: Date.now }, b.userId);
+    const r = await revokeAccountCards({ store: createRevokeStore(admin()), gateway: createEcpayClient(cfg.ecpay), bindMerchantId: cfg.ecpay.merchantId, now: Date.now }, b.userId);
     console.log('[admin-revoke] done', JSON.stringify({ allRevoked: r.allRevoked, queryOk: r.queryOk, ecpayRemaining: r.ecpayRemaining, siteRemaining: r.siteRemaining,
       cards: r.cards.map((c) => c.result), orphans: r.orphans.map((o) => o.result) }));
     return json(req, { ok: true, ...r });

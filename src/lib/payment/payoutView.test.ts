@@ -162,3 +162,44 @@ describe('chunkIds：一次請求取整頁（AC-R24），超過上限才分批',
     expect(chunkIds([])).toEqual([]);
   });
 });
+
+describe('payoutView：平台代收（PR-乙 IN-B7、AC-57、AC-60；design.md §2）', () => {
+  const PLATFORM_TEXT = '買家已付款。撥款給你的方式準備中，確定後會在這裡顯示。';
+  const pview = (r: SellerOrderPayoutRow | undefined, platformOn: boolean, status: OrderStatus = 'to_ship', hidePayout = false) =>
+    payoutView({ orderStatus: status, hidePayout, row: r, platformOn }, { today: TODAY });
+
+  it('開關開且刷進平台：新的 platform view（已付款、info、E2 句逐字、沒有金額與更新時間）', () => {
+    expect(pview(row({ payout_status: 'updating', data_updated_at: null, collector: 'platform' }), true)).toEqual({
+      status: 'platform', tone: 'info', label: '已付款', labelSr: '已付款', description: PLATFORM_TEXT, amountLine: null, updatedLine: null,
+    });
+  });
+  it('開關開但對帳檔有資料（對帳開關誤開）：仍是 platform view，不顯示對帳檔的日期與金額', () => {
+    expect(pview(row({ payout_status: 'scheduled', expected_payout_date: '2026-10-28', payout_amount: 1234, has_ledger_rows: true, collector: 'platform' }), true))
+      .toMatchObject({ status: 'platform', amountLine: null, updatedLine: null });
+  });
+  it('開關關（含 AC-60 關回去後）：刷進平台的單與現在相同（更新中）', () => {
+    expect(pview(row({ payout_status: 'updating', data_updated_at: null, collector: 'platform' }), false))
+      .toEqual(view(row({ payout_status: 'updating', data_updated_at: null })));
+  });
+  it('開關開但刷進賣家特店（collector seller 或舊資料庫沒這欄）：與現在相同', () => {
+    expect(pview(row({ collector: 'seller' }), true)).toEqual(view(row()));
+    expect(pview(row(), true)).toEqual(view(row()));
+  });
+  it('platformOn 省略時等同關（既有呼叫端不變）', () => {
+    expect(view(row({ collector: 'platform' }))).toEqual(view(row()));
+  });
+  it('退款處理中／已退款優先：不能把退款中的單寫成「買家已付款」；已退款扣回仍顯示', () => {
+    expect(pview(row({ collector: 'platform' }), true, 'cancelled', true)).toBeNull();
+    expect(pview(row({ payout_status: 'clawed_back', clawback_amount: 100, clawback_date: '2026-10-30', has_ledger_rows: true, collector: 'platform' }), true, 'completed', true))
+      .toMatchObject({ status: 'clawed_back' });
+  });
+  it('已取消且沒有對帳列：不顯示（既有規則優先）', () => {
+    expect(pview(row({ has_ledger_rows: false, collector: 'platform' }), true, 'cancelled')).toBeNull();
+  });
+  it('讀不到（row undefined）：不猜收款方，維持更新中', () => {
+    expect(pview(undefined, true)).toMatchObject({ status: 'updating' });
+  });
+  it('E2 句不承諾撥款時程、不提特約商店或開通', () => {
+    expect(PLATFORM_TEXT).not.toMatch(/\d+\s*天|工作天|特約商店|開通/);
+  });
+});

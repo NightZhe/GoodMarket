@@ -22,14 +22,13 @@ import { dateText, money } from '../../lib/format';
 import { FEE_RATES, payoutOf } from '../../lib/payout';
 import { sellerCancelUi, sellerPayLabel } from '../../lib/payment/orderView';
 import { sellerRefundView, sortPendingFirst } from '../../lib/payment/refundView';
-import { payoutView, taipeiToday, type PayoutTone, type PayoutView } from '../../lib/payment/payoutView';
+import { payoutView, taipeiToday, type PayoutTone, type PayoutView, type PayoutViewStatus } from '../../lib/payment/payoutView';
 import { sellerCancelFailure } from '../../lib/payment/refundErrors';
 import { acceptOrderCancel, fetchSellerOrderPayouts, fetchShopOrderRefunds, rejectOrderCancel, sellerCancelPaidOrder } from '../../lib/payment/api';
 import { useOrderRefunds } from '../../lib/payment/useOrderRefunds';
 import { useOnline } from '../../lib/useOnline';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { useMerchantState } from '../../lib/payment/useMerchant';
-import type { PayoutStatus } from '../../lib/payment/types';
 import type { Order, OrderStatus, ShippingMilestone } from '../../types';
 
 type SellerDialog = { kind: 'accept' | 'reject' | 'cancel'; order: Order };
@@ -101,8 +100,8 @@ const PAYOUT_TAG: Record<PayoutTone, string> = {
   info: 'bg-info-bg text-info-text', success: 'bg-success-soft text-success-text',
   warning: 'bg-warning-bg text-warning-text', neutral: 'bg-canvas text-ink',
 };
-const PAYOUT_ICON: Record<PayoutStatus, typeof Clock> = {
-  captured: Clock, scheduled: CalendarClock, paid_out: CircleCheck, clawed_back: CircleAlert, updating: CircleDashed,
+const PAYOUT_ICON: Record<PayoutViewStatus, typeof Clock> = {
+  captured: Clock, scheduled: CalendarClock, paid_out: CircleCheck, clawed_back: CircleAlert, updating: CircleDashed, platform: Clock,
 };
 
 /**
@@ -227,7 +226,7 @@ function ShipForm({ onSubmit, onCancel }: {
 export default function SellerOrders() {
   const { myShop, shopOrders, shopOrdersState, updateOrderStatus, addOrderEvent, refreshShopOrders } = useStore();
   const toast = useToast();
-  const { enabled: payEnabled } = usePaymentConfig();
+  const { enabled: payEnabled, platformCollectEnabled: platformOn } = usePaymentConfig();
   const merchantState = useMerchantState(payEnabled);
   const online = useOnline();
   const chatOn = useChat().availability === 'ok';
@@ -354,7 +353,7 @@ export default function SellerOrders() {
             // 資料庫還沒有退款函式（舊資料庫）：已付款線上單維持上線前的樣子，沒有取消鈕
             const cancelUi = refunds.status === 'missing' && o.payment === 'ecpay_card' ? 'none' : sellerCancelUi(o.payment, row?.cancel_request);
             const requested = isRequested(o);
-            const pv = o.payment === 'ecpay_card' ? payoutView({ orderStatus: o.status, hidePayout: rv.hidePayout, row: payouts.rows.get(o.id) }, { today }) : null;
+            const pv = o.payment === 'ecpay_card' ? payoutView({ orderStatus: o.status, hidePayout: rv.hidePayout, row: payouts.rows.get(o.id), platformOn }, { today }) : null;
             return (
             <li key={o.id} className="overflow-hidden rounded-lg bg-white">
               <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-[#fafafa] px-4 py-2.5 text-xs text-muted">

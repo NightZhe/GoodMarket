@@ -1,19 +1,27 @@
 // 環境變數（Supabase secrets）。金鑰只從這裡讀，不寫進程式碼、不寫進日誌。
+// 平台收款（PR-乙，spec §4 S-5；decisions E1＝A）：綠界帳戶類型與本站收款商店編號由 secret 決定，缺設或值錯就拒絕啟動（fail closed）：
+//   ECPAY_ACCOUNT_TYPE  merchant（一般特店：不帶 PlatformID，外層與 Data 的 MerchantID 都是 ECPAY_MERCHANT_ID，用本站自己的 HashKey／IV，R12）
+//                       platform（平台商：外層與 Data 帶 ECPAY_PLATFORM_ID，Data.MerchantID＝ECPAY_MERCHANT_ID，用平台商的 HashKey／IV）
+//   ECPAY_MERCHANT_ID   本站用來收款的商店編號；綁卡、授權、查詢、請款、放棄、退刷都用它（不再有「綁卡在 A、授權在 B」；舊 ECPAY_BIND_MERCHANT_ID 不再使用）
 import { ecpayBases, type EcpayConfig } from './ecpayClient.ts';
 
-const need = (k: string): string => {
-  const v = Deno.env.get(k);
-  if (!v) throw new Error(`missing env ${k}`);
-  return v;
-};
-const opt = (k: string): string | undefined => Deno.env.get(k) || undefined;
+export type Getter = (k: string) => string | undefined;
+
+/** 設定缺失或格式錯（E1 fail closed）。message 只寫「缺哪個名稱」給日誌，不含值；對外一律統一格式 503 PAYMENT_DISABLED（http.ts serve 負責映射） */
+export class ConfigError extends Error {
+  readonly code = 'PAYMENT_DISABLED';
+  readonly status = 503;
+  readonly userMessage = '線上付款暫時無法使用';
+  constructor(message: string) { super(message); this.name = 'ConfigError'; }
+}
 
 export interface AppConfig {
   supabaseUrl: string;
   serviceKey: string;
   anonKey: string;
+  /** 綠界帳戶類型（E1：沒設就不啟動） */
+  accountType: 'merchant' | 'platform';
   ecpay: EcpayConfig;
-  bindMerchantId: string;     // 綁卡用的特約商店編號（綁卡的最低金額授權會在這家店的帳上，隨後放棄）
   bindAmount: number;         // 綁卡驗證金額（綠界要求的最低交易金額，後台查）
   functionsBaseUrl: string;   // 綠界打得到的公開網址，例如 https://<ref>.supabase.co/functions/v1
   siteUrl: string;            // 前端網址（含 GitHub Pages 子路徑），綁卡結果導回用
@@ -23,21 +31,34 @@ export interface AppConfig {
   allowedOrigins: string[];
 }
 
-let cached: AppConfig | null = null;
-export function loadConfig(): AppConfig {
-  if (cached) return cached;
+export const MERCHANT_ID_RE = /^[0-9]{7,10}$/;
+
+/** 純函式：從任一 getter 讀設定（測試用假的 env；正式用 Deno.env）。任何缺設或格式錯都丟 ConfigError → serve() 回 503 PAYMENT_DISABLED，不打綠界。 */
+export function parseConfig(get: Getter): AppConfig {
+  const need = (k: string): string => {
+    const v = get(k);
+    if (!v) throw new ConfigError(`missing env ${k}`);
+    return v;
+  };
+  const opt = (k: string): string | undefined => get(k) || undefined;
   const env = (opt('ECPAY_ENV') ?? 'stage') as 'stage' | 'prod';
-  if (env !== 'stage' && env !== 'prod') throw new Error('ECPAY_ENV must be stage or prod');
+  if (env !== 'stage' && env !== 'prod') throw new ConfigError('ECPAY_ENV must be stage or prod');
+  const accountType = get('ECPAY_ACCOUNT_TYPE');
+  if (accountType !== 'merchant' && accountType !== 'platform') throw new ConfigError('ECPAY_ACCOUNT_TYPE must be merchant or platform');
+  const merchantId = need('ECPAY_MERCHANT_ID');
+  if (!MERCHANT_ID_RE.test(merchantId)) throw new ConfigError('ECPAY_MERCHANT_ID must be 7-10 digits');
+  const platformId = accountType === 'platform' ? need('ECPAY_PLATFORM_ID') : undefined;
+  if (platformId !== undefined && !MERCHANT_ID_RE.test(platformId)) throw new ConfigError('ECPAY_PLATFORM_ID must be 7-10 digits');
   const functionsBaseUrl = need('PAYMENT_FUNCTIONS_BASE_URL').replace(/\/$/, '');
-  cached = {
+  return {
     supabaseUrl: need('SUPABASE_URL'),
     serviceKey: need('SUPABASE_SERVICE_ROLE_KEY'),
     anonKey: need('SUPABASE_ANON_KEY'),
+    accountType,
     ecpay: {
-      env, platformId: need('ECPAY_PLATFORM_ID'), hashKey: need('ECPAY_HASH_KEY'), hashIv: need('ECPAY_HASH_IV'),
+      env, merchantId, platformId, hashKey: need('ECPAY_HASH_KEY'), hashIv: need('ECPAY_HASH_IV'),
       ...ecpayBases(env), payReturnUrl: `${functionsBaseUrl}/payment-pay-return`,
     },
-    bindMerchantId: need('ECPAY_BIND_MERCHANT_ID'),
     bindAmount: Number(opt('ECPAY_BIND_AMOUNT') ?? '500'),
     functionsBaseUrl,
     siteUrl: need('PAYMENT_SITE_URL').replace(/\/$/, ''),
@@ -45,5 +66,11 @@ export function loadConfig(): AppConfig {
     adminSecret: opt('PAYMENT_ADMIN_SECRET'),
     allowedOrigins: (opt('PAYMENT_ALLOWED_ORIGINS') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   };
+}
+
+let cached: AppConfig | null = null;
+export function loadConfig(): AppConfig {
+  if (cached) return cached;
+  cached = parseConfig((k) => Deno.env.get(k));
   return cached;
 }

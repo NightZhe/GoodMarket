@@ -7,8 +7,11 @@ import { PAYOUT_IDS_LIMIT, type PayoutStatus, type SellerOrderPayoutRow } from '
 
 export type PayoutTone = 'info' | 'success' | 'warning' | 'neutral';
 
+/** 畫面的狀態：對帳檔的五種，加上「平台代收」（PR-乙 IN-B7：刷進好物集帳戶、撥款是第二刀，不顯示對帳檔） */
+export type PayoutViewStatus = PayoutStatus | 'platform';
+
 export interface PayoutView {
-  status: PayoutStatus;
+  status: PayoutViewStatus;
   tone: PayoutTone;
   /** 標籤上看得到的字（含月/日） */
   label: string;
@@ -27,12 +30,21 @@ export interface PayoutViewInput {
   hidePayout: boolean;
   /** undefined＝讀取失敗、離線第一次載入、或回應裡沒有這張單 */
   row: SellerOrderPayoutRow | undefined;
+  /** 平台收款開關（get_payment_config.platformCollectEnabled）。省略＝關：既有呼叫端畫面不變（AC-57、AC-60） */
+  platformOn?: boolean;
 }
 
 // 和 SellerOrders 現況逐字相同（對帳開關關著、RPC 不存在、讀取失敗時畫面不能變）
 const UPDATING: PayoutView = {
   status: 'updating', tone: 'neutral', label: '撥款資料更新中', labelSr: '撥款資料更新中',
   description: '綠界科技的對帳資料還沒送來。資料送來後這裡會更新，不影響出貨。預計撥款日與實際入帳時間以綠界科技為準。',
+  amountLine: null, updatedLine: null,
+};
+
+/** 平台代收（design.md §2.1）：錢已收到但還沒撥，語意等同「已請款」所以同用 info；說明句＝decisions E2＝C，逐字 */
+const PLATFORM: PayoutView = {
+  status: 'platform', tone: 'info', label: '已付款', labelSr: '已付款',
+  description: '買家已付款。撥款給你的方式準備中，確定後會在這裡顯示。',
   amountLine: null, updatedLine: null,
 };
 
@@ -79,10 +91,13 @@ function clawbackText(r: SellerOrderPayoutRow, today: string): string {
  * 其餘讀不到撥款資料一律當「資料更新中」，不顯示錯誤。
  */
 export function payoutView(input: PayoutViewInput, ctx: { today: string }): PayoutView | null {
-  const { orderStatus, hidePayout, row } = input;
+  const { orderStatus, hidePayout, row, platformOn = false } = input;
   if (hidePayout && row?.payout_status !== 'clawed_back') return null;
   if (orderStatus === 'cancelled' && !row?.has_ledger_rows) return null;
   if (!row) return UPDATING;
+  // 平台代收（design.md §2.2 第 4 步）：開關開且這張單刷進好物集帳戶。讀不到 row 時不猜收款方（上一行已回更新中）；
+  // 退款單（hidePayout）永遠不走這裡——退款中的單不能寫「買家已付款」，已退款扣回維持既有顯示
+  if (platformOn && !hidePayout && row.collector === 'platform') return PLATFORM;
 
   const updatedLine = row.data_updated_at ? `資料更新於 ${updatedText(row.data_updated_at)}` : null;
   const amountLine = row.payout_amount != null ? `撥款金額 ${money(row.payout_amount)}` : null;
