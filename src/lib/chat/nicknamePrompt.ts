@@ -14,7 +14,7 @@ export const NICKNAME_PROMPT_PENDING_KEY = 'goodmarket.nicknamePromptPending';
 export const PENDING_TTL_MS = 60_000;
 
 export const NICKNAME_PROMPT_TITLE = '設個顯示名稱，賣家才認得你';
-export const NICKNAME_PROMPT_DESC = '賣家在聊聊會看到這個名稱；評價頁會遮罩。';
+export const NICKNAME_PROMPT_DESC = '賣家在聊聊會看到這個名稱；評價頁會遮罩';
 
 export function nicknamePromptDismissed(store: StorageLike | null): boolean {
   try { return store?.getItem(NICKNAME_PROMPT_KEY) === '1'; } catch { return false; }

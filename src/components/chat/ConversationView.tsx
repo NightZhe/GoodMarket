@@ -52,12 +52,13 @@ export default function ConversationView(p: Props) {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  /** 查一次顯示名稱；沒有就彈面板並清掉待邀請旗標。查不到（離線、逾時）就不彈、旗標留著（還在有效期內的下一次掛載會再試） */
+  /** 查一次顯示名稱；沒有就彈面板。查不到（離線、逾時）就不彈，旗標也清掉：邀請是盡力而為，不讓它在之後別的對話突然冒出來 */
   const checkNickname = useCallback(async () => {
     let nickname: string | null;
     try {
       nickname = await fetchNickname();
     } catch {
+      if (mounted.current) clearNicknamePromptPending(sessionStore());
       return;
     }
     if (!mounted.current) return;
