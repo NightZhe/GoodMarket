@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { ChevronDown, Clock, Hourglass, LoaderCircle, Store, TriangleAlert, WifiOff } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import ChatEntryButton from '../../components/chat/ChatEntryButton';
@@ -20,13 +20,15 @@ import { dateText, dayText, money } from '../../lib/format';
 import { useOnline } from '../../lib/useOnline';
 import { expireMyPendingOrders, fetchMyOrderRefunds, fetchOrderPayments, requestOrderCancel, withdrawOrderCancel } from '../../lib/payment/api';
 import { clockText, msUntil } from '../../lib/payment/countdown';
-import { buyerCancelUi, hasBatchSiblings, ordersTabFromQuery, orderPayLineIfOn, orderPayState, pendingBatch, type OrderPayState } from '../../lib/payment/orderView';
+import { buyerCancelUi, hasBatchSiblings, orderPayLineIfOn, orderPayState, pendingBatch, type OrderPayState } from '../../lib/payment/orderView';
 import { buyerRefundView } from '../../lib/payment/refundView';
 import { buyerCancelFailure } from '../../lib/payment/refundErrors';
 import { useOrderRefunds } from '../../lib/payment/useOrderRefunds';
 import type { OrderPaymentRow, OrderPaymentStatus } from '../../lib/payment/types';
 import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import OrderTimeline from '../../components/OrderTimeline';
+import { buyerTabForOrder } from '../../lib/orders/deeplink';
+import { orderCardDomId, useOrderDeepLink } from '../../lib/orders/useOrderDeepLink';
 import ReturnInfoToggle from '../../components/logistics/ReturnInfo';
 import { hasReturnInfoEntry } from '../../lib/logistics/returnInfoAccess';
 import type { Order, OrderStatus } from '../../types';
@@ -85,13 +87,13 @@ function OrdersView() {
   const paymentCfg = usePaymentConfig();
   const [busy, setBusy] = useState<{ id: string; kind: 'cancel' | 'complete' } | null>(null);
   const [retrying, setRetrying] = useState(false);
-  const [tab, setTab] = useState<Tab>('all');
   const [openId, setOpenId] = useState<string | null>(null);
   const [payments, setPayments] = useState<OrderPaymentRow[]>([]);
+  // 付款資訊讀過一次了嗎（成功或失敗都算）：?order= 定位要等它，否則待付款的線上單會被算成「待出貨」
+  const [paymentsChecked, setPaymentsChecked] = useState(false);
   const [cancelBatch, setCancelBatch] = useState<Order[] | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const { statusState, statusOf, refreshStatus } = useReviews();
-  const [query] = useSearchParams();
   const online = useOnline();
   const [dialog, setDialog] = useState<CancelDialog | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -101,13 +103,16 @@ function OrdersView() {
   // 線上付款的付款資訊（待付款、確認中、已付款…）。開關關著、也沒有任何線上付款訂單時不讀：舊資料庫沒有這支函式。
   // 開關關著但已經有線上付款訂單（軟回滾）：退款照常（R-RF9），所以讀，但只認已付款／退款中／已退款，其餘維持開關關著時的樣子
   const hasOnlineOrders = useMemo(() => myOrders.some(o => o.payment === 'ecpay_card'), [myOrders]);
+  const needPayments = paymentCfg.enabled || hasOnlineOrders;
   const refreshPayments = useCallback(async () => {
-    if (!paymentCfg.enabled && !hasOnlineOrders) return;
+    if (!needPayments) return;
     try {
       const rows = await fetchOrderPayments();
       setPayments(paymentCfg.enabled ? rows : rows.filter(r => PAID_FAMILY.has(r.payment_status)));
-    } catch { /* 讀不到：沒有付款資訊的線上單顯示成一般「信用卡」，不會被當成已付款 */ }
-  }, [paymentCfg.enabled, hasOnlineOrders]);
+    } catch { /* 讀不到：沒有付款資訊的線上單顯示成一般「信用卡」，不會被當成已付款 */ } finally {
+      setPaymentsChecked(true);
+    }
+  }, [paymentCfg.enabled, needPayments]);
   useEffect(() => { void refreshPayments(); }, [refreshPayments, myOrders]);
   // 取消申請與退款的細節。沒有線上付款訂單時不讀（舊資料庫沒有這支函式，畫面與上線前逐字相同）
   const refunds = useOrderRefunds(fetchMyOrderRefunds, paymentCfg.enabled || hasOnlineOrders);
@@ -119,9 +124,23 @@ function OrdersView() {
   const showPendingTab = paymentCfg.enabled || unfinished.length > 0;
   const tabs = showPendingTab ? [TABS[0], { id: 'pending' as const, label: unfinished.length > 0 ? `待付款 (${unfinished.length})` : '待付款' }, ...TABS.slice(1)] : TABS;
 
-  // #/orders?tab=pending（例如從付款頁、通知連進來）要切到待付款分頁；分頁要等線上付款開關或待付款訂單確定有了才存在
-  const wantPending = ordersTabFromQuery(query.get('tab')) === 'pending';
-  useEffect(() => { if (wantPending && showPendingTab) setTab('pending'); }, [wantPending, showPendingTab]);
+  // 進頁先重抓一次（靜默）。?order= 定位要等這次抓完：全站的訂單清單可能是上一頁留下的舊資料，拿舊清單找會誤判「找不到」
+  const [listRefreshed, setListRefreshed] = useState(false);
+  useEffect(() => {
+    let current = true;
+    void refreshMyOrders(true).then(() => { if (current) setListRefreshed(true); });
+    return () => { current = false; };
+  }, [refreshMyOrders]);
+  // 分頁與網址同步（D9）：?tab= 認所有分頁值（#/orders?tab=pending 從付款頁、通知連進來照舊；待付款分頁要等線上付款開關或待付款訂單確定有了才存在）。
+  // ?order=<id>（聊聊訂單卡）進頁優先：找到就切到它目前狀態的分頁、捲到並展開那筆（D2）；找不到留在預設分頁並提示
+  const { tab, selectTab, highlightId } = useOrderDeepLink<Tab>({
+    tabs: tabs.map(t => t.id), fallback: 'all',
+    // 訂單清單讀好、而且（有線上付款單時）付款資訊也讀過一次，才知道該筆目前是待付款還是待出貨
+    loaded: listRefreshed && myOrdersState === 'ready' && (!needPayments || paymentsChecked),
+    locate: id => { const o = myOrders.find(x => x.id === id); return o ? buyerTabForOrder(o.status, isUnfinished(stateOf(o)), showPendingTab) : null; },
+    onFound: setOpenId,
+    onMissing: () => toast('找不到這筆訂單', 'error'),
+  });
 
   const list = myOrders.filter(o => {
     const s = stateOf(o);
@@ -132,7 +151,6 @@ function OrdersView() {
   });
   const hasCompleted = list.some(o => o.status === 'completed');
 
-  useEffect(() => { void refreshMyOrders(true); }, [refreshMyOrders]);
   // 評價期限會隨時間跨過：進頁與從背景回來都重新取得（保留舊畫面，不閃骨架）。
   // 「已完成」的訂單集合變了（按了「完成訂單」）也要重新取得，否則剛完成的訂單要重新整理才有評價列
   const completedKey = myOrders.filter(o => o.status === 'completed').map(o => o.id).join(',');
@@ -232,7 +250,7 @@ function OrdersView() {
     <div className="mx-auto max-w-4xl md:px-4 md:pt-6">
       <div className="no-scrollbar sticky top-[env(safe-area-inset-top)] z-20 flex overflow-x-auto bg-white md:rounded-t-md">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
+          <button key={t.id} onClick={() => selectTab(t.id)}
             aria-label={t.id === 'pending' && unfinished.length > 0 ? `待付款，${unfinished.length} 筆` : undefined}
             className={`flex-1 shrink-0 whitespace-nowrap border-b-2 px-4 py-3.5 text-sm ${tab === t.id ? 'border-brand text-brand' : 'border-line'}`}>
             {t.label}
@@ -278,7 +296,7 @@ function OrdersView() {
           const legacyPaid = refunds.status === 'missing' && ps === 'paid' && o.status === 'to_ship';
           const cancelUi = legacyPaid ? 'none' : buyerCancelUi(o.status, ps, refunds.rows.get(o.id)?.cancel_request);
           return (
-            <article key={o.id} className="bg-white md:rounded-md">
+            <article key={o.id} id={orderCardDomId(o.id)} className={`bg-white transition-shadow duration-700 md:rounded-md ${highlightId === o.id ? 'ring-2 ring-brand' : ''}`}>
               <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line px-4 py-3 text-sm">
                 <Link to={`/shop/${o.shopId}`} className="flex items-center gap-1.5 font-medium"><Store size={16} />{getShop(o.shopId)?.name}</Link>
                 <span className="order-3 w-full font-mono text-xs text-muted md:order-none md:w-auto">訂單編號 {o.orderNo}</span>

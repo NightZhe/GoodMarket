@@ -17,6 +17,7 @@ import { useCancelSummary } from '../../store/CancelSummaryContext';
 import { useToast } from '../../components/Toast';
 import ProductImage from '../../components/ProductImage';
 import OrderTimeline from '../../components/OrderTimeline';
+import { orderCardDomId, useOrderDeepLink } from '../../lib/orders/useOrderDeepLink';
 import { STATUS_LABEL } from '../buyer/Orders';
 import { dateText, money } from '../../lib/format';
 import { FEE_RATES, payoutOf } from '../../lib/payout';
@@ -271,15 +272,23 @@ export default function SellerOrders() {
     void reloadRefunds();
     void reloadPayouts();
   }, { onFocus: true });
-  const [tab, setTab] = useState<OrderStatus | 'all'>('to_ship');
   const [shipId, setShipId] = useState<string | null>(null);   // 正在填出貨資訊的訂單
   const [openId, setOpenId] = useState<string | null>(null);   // 展開歷程的訂單
   const mine = shopOrders.filter(o => o.shopId === myShop?.id);
+  const tabs: (OrderStatus | 'all')[] = ['all', 'to_ship', 'shipping', 'completed', 'cancelled'];
+  // 分頁與網址同步（D9）：?tab= 認所有分頁值，預設待出貨。?order=<id>（聊聊訂單卡）進頁優先：找到就切到它目前狀態的分頁、
+  // 捲到並展開那筆（D2，合夥人踩到的「出貨後點卡片落在待出貨、看起來空白」）；找不到留在預設分頁並提示
+  const { tab, selectTab, highlightId } = useOrderDeepLink<OrderStatus | 'all'>({
+    tabs, fallback: 'to_ship',
+    loaded: view === 'ready',
+    locate: id => mine.find(o => o.id === id)?.status ?? null,
+    onFound: setOpenId,
+    onMissing: () => toast('找不到這筆訂單', 'error'),
+  });
   // 申請中的訂單排在該分頁最上面，同組內維持原順序（退款設計 5.1）
   const isRequested = (o: Order) => o.status === 'to_ship' && refunds.rows.get(o.id)?.cancel_request?.status === 'pending';
   const list = sortPendingFirst(mine.filter(o => tab === 'all' || o.status === tab), isRequested);
   const today = taipeiToday(Date.now());
-  const tabs: (OrderStatus | 'all')[] = ['all', 'to_ship', 'shipping', 'completed', 'cancelled'];
 
   // 同意、拒絕、取消並退款成功後：重讀訂單、申請與退款、側欄待辦數字；訂單離開了目前的分頁，焦點移到分頁鈕（念出更新後的計數）
   const reloadAll = () => Promise.all([refreshShopOrders(), reloadRefunds(), reloadSummary()]);
@@ -311,7 +320,7 @@ export default function SellerOrders() {
       )}
       <div className="no-scrollbar mt-4 flex overflow-x-auto rounded-t-lg border-b border-line bg-white px-2">
         {tabs.map(t => (
-          <button key={t} id={`seller-orders-tab-${t}`} onClick={() => setTab(t)}
+          <button key={t} id={`seller-orders-tab-${t}`} onClick={() => selectTab(t)}
             className={`shrink-0 border-b-2 px-4 py-3 text-sm ${tab === t ? 'border-brand text-brand' : 'border-transparent'}`}>
             {t === 'all' ? '全部' : STATUS_LABEL[t]}{view === 'ready' && <span className="text-muted"> ({mine.filter(o => t === 'all' || o.status === t).length})</span>}
           </button>
@@ -355,7 +364,7 @@ export default function SellerOrders() {
             const requested = isRequested(o);
             const pv = o.payment === 'ecpay_card' ? payoutView({ orderStatus: o.status, hidePayout: rv.hidePayout, row: payouts.rows.get(o.id), platformOn }, { today }) : null;
             return (
-            <li key={o.id} className="overflow-hidden rounded-lg bg-white">
+            <li key={o.id} id={orderCardDomId(o.id)} className={`overflow-hidden rounded-lg bg-white transition-shadow duration-700 ${highlightId === o.id ? 'ring-2 ring-brand' : ''}`}>
               <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-[#fafafa] px-4 py-2.5 text-xs text-muted">
                 <span>訂單編號 <span className="font-mono text-ink">{o.orderNo}</span></span>
                 <span>{dateText(o.createdAt)}</span>

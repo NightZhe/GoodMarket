@@ -88,6 +88,3 @@ export function sellerCancelUi(payment: Order['payment'], request: CancelRequest
   if (payment !== 'ecpay_card') return 'direct';
   return request?.status === 'pending' ? 'none' : 'refund';
 }
-
-/** 我的訂單網址的 ?tab=：只認 pending（待付款），其餘一律是「全部」（網址可被任何人亂改） */
-export const ordersTabFromQuery = (raw: string | null): 'all' | 'pending' => (raw === 'pending' ? 'pending' : 'all');
