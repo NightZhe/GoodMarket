@@ -3,7 +3,7 @@
 從 `CLAUDE.md` 搬來（2026-10-25）。新功能上線後更新本檔，不要寫回 `CLAUDE.md`。
 各功能的決策、規格、驗收報告、上線紀錄都在 `.work/<功能>/`（不進版控）。
 
-## 目前狀態（2026-10-30 更新）
+## 目前狀態（2026-10-31 更新）
 
 已上線：商品評價（含照片、賣家回覆）；買家已取貨自動完成＋訂單狀態鎖定；**買家帳號**（遊客只能瀏覽，
 加購物車／下單／訂單／評價都要 Google 或 Apple 登入；購物車與訂單綁帳號；舊訂單憑證機制已移除）；
@@ -18,7 +18,7 @@
 結帳改從地址簿選，地址簿空時填表並預設「存到我的地址」；裝置上的舊收件資料 `goodmarket_buyer` 新前端啟動時清掉；資料表 `profiles`／`addresses`／`tw_districts` 寫入只走 RPC，
 行政區清單由 `scripts/gen-tw-districts.mts` 從中華郵政 3 碼檔產生，`src/data/tw-districts.json` 與資料庫同源）。隱私政策生效日改為 2026/10/18。
 **刪帳號工具已更新**（會一併刪地址與個人檔案；舊版備份在 `account-payment-methods/tools/pre-A-T4-account-tool/`）。
-**線上付款（綠界特約合作平台商，`account-payment-methods/`）**：前後端程式已合併並推上線（2026-10-20）。**2026-10-28 正式站已套** `20261019200000_ecpay_payments`、`20261020120000_account_delete_cards`、`20261020130000_refunds`、`20261020140000_payout_reconcile`（verify 皆 all_ok），**付款開關已開**（使用者指示，金流商確認綠界；紀錄 `prod-apply-log.md`）；對帳開關仍關。**尚未設 secrets、尚未部署** `supabase/functions/payment-*`／`payout-reconcile`、無綠界平台商資格：買家「新增信用卡」會失敗；沒有任何店 active，結帳仍只有貨到付款；賣家可在收款帳戶頁送出特約商店編號（pending_review）。設計：買家平台層綁卡（卡號只在綠界 SDK，本站存 BindCardID 於 service-role 專用表）、多店一次付款＝每店各授權一筆、全部成功才請款、任一失敗放棄已授權；賣家在綠界成為本站底下的特約商店，本站只存編號與狀態；LINE Pay 本版不做；本站不經手錢（D3＝B）。
+**線上付款（綠界特約合作平台商，`account-payment-methods/`）**：前後端程式已合併並推上線（2026-10-20）。**2026-10-28 正式站已套** `20261019200000_ecpay_payments`、`20261020120000_account_delete_cards`、`20261020130000_refunds`、`20261020140000_payout_reconcile`（verify 皆 all_ok），**付款開關已開**（使用者指示，金流商確認綠界；紀錄 `prod-apply-log.md`）；對帳開關仍關。**尚未設 secrets、尚未部署** `supabase/functions/payment-*`／`payout-reconcile`、無綠界平台商資格：買家「新增信用卡」會失敗；沒有任何店 active，結帳仍只有貨到付款；賣家可在收款帳戶頁送出特約商店編號（pending_review）。**2026-10-31 起付款規則改走 PR-乙（見下方「平台收款」段）**，此段的「每店自己成為特約商店」已不是現行規則。設計：買家平台層綁卡（卡號只在綠界 SDK，本站存 BindCardID 於 service-role 專用表）、多店一次付款＝每店各授權一筆、全部成功才請款、任一失敗放棄已授權；賣家在綠界成為本站底下的特約商店，本站只存編號與狀態；LINE Pay 本版不做；本站不經手錢（D3＝B）。
 上線前置（使用者）：以公司申請綠界平台商與綁卡白名單、拿 HashKey／IV、確認綁卡用特店與最低金額；之後照 `prod-runbook-pb.md`：套 migration → 設 Edge Function secrets → 部署函式 → 後台啟用 pg_cron／pg_net 排程 → 開開關 → 實刷。待補規格：退款、刪帳號同步向綠界刪卡、撥款對帳。
 → 這三份已由另一 session 做成 **PR #2**（分支 `feat/payment-go-live-prereqs`，2026-10-21，待使用者確認文案後合併；merge 只部署前端、開關仍關）。
 個人中心／金流線的完整交接在 `.work/account-payment-methods/handoff-2026-10-23.md`。
@@ -101,7 +101,17 @@ Supabase Realtime **Broadcast from Database** 私有頻道 `conversation:<id>`�
 使用者本人已線上綁定冒煙通過（2026-10-30）：密文格式與 `key_version` 正常、新增與改狀態事件都有留下；驗證狀態目前靠人工 `admin_set_bank_account_status`（決策 N5），操作見 `prod-runbook.md` §8。刪帳號工具白名單已補這兩張表，測試通過，但工具的 SQL 未對資料庫演練。
 這一刀不改結帳與付款流程；舊「填綠界特約商店編號」表單已從畫面拿掉（資料表與 RPC 不動）。未驗：真機 VoiceOver、iOS 模擬器、綠界綁卡。
 
-下一個該做的：PR-乙 `feat/platform-collect`（付款改進平台帳戶，規格在 `.work/seller-bank-account/spec.md`，含 N1／N2 決策；開工前要確認 `.work/platform-collect/` 是否要獨立成一份）。之後才是綠界的線上付款收尾（等平台商資格與金鑰 → `prod-runbook-pb.md` §5 secrets → §6 部署函式與排程 → 實刷）。
+**平台收款（PR-乙，付款改進平台帳戶）**（`.work/platform-collect/`，**2026-10-31 上線**，PR #28，分支 `claude/platform-collect-35a5fd`，merge commit `4d517ca`）：買家線上付款改由**本站的綠界帳戶代收**，不再要求每店自己成為綠界特約商店；一店能否線上付款改走單一規則「店主有撥款帳號（甲的銀行帳號）」，
+`get_payment_config`（多回 `platformCollectEnabled`／`platformCollectEnabledAt`）、`get_shops_online_payable`、`place_online_order` 都不再看 `seller_ecpay_merchants`（表、`submit_seller_ecpay_merchant`、退款、對帳、銀行帳號物件一律不動，指紋前後相同）。
+`payment_auths` 加 `collector`（`seller`／`platform`）記每筆授權的收款方；`pay_begin_attempt` 多帶 `p_collect_merchant_id`（舊簽名已 drop）；`get_seller_order_payouts` 多回 `collector`，賣家訂單頁顯示平台代收；結帳頁有原因句；隱私政策依開關切換句子（生效日＝打開時間的台灣日期）。
+Edge Functions `payment-*`（11 支）與 `payout-reconcile` 改由 secret `ECPAY_ACCOUNT_TYPE`（`merchant`／`platform`，**之後不可切換**）決定帳戶類型，缺設或格式錯回 503 `PAYMENT_DISABLED`；`_shared/env.ts` 改了，部署時 12 支要一起重部署。
+正式站已套 `20261031120000_platform_collect.sql`（precheck 全 true、verify `all_ok`、既有物件指紋前後相同、匿名 `get_payment_config` 回三欄）。**平台收款開關已開**（2026-10-31 22:57 台灣時間，使用者拍板 `decisions.md` E8「合併時打開」，知悉下列風險）；**對帳開關 `payout_settings.reconcile_enabled` 仍關、不得打開**（`_payout_merchants()` 會把本站商店編號排進對帳，第二刀才重做，OUT-9）。
+**spec §9 前置 P-1～P-9 全部未完成**：P-1 律師（數位部登錄、登錄前能否代收）、P-2 綠界帳戶類型答覆、P-3 正式 MerchantID／HashKey／IV／綁卡白名單／最低金額、P-4 撥款辦法（至少人工撥款 runbook）、P-5 退刷餘額、P-6 secrets＋部署函式、P-7 正式環境實刷、P-8 隱私政策 §7.2 定稿（前端目前用甲 spec 的句子）、P-9 App 隱私標籤。
+正式站**沒有綠界 secrets、`payment-*`／`payout-reconcile` 函式未部署**：店主有撥款帳號的店在結帳頁會出現「線上付款」，但按下去會失敗；`payment_auths` 目前 0 列。止血一個指令 `tools/switch-off.sql`（關掉後新結帳不能線上付款、待付款單 30 分鐘逾時作廢、已付款與退款不受影響）。
+紀錄 `prod-apply-log.md`；手冊 `prod-runbook.md`（§7 secrets、§8 部署函式、§9 前置表與開關、§10 每日查詢、§11 還原含 `tools/rollback.sql`）；每日看 `tools/collect-outstanding.sql`（代收未撥，撥款的輸入）、`tools/metrics/c-m6`／`c-m7.sql`、`tools/switch-status.sql`；驗收 `qa-report.md`，隔離實例整合測試 `t-local-tests-output.txt`（64 PASS）。
+待辦：刪帳號／刪店工具不認綠界 migration 的外鍵（既有，本 migration 沒加新表或新外鍵，不用改，但舊問題仍在）；`.work/account-payment-methods/decisions.md` 可加一行指向 `platform-collect/decisions.md`。
+
+下一個該做的：完成 §9 前置 P-1～P-9 → 照 `prod-runbook.md` §7 設 secrets（先決定 `ECPAY_ACCOUNT_TYPE`）→ §8 部署 12 支函式與排程 → P-7 實刷（自己的卡、兩店各一筆、再退款）。之後是對帳第二刀（本站商店編號的撥款對帳，OUT-9）。
 
 維運提醒：
 - **Apple 登入 client secret 2027-04-15 到期**，2027-04-01 前用 Supabase 文件頁工具＋原 `.p8` 重做並更新後台。
