@@ -236,12 +236,12 @@ describe('聊聊訊息（AC-M46、規格 §10.1）', () => {
       expect(section(html(on), '5. 刪除你的資料', '6. 內容審核與檢舉')).toContain('聊聊對話不隨帳號刪除而刪除，你的名稱改顯示為『已刪除的帳號』。');
     }
   });
-  it('生效日是 2026/10/29（上線日），修訂紀錄最新一筆用生效日、排在其他所有舊修訂之前', () => {
+  it('聊聊那筆上線日 2026/10/29 已成固定日期（工單 B 接手生效日）；修訂紀錄最新一筆仍用生效日，頁首生效日期同值', () => {
     const page = html(false);
-    expect(PRIVACY_EFFECTIVE).toBe('2026/10/29');
-    const latest = `${PRIVACY_EFFECTIVE}</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${CHAT_REVISION}`;
-    expect(page).toContain(latest);
+    const chat = `2026/10/29</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${CHAT_REVISION}`;
+    expect(page).toContain(chat);
     expect(page.split('9. 修訂紀錄')[1].match(/<dt[^>]*>([^<]+)<\/dt>/)?.[1]).toBe(PRIVACY_EFFECTIVE);
+    expect(page.indexOf(`${PRIVACY_EFFECTIVE}</dt>`)).toBeLessThan(page.indexOf(chat));
     expect(page).toContain(`生效日期：${PRIVACY_EFFECTIVE}`);
   });
   it('新句與修訂紀錄新句都不含付款字樣、不含 emoji（開關關著時整頁仍沒有）', () => {
