@@ -6,6 +6,7 @@ import { BlockedBar, OfflineBar, PeerGoneBar, RulesNotice } from './ChatStatusBa
 import { ConversationFailure, MessagesFailed, MessagesSkeleton } from './ChatStates';
 import MessageList from './MessageList';
 import LetterAvatar from '../LetterAvatar';
+import { contextLine, lastCardOf } from '../../lib/chat/context';
 import type { DisplayMessage } from '../../lib/chat/outbox';
 import type { PeerView } from '../../lib/chat/nav';
 import type { Announcement, ConversationPhase, OutgoingPhoto } from '../../lib/chat/useConversation';
@@ -84,6 +85,8 @@ export default function ConversationScreen({ m, h, overlays }: { m: ScreenModel;
   const block: ComposerBlock = m.phase === 'loading' ? 'loading' : !m.online ? 'offline' : openedOffline ? 'loading' : m.peerDeleted ? 'gone' : m.blockedByMe ? 'blocked' : null;
   const emptyText = m.side === 'buyer' ? '還沒有訊息，傳一則打聲招呼吧。' : '還沒有訊息，傳一則訊息給買家吧。';
   const failedPhase = m.phase !== 'loading' && m.phase !== 'ready' && m.phase !== 'offline';
+  // 標題下的脈絡列（D10）：已載入訊息裡最近一張卡；還沒載入、或這條對話沒有卡就沒有這一行
+  const context = contextLine(lastCardOf(m.messages));
 
   return (
     <div className={`flex flex-col bg-white ${m.className ?? DEFAULT_ROOT}`}>
@@ -98,7 +101,7 @@ export default function ConversationScreen({ m, h, overlays }: { m: ScreenModel;
               {m.backLabel ?? '聊聊'}
             </Link>
           )}
-          <PeerTitle peer={m.peer} fallbackName={m.fallbackName} link={m.side === 'buyer'} />
+          <PeerTitle peer={m.peer} fallbackName={m.fallbackName} context={context} link={m.side === 'buyer'} />
           {ready && m.hasMenu ? (
             <button
               type="button"
@@ -163,13 +166,17 @@ export default function ConversationScreen({ m, h, overlays }: { m: ScreenModel;
   );
 }
 
-function PeerTitle({ peer, fallbackName, link }: { peer: PeerView | null; fallbackName?: string; link: boolean }) {
+/** 導覽列中央：頭像＋名稱；有脈絡列時名稱下方多一行小字（同一個 44 高的列裡放得下：20＋16），整組仍是一個連結 */
+function PeerTitle({ peer, fallbackName, context, link }: { peer: PeerView | null; fallbackName?: string; context: string | null; link: boolean }) {
   const name = peer?.name ?? fallbackName;
   if (!name) return <span className="flex-1" />;
   const inner = (
     <>
       <LetterAvatar name={peer?.letter ?? fallbackName ?? ''} size={28} />
-      <span className={`truncate text-headline font-semibold ${peer?.deleted ? 'text-muted' : 'text-ink'}`}>{name}</span>
+      <span className="flex min-w-0 flex-col">
+        <span className={`truncate text-headline font-semibold leading-5 ${peer?.deleted ? 'text-muted' : 'text-ink'}`}>{name}</span>
+        {context && <span className="truncate text-xs leading-4 text-muted">{context}</span>}
+      </span>
     </>
   );
   const cls = 'flex min-w-0 max-w-[55vw] flex-1 items-center justify-center gap-2';

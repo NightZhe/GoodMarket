@@ -240,3 +240,24 @@ describe('整頁失敗狀態（設計 4.6）：沒有輸入列', () => {
     expect(err).not.toContain(composer);
   });
 });
+
+describe('標題下的脈絡列（D10、spec B4）', () => {
+  it('對話裡有訂單卡：標題下方同一組出現「訂單 #末 6 碼 · 商品名」，仍在店家頁的連結裡', () => {
+    const h = html({ messages: [msg({ key: 'a', card: order, mine: true, side: 'buyer' }), msg({ key: 'b', text: '出貨了嗎？', mine: true, side: 'buyer' })] });
+    expect(h).toContain('訂單 #PA9T6C · Switch 寶可夢');
+    expect(h).toMatch(/<a [^>]*href="\/shop\/s1"[^>]*>[\s\S]*好物小舖[\s\S]*訂單 #PA9T6C · Switch 寶可夢[\s\S]*<\/a>/);
+  });
+  it('取最新一張卡：商品卡在後就顯示商品名；賣家端（買家 31B3）也有', () => {
+    const h = html({
+      side: 'shop', peer: { name: '買家 31B3', letter: '買', deleted: false, shopId: null },
+      messages: [msg({ key: 'a', card: order }), msg({ key: 'b', card: product })],
+    });
+    expect(h).toContain('買家 31B3');
+    expect(h).toContain('【Jy】Switch 任天堂 NS 咚奇剛');
+    expect(h).not.toContain('訂單 #PA9T6C ·');
+  });
+  it('沒有卡片的對話、載入中：沒有脈絡列', () => {
+    expect(html({ messages: [msg({ key: 'a' })] })).not.toContain('text-xs leading-4 text-muted');
+    expect(html({ phase: 'loading', peer: null, fallbackName: '好物小舖' })).not.toContain('text-xs leading-4 text-muted');
+  });
+});

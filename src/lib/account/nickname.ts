@@ -1,5 +1,9 @@
 import type { NicknamePrefill } from '../auth/identity';
 import { normalizeNickname, validateNickname } from '../reviews/nickname';
+import { NICKNAME_MAX, NICKNAME_MIN } from '../reviews/types';
+
+/** 個人檔案頁與聊聊邀請面板用的錯誤句（欄位對使用者叫「顯示名稱」，D12）；規則與評價暱稱完全相同 */
+export const DISPLAY_NAME_ERROR = `顯示名稱需為 ${NICKNAME_MIN}–${NICKNAME_MAX} 個字，只能用中英文、數字、_ 和 -`;
 
 export type NicknamePrefillSource = 'profile' | 'google';
 export type ResolvedPrefill = NicknamePrefill & { source: NicknamePrefillSource };

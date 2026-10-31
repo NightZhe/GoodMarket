@@ -69,9 +69,10 @@ export function previewSpoken(last: LastMessage): string {
   return '';
 }
 
-/** 列表一列的朗讀：「好物小舖，2 則未讀，最後訊息：有的，19:02」 */
-export function rowSpoken(r: { name: string; unread: number; last: LastMessage; time: string; blocked: boolean }): string {
+/** 列表一列的朗讀：「好物小舖，訂單 #PA9T6C · Switch 寶可夢，2 則未讀，最後訊息：有的，19:02」（脈絡列有才念） */
+export function rowSpoken(r: { name: string; context?: string | null; unread: number; last: LastMessage; time: string; blocked: boolean }): string {
   const parts = [r.name];
+  if (r.context) parts.push(r.context);
   if (r.unread > 0) parts.push(`${r.unread} 則未讀`);
   if (r.blocked) parts.push('已封鎖');
   parts.push(`最後訊息：${previewSpoken(r.last)}`);

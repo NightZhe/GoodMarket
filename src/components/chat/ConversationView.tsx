@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ActionSheet, { type SheetAction } from './ActionSheet';
 import ConversationScreen, { type ScreenHandlers, type ScreenModel } from './ConversationScreen';
+import NicknamePromptSheet from './NicknamePromptSheet';
 import LeaveDialog from '../import/LeaveDialog';
 import PhotoLightbox from '../reviews/PhotoLightbox';
 import { useToast } from '../Toast';
@@ -9,6 +10,10 @@ import { useOnline } from '../../lib/useOnline';
 import { useConversation } from '../../lib/chat/useConversation';
 import { useSignedUrls } from '../../lib/chat/useSignedUrls';
 import { browserStore, dismissRules, rulesDismissed, rulesVisible } from '../../lib/chat/rules';
+import {
+  clearNicknamePromptPending, dismissNicknamePrompt, markNicknamePromptPending, nicknamePromptDismissed, sessionStore, shouldPromptNickname, takeNicknamePromptPending,
+} from '../../lib/chat/nicknamePrompt';
+import { fetchNickname } from '../../lib/account/profile';
 import type { OpenTarget } from '../../lib/chat/outbox';
 import type { ChatCard, ChatSide } from '../../lib/chat/types';
 import type { DisplayMessage } from '../../lib/chat/outbox';
@@ -41,7 +46,38 @@ type Dialog = null | 'menu' | 'confirm-block';
  * 這裡負責把兩者接起來，加上選單、封鎖確認、全螢幕看圖、規則提示的本機記憶與各種 toast。
  */
 export default function ConversationView(p: Props) {
-  const convo = useConversation(p.side, p.target, p.onCreated);
+  const [nickPrompt, setNickPrompt] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  /** 查一次顯示名稱；沒有就彈面板。查不到（離線、逾時）就不彈，旗標也清掉：邀請是盡力而為，不讓它在之後別的對話突然冒出來 */
+  const checkNickname = useCallback(async () => {
+    let nickname: string | null;
+    try {
+      nickname = await fetchNickname();
+    } catch {
+      if (mounted.current) clearNicknamePromptPending(sessionStore());
+      return;
+    }
+    if (!mounted.current) return;
+    clearNicknamePromptPending(sessionStore());
+    if (shouldPromptNickname({ side: p.side, dismissed: nicknamePromptDismissed(browserStore()), nickname })) setNickPrompt(true);
+  }, [p.side]);
+  // 買家送出第一則成功後（D11）：沒略過過才去查顯示名稱。先記「待邀請」再查——第一則若同時建立了對話，
+  // onCreated 會把網址換成 /chat/:id，這個元件會被卸載重掛，查詢回來時已經沒人收；重掛後的元件在下面的 effect 接手
+  const onFirstSent = useCallback(() => {
+    if (!shouldPromptNickname({ side: p.side, dismissed: nicknamePromptDismissed(browserStore()), nickname: undefined })) return;
+    markNicknamePromptPending(sessionStore(), Date.now());
+    void checkNickname();
+  }, [p.side, checkNickname]);
+  useEffect(() => {
+    if (p.side !== 'buyer' || !takeNicknamePromptPending(sessionStore(), Date.now())) return;
+    if (nicknamePromptDismissed(browserStore())) return;
+    void checkNickname();
+  }, [p.side, checkNickname]);
+  const convo = useConversation(p.side, p.target, p.onCreated, onFirstSent);
   const online = useOnline();
   const toast = useToast();
   const { openLogin } = useAuth();
@@ -138,6 +174,13 @@ export default function ConversationView(p: Props) {
               description="封鎖後，你和對方都無法在這個對話傳送訊息。既有的訂單不受影響，隨時可以解除封鎖。"
               stayLabel="取消" leaveLabel="封鎖" busy={busy} busyLabel="封鎖中…"
               onStay={closeDialog} onLeave={() => { void confirmBlock(); }}
+            />
+          )}
+          {nickPrompt && (
+            <NicknamePromptSheet
+              onSaved={() => { setNickPrompt(false); toast('已儲存顯示名稱', 'info'); }}
+              onSkip={() => { dismissNicknamePrompt(browserStore()); setNickPrompt(false); }}
+              onClose={() => setNickPrompt(false)}
             />
           )}
           {viewer && (
