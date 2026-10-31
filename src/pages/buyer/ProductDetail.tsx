@@ -296,7 +296,8 @@ function ProductDetailView({ id }: { id: string }) {
       </dl>
 
       <div className="mt-6 hidden md:block">{picker}</div>
-      <div className="mt-8 hidden gap-3 md:flex">
+      {/* 右欄窄（768～1023）時兩顆鈕換行上下排，不溢出右欄 */}
+      <div className="mt-8 hidden flex-wrap gap-3 md:flex">
         <button
           type="button"
           onClick={() => { if (!blocked()) act('cart'); }}
@@ -429,7 +430,8 @@ function ProductDetailView({ id }: { id: string }) {
             <ChevronRight size={14} aria-hidden="true" />
             <span className="truncate">{product.title}</span>
           </nav>
-          <section className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[450px_1fr] md:gap-8">
+          {/* 桌機兩欄：lg 以上左欄固定 450；768～1023（iPad 直向，右側還有浮動軌）兩欄均分，右欄才放得下購買鈕（工單 C3） */}
+          <section className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-8 lg:grid-cols-[450px_1fr]">
             {photos}
             {info}
           </section>

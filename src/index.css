@@ -131,6 +131,15 @@ button:disabled { cursor: not-allowed; }
   --tray-clearance: calc(var(--tray-h) + var(--tp-bottom) + 16px); /* 托盤版（購物車等頁）122；托盤實際比 --tray-h 高（文字放大換行）時，頁面用 lib/layout/trayReserve 補上多出的高度 */
   --stack-clearance: calc(var(--tray-h) + 8px + var(--pill-h) + var(--tp-bottom) + 16px); /* 托盤疊在膠囊上（賣家新增商品直向）192 */
   --tabs-clearance: var(--pill-clearance); /* 有分頁導覽的頁，內容底部預留 */
+  /* 桌機右側浮動軌（合夥人回饋 10/31 工單 C，design-C.md）：外殼寬 56、離右緣 16、六格 48×50＋上下內距 6＝312 高。
+     --rail-clearance 是內容區右側要讓出的 padding：軌佔右緣 72 再留 12，內容右緣要離視窗右邊 ≥84。置中容器（max-w-6xl＝72rem）
+     兩側原本就有 (100vw−72rem)/2 的留白，而 padding 只會把置中的容器推開一半，所以要補的是差額的兩倍：
+     clearance＝2×(84 − (100vw−72rem)/2)，上限 84（容器比可用寬還寬時 padding 就是全部的留白）、下限 0。
+     768 寬→84、1280 寬→40（容器右緣離視窗 84）、≥1320→0（頁面維持置中不偏）。只在 md 以上且非 App 套用（BuyerLayout 的 md:pr-(--rail-clearance)） */
+  --desk-rail-w: 56px;
+  --desk-rail-r: 16px;
+  --desk-rail-h: calc(var(--rail-pad) * 2 + 6 * var(--cell-h)); /* 312 */
+  --rail-clearance: clamp(0px, calc(168px - (100vw - 72rem)), 84px);
   --inset-l: env(safe-area-inset-left); /* 內容欄左右內縮：side 姿態時系統欄那一側換成軌欄寬 */
   --inset-r: env(safe-area-inset-right);
   /* 中線帶（雙畫面，D13、X2）：折線兩側各 24、總寬 48。推估，T0 量到折疊區實際寬度後調整。互動元件熱區不得進入 */
@@ -178,6 +187,10 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
   .glass-capsule .glass-btn { background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .glass-capsule .glass-btn:active { transform: none; background-color: var(--color-press-rail); }
 
+  /* 桌機右側浮動軌（DesktopRail）：貼右緣、垂直置中、不隨捲動。top 用 dvh 算而不用 translateY(-50%)：視窗高為奇數時 transform 會落在半像素，模糊文字。
+     與 Duo 的 .glass-capsule 分開：那條的 right 被 html[data-bars] 綁住。材質與陰影同賣家中心懸浮列（.glass），不另加邊框 */
+  .glass-desk-rail { position: fixed; z-index: 40; right: var(--desk-rail-r); top: calc(50dvh - var(--desk-rail-h) / 2); width: var(--desk-rail-w); border-radius: calc(var(--desk-rail-w) / 2); padding: var(--rail-pad) 4px; flex-direction: column; align-items: center; }
+
   /* 水平姿態的分頁膠囊：不貼邊、只包五格、置中在內容欄、離底有間距 */
   .glass-pill { position: fixed; z-index: 40; left: var(--inset-l); right: var(--inset-r); bottom: var(--tp-bottom); margin-inline: auto; width: max-content; height: var(--pill-h); border-radius: calc(var(--pill-h) / 2); padding: 6px; display: flex; }
   .glass-pill--icons { height: 56px; border-radius: 28px; }
@@ -186,6 +199,10 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
   .glass-tray { position: fixed; z-index: 40; left: var(--inset-l); right: var(--inset-r); bottom: var(--tp-bottom); margin-inline: auto; width: max-content; max-width: calc(100vw - var(--inset-l) - var(--inset-r) - 16px); min-height: var(--tray-h); border-radius: 32px; padding: 10px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
   .glass-tray--checkout { width: auto; max-width: min(340px, calc(100vw - var(--inset-l) - var(--inset-r) - 16px)); display: grid; grid-template-columns: auto 1fr auto; gap: 8px; padding: 10px 10px 10px 12px; }
   .glass-tray--above-pill { bottom: calc(var(--tp-bottom) + var(--pill-h) + 8px); }
+  /* 桌機網頁（md 以上、非 App）沒有底部膠囊（TabPill 是 md:hidden），疊在膠囊上的托盤回到底部（購物車頁 768～1023 寬）。內容預留的退回在 @layer 之外（下面） */
+  @media (width >= 48rem) {
+    html:not(.native) .glass-tray--above-pill { bottom: var(--tp-bottom); }
+  }
   .tray-btn { display: grid; height: 44px; min-width: 120px; flex-grow: 1; place-items: center; border-radius: 22px; padding: 0 18px; white-space: nowrap; transition: transform 160ms cubic-bezier(.23,1,.32,1), background-color 160ms; }
   .tray-btn:active { transform: scale(.97); transition-duration: 100ms; }
   .glass-tray--checkout .tray-btn { min-width: 0; flex-grow: 0; }
@@ -245,6 +262,18 @@ html[data-rail='outer-landscape-secondary'] { --sys-status-end: 0px; --rail-bott
     .glass-group-pop, .glass-group-pop[data-open='true'] { transform: none; transition: opacity 150ms ease, visibility 0s; }
     .glass-group-pop:not([data-open='true']) { transition: opacity 150ms ease, visibility 0s 150ms; }
   }
+}
+
+/* 桌機網頁（md 以上、非 App）沒有底部膠囊：疊在膠囊上的托盤的內容預留退回單托盤的高度（購物車頁 768～1023 寬）。
+   :root 的 --stack-clearance 沒分層，這條也要寫在 @layer 之外才蓋得過它 */
+@media (width >= 48rem) { html:not(.native) { --stack-clearance: var(--tray-clearance); } }
+
+/* 桌機浮動軌在矮視窗（高 < 432：軌 312 離頂不到 60，會碰到右上「賣家中心」）：標籤藏起來（留給讀屏）、格矮成 44，外殼 276。
+   寫在 @layer 之外才蓋得過 TabCell 的 h-(--cell-h)（utilities 層） */
+@media (max-height: 431px) {
+  .glass-desk-rail { --desk-rail-h: calc(var(--rail-pad) * 2 + 6 * var(--cell-h-compact)); }
+  .glass-desk-rail > a { height: var(--cell-h-compact); }
+  .glass-desk-rail [data-tab-label] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 }
 
 /* 頁面（文件）捲軸全站隱藏：只藏視覺，仍可捲動。內層捲動容器（橫滑列等）用 .no-scrollbar 各自處理 */
