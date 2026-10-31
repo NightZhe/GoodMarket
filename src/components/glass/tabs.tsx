@@ -41,21 +41,21 @@ export function useLabelsFit(listRef: RefObject<HTMLElement | null>, available: 
 
 type CellProps = {
   item: TabItem;
-  /** pill＝水平膠囊（60×50，選中有淡橘底）；rail＝直立軌（48×50，選中只換色） */
-  kind: 'pill' | 'rail';
+  /** pill＝水平膠囊（60×50，選中有淡橘底）；rail＝直立軌（48×50，選中只換色）；desk＝桌機浮動軌（48×50，選中淡橘底、hover 淡灰底） */
+  kind: 'pill' | 'rail' | 'desk';
   /** 顯示標籤；false＝純圖示（標籤留在 aria-label，視覺上藏起來但仍可量寬度） */
   labeled: boolean;
   /** 軌 L1：純圖示格子矮一點（44） */
   compact?: boolean;
 };
 
-const BASE = 'relative flex flex-col items-center justify-center text-caption2 font-medium transition-colors duration-150 active:bg-press-rail active:duration-0 motion-reduce:transition-none';
+const BASE = 'relative flex flex-col items-center justify-center text-caption2 font-medium duration-150 active:duration-0 motion-reduce:transition-none';
 
 /** 分頁格：膠囊與直立軌共用。選中態由 NavLink 的 aria-current="page" 帶出 */
 export function TabCell({ item, kind, labeled, compact = false }: CellProps) {
   const size = kind === 'pill'
     ? `${labeled ? 'h-(--cell-h) w-[60px]' : 'h-(--cell-h-compact) w-[52px]'} rounded-[25px]`
-    : `${labeled && !compact ? 'h-(--cell-h)' : 'h-(--cell-h-compact)'} w-(--rail-cap-w) rounded-[22px]`;
+    : `${labeled && !compact ? 'h-(--cell-h)' : 'h-(--cell-h-compact)'} w-(--rail-cap-w) ${kind === 'desk' ? 'rounded-[24px]' : 'rounded-[22px]'}`;
   return (
     <NavLink
       to={item.to}
@@ -64,8 +64,15 @@ export function TabCell({ item, kind, labeled, compact = false }: CellProps) {
       onClick={item.onReselect && (e => { e.preventDefault(); item.onReselect?.(); })}
       className={({ isActive }) => [
         BASE, size, 'gap-0.5',
-        isActive ? 'text-brand' : kind === 'pill' ? 'text-label2-glass' : 'text-muted',
-        isActive && kind === 'pill' ? 'bg-tab-sel' : '',
+        // 桌機軌只漸變底色（transition-colors 連 focus 外框的顏色也會漸變，鍵盤外框要立即出現）；外框 offset 0，2px 外框落在軌的 4px 內距裡不碰外緣
+        kind === 'desk' ? 'transition-[background-color] focus-visible:outline-offset-0' : 'transition-colors',
+        // 直立軌（Duo）未選中用 muted；膠囊與桌機軌的小字壓在玻璃上，要用 label2-glass 才過對比
+        isActive ? 'text-brand' : kind === 'rail' ? 'text-muted' : 'text-label2-glass',
+        isActive && kind !== 'rail' ? 'bg-tab-sel' : '',
+        // 按下：目前頁（有淡橘底的桌機軌）用 tab-sel-press，其餘灰底
+        isActive && kind === 'desk' ? 'active:bg-tab-sel-press' : 'active:bg-press-rail',
+        // 桌機有滑鼠：非目前頁 hover 淡灰底（press-rail 的一半，約 8%）；目前頁 hover 不變色
+        !isActive && kind === 'desk' ? 'hover:bg-press-rail/50' : '',
       ].join(' ')}
     >
       {({ isActive }) => (
