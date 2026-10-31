@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { PrivacyView } from './Privacy';
 import { CONTACT_EMAIL, PRIVACY_EFFECTIVE } from '../../lib/site';
-import { BANK_REVISION } from './Privacy';
+import { BANK_REVISION, DISPLAY_NAME_REVISION } from './Privacy';
 
 const html = (payOn: boolean) => renderToStaticMarkup(<MemoryRouter><PrivacyView payOn={payOn} /></MemoryRouter>);
 
@@ -19,7 +19,7 @@ describe('隱私政策隨線上付款開關顯示付款段落', () => {
     const off = html(false);
     expect(off).toContain('你的訂單內容、金額、狀態與物流進度。');
     expect(off).toContain('訂單等交易紀錄，依相關法規規定的期間保存。');
-    expect(off).toContain('收件地址可以隨時在「我的帳號 › 地址」刪除；暱稱可以在「個人檔案」清空。');
+    expect(off).toContain('收件地址可以隨時在「我的帳號 › 地址」刪除；顯示名稱可以在「個人檔案」清空。');
   });
   it('開關打開：出現付款資料與銀行帳號兩項，與「不會儲存完整卡號」', () => {
     const on = html(true);
@@ -297,5 +297,34 @@ describe('平台收款開關（PR-乙 IN-B8；AC-58、AC-63；§7.2 文字待律
     const off = page(false, true, '2026/11/02');
     for (const w of PAY_WORDS) expect(off, w).not.toContain(w);
     expect(off).toBe(html(false));
+  });
+});
+
+describe('暱稱改稱「顯示名稱」（工單 B，D12）', () => {
+  const PAY = ['綠界', '信用卡', '付款', '卡號', '收款', '撥款', '特約商店', '扣款'];
+  it('正文不再說暱稱「不會公開顯示」或「不會顯示在任何公開的地方」；資料項目叫「顯示名稱」並說店家看完整名稱、評價遮罩', () => {
+    const body = html(false).split('9. 修訂紀錄')[0];
+    expect(body).not.toContain('不會公開顯示');
+    expect(body).not.toContain('不會顯示在任何公開的地方');
+    expect(body).toContain('>顯示名稱<');
+    expect(body).toContain('你聊聊的店家會看到完整名稱；寫評價時會先幫你填好，評價公開時遮罩顯示。');
+    expect(body).toContain('只會以完整名稱顯示給你聊聊的店家；評價等其他地方一律遮罩顯示。');
+  });
+  it('第 7 節聊聊補「對話中的名稱」：沒設定時是「買家」加 4 碼代號、代號無法對回帳號、不顯示 email／手機／識別碼；§10.1 原句不動', () => {
+    const s7 = html(false).split('7. 聊聊')[1].split('8. 聯絡我們')[0];
+    expect(s7).toContain('我們不會將對話內容用於廣告。');
+    expect(s7).toContain('對話中的名稱');
+    expect(s7).toContain('顯示為「買家」加 4 碼代號，代號由系統產生、無法對回你的帳號');
+    expect(s7).toContain('不會把你的電子郵件、手機號碼或帳號識別碼顯示給店家');
+  });
+  it('修訂紀錄：最新一筆是顯示名稱（用 PRIVACY_EFFECTIVE），聊聊那筆退成固定日期 2026/10/29 排在其後；兩句都不含付款字樣', () => {
+    const page = html(false);
+    const top = `${PRIVACY_EFFECTIVE}</dt><dd class="mt-0.5 text-sm leading-6 text-muted">${DISPLAY_NAME_REVISION}`;
+    const chat = '2026/10/29</dt><dd class="mt-0.5 text-sm leading-6 text-muted">新增『聊聊』：';
+    expect(page).toContain(top);
+    expect(page).toContain(chat);
+    expect(page.indexOf(top)).toBeLessThan(page.indexOf(chat));
+    expect(PRIVACY_EFFECTIVE > '2026/10/29').toBe(true);
+    for (const w of PAY) expect(DISPLAY_NAME_REVISION, w).not.toContain(w);
   });
 });

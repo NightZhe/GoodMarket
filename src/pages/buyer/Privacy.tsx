@@ -5,8 +5,12 @@ import { usePaymentConfig } from '../../lib/payment/usePaymentConfig';
 import { PLATFORM_COLLECT_REVISION, PLATFORM_COLLECT_USE_SENTENCE, privacyEffectiveDate, taipeiDate } from '../../lib/payment/platformCollect';
 import { CONTACT_EMAIL, DELETION_WINDOW, PRIVACY_EFFECTIVE, PRIVACY_FIRST_PUBLISHED } from '../../lib/site';
 
+/** 聊聊上線那筆（2026/10/29）：已發生的修訂，不會再變。暱稱改稱「顯示名稱」那筆（工單 B）接手 PRIVACY_EFFECTIVE，這筆依合併規則改成固定日期 */
+const PRIVACY_CHAT = '2026/10/29';
+/** 暱稱改稱「顯示名稱」的修訂紀錄句子（工單 B，D12）：對話的店家看完整名稱，評價仍遮罩 */
+export const DISPLAY_NAME_REVISION = '暱稱改稱「顯示名稱」：你聊聊的店家會看到完整名稱；評價公開時仍遮罩顯示。聊聊一節補充沒有設定名稱時店家看到的代號。';
 /** 刪除帳號改為申請制、新增內容審核與檢舉的修訂日（store-prereqs，2026-10-26 推上）：已發生的修訂，不會再變。
- *  聊聊上線那筆（2026/10/29）接手 PRIVACY_EFFECTIVE，這筆依合併規則改成固定日期 */
+ *  聊聊上線那筆（2026/10/29）當時接手 PRIVACY_EFFECTIVE，這筆依合併規則改成固定日期 */
 const PRIVACY_DELETE_REQUEST = '2026/10/26';
 /** 帳號頁 P-A（個人檔案、地址簿）上線日：已發生的修訂，不會再變 */
 const PRIVACY_P_A = '2026/10/18';
@@ -66,7 +70,7 @@ const dataItems = (payOn: boolean): { name: string; detail: ReactNode }[] => [
     ),
   }] : []),
   { name: '訂單', detail: payOn ? '你的訂單內容、金額、狀態與物流進度，以及線上付款的付款狀態、時間與綠界科技的交易編號。' : '你的訂單內容、金額、狀態與物流進度。' },
-  { name: '暱稱', detail: '你在「個人檔案」設定的暱稱，只用來在寫評價時預填，不會公開顯示。' },
+  { name: '顯示名稱', detail: '你在「個人檔案」設定的顯示名稱（原「暱稱」）。你聊聊的店家會看到完整名稱；寫評價時會先幫你填好，評價公開時遮罩顯示。' },
   { name: '評價', detail: '你寫的星等、文字、照片與暱稱。' },
   { name: '檢舉紀錄', detail: '你檢舉時選的原因、說明、被檢舉的內容與時間，跟著你的帳號識別碼保存，用來處理檢舉與防止濫用；不會提供給被檢舉的一方。' },
 ];
@@ -107,7 +111,7 @@ export function PrivacyView({ payOn, platformOn = false, platformOnDate = null }
           <li>下單時，把你選的那一筆收件資料交給你下單的賣家，讓賣家出貨。</li>
           {/* 平台收款開關開：款項先進好物集（甲 spec §7.2 原句，待律師定稿）；關：維持原句 */}
           {payOn && <li>{collectOn ? PLATFORM_COLLECT_USE_SENTENCE : '你按下付款時，向綠界科技請求用你選的卡付款；款項由綠界科技處理並撥給賣家。'}</li>}
-          <li>寫評價時，暱稱會先預填你在個人檔案設定的暱稱；沒設定時，預填你的 Google 名稱。你可以自行修改或清空，改的只影響那則評價。</li>
+          <li>寫評價時，暱稱會先預填你在個人檔案設定的顯示名稱；沒設定時，預填你的 Google 名稱。你可以自行修改或清空，改的只影響那則評價。</li>
         </ul>
 
         <h2 className="mt-8 text-base font-bold">3. 誰看得到</h2>
@@ -120,17 +124,17 @@ export function PrivacyView({ payOn, platformOn = false, platformOnDate = null }
           <li>其他人只看得到遮罩後的暱稱（例如「王*****明」）。</li>
           <li>我們不會公開你的電子郵件、手機號碼與帳號識別碼。</li>
           <li>我們不會把你登入用的手機號碼提供給賣家；賣家看到的是你下單時填寫的收件人電話。</li>
-          <li>你在個人檔案設定的暱稱，不會顯示在任何公開的地方。</li>
+          <li>你在個人檔案設定的顯示名稱，只會以完整名稱顯示給你聊聊的店家；評價等其他地方一律遮罩顯示。</li>
         </ul>
 
         <h2 className="mt-8 text-base font-bold">4. 保存多久</h2>
         <p className="mt-2 text-base leading-7">
-          你的帳號存在期間，我們會保存帳號、購物車、收件地址、暱稱與評價等資料。你申請刪除帳號後，我們會在 {DELETION_WINDOW}刪除或去識別化你的個人資料，你寫的評價與照片會一併刪除。{payOn && '刪除帳號時，我們會先請綠界科技刪除你綁定的所有信用卡。你刪除信用卡時，好物集會刪除顯示用的卡片資料，並通知綠界科技撤銷綁定。刪除帳號時，你綁定的銀行帳號一併刪除。'}訂單等交易紀錄{payOn ? '（含付款紀錄）' : ''}，依相關法規規定的期間保存。我們會保留刪除申請的處理紀錄（申請、完成日期與已刪除帳號的識別碼），以及你檢舉過的內容紀錄（不含你的身分）。
+          你的帳號存在期間，我們會保存帳號、購物車、收件地址、顯示名稱與評價等資料。你申請刪除帳號後，我們會在 {DELETION_WINDOW}刪除或去識別化你的個人資料，你寫的評價與照片會一併刪除。{payOn && '刪除帳號時，我們會先請綠界科技刪除你綁定的所有信用卡。你刪除信用卡時，好物集會刪除顯示用的卡片資料，並通知綠界科技撤銷綁定。刪除帳號時，你綁定的銀行帳號一併刪除。'}訂單等交易紀錄{payOn ? '（含付款紀錄）' : ''}，依相關法規規定的期間保存。我們會保留刪除申請的處理紀錄（申請、完成日期與已刪除帳號的識別碼），以及你檢舉過的內容紀錄（不含你的身分）。
         </p>
 
         <h2 className="mt-8 text-base font-bold">5. 刪除你的資料</h2>
         <p className="mt-2 text-base leading-7">
-          收件地址可以隨時在「我的帳號 › 地址」刪除；{payOn && '信用卡與銀行帳號可以隨時在「我的帳號 › 銀行帳號／信用卡」刪除（撥款帳號要先把別的帳號設為撥款帳號才能刪）；'}暱稱可以在「個人檔案」清空。
+          收件地址可以隨時在「我的帳號 › 地址」刪除；{payOn && '信用卡與銀行帳號可以隨時在「我的帳號 › 銀行帳號／信用卡」刪除（撥款帳號要先把別的帳號設為撥款帳號才能刪）；'}顯示名稱可以在「個人檔案」清空。
         </p>
         <div className="mt-2 rounded-md border border-line bg-subtle p-4 text-base leading-7">
           要刪除整個帳號，請在 App 或網站的『我的 › 刪除帳號』提出申請，也可以直接從這裡
@@ -154,6 +158,9 @@ export function PrivacyView({ payOn, platformOn = false, platformOnDate = null }
         <p className="mt-2 text-base leading-7">
           <strong className="font-semibold">聊聊訊息</strong>：你與店家在站內的對話內容（文字、圖片、商品與訂單卡片）會儲存在我們的資料庫與檔案儲存空間，用於提供對話功能與處理交易糾紛。對話不會自動刪除；你刪除帳號後，對方仍看得到既有對話，但你的名稱會顯示為『已刪除的帳號』。圖片只有對話雙方看得到。我們不會將對話內容用於廣告。
         </p>
+        <p className="mt-2 text-base leading-7">
+          <strong className="font-semibold">對話中的名稱</strong>：店家看到的是你在「個人檔案」設定的顯示名稱；沒有設定時，顯示為「買家」加 4 碼代號，代號由系統產生、無法對回你的帳號。我們不會把你的電子郵件、手機號碼或帳號識別碼顯示給店家。
+        </p>
 
         <h2 className="mt-8 text-base font-bold">8. 聯絡我們</h2>
         <p className="mt-2 text-base leading-7">
@@ -172,6 +179,10 @@ export function PrivacyView({ payOn, platformOn = false, platformOnDate = null }
           )}
           <div className="border-t border-line py-3 first:border-t-0">
             <dt className="text-sm font-medium tabular-nums">{PRIVACY_EFFECTIVE}</dt>
+            <dd className="mt-0.5 text-sm leading-6 text-muted">{DISPLAY_NAME_REVISION}</dd>
+          </div>
+          <div className="border-t border-line py-3">
+            <dt className="text-sm font-medium tabular-nums">{PRIVACY_CHAT}</dt>
             <dd className="mt-0.5 text-sm leading-6 text-muted">新增『聊聊』：說明站內對話內容的儲存、保留與刪帳號後的顯示方式。</dd>
           </div>
           {payOn && (
