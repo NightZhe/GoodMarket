@@ -49,7 +49,7 @@ type CellProps = {
   compact?: boolean;
 };
 
-const BASE = 'relative flex flex-col items-center justify-center text-caption2 font-medium transition-colors duration-150 active:duration-0 motion-reduce:transition-none';
+const BASE = 'relative flex flex-col items-center justify-center text-caption2 font-medium duration-150 active:duration-0 motion-reduce:transition-none';
 
 /** 分頁格：膠囊與直立軌共用。選中態由 NavLink 的 aria-current="page" 帶出 */
 export function TabCell({ item, kind, labeled, compact = false }: CellProps) {
@@ -64,6 +64,8 @@ export function TabCell({ item, kind, labeled, compact = false }: CellProps) {
       onClick={item.onReselect && (e => { e.preventDefault(); item.onReselect?.(); })}
       className={({ isActive }) => [
         BASE, size, 'gap-0.5',
+        // 桌機軌只漸變底色（transition-colors 連 focus 外框的顏色也會漸變，鍵盤外框要立即出現）；外框 offset 0，2px 外框落在軌的 4px 內距裡不碰外緣
+        kind === 'desk' ? 'transition-[background-color] focus-visible:outline-offset-0' : 'transition-colors',
         // 直立軌（Duo）未選中用 muted；膠囊與桌機軌的小字壓在玻璃上，要用 label2-glass 才過對比
         isActive ? 'text-brand' : kind === 'rail' ? 'text-muted' : 'text-label2-glass',
         isActive && kind !== 'rail' ? 'bg-tab-sel' : '',

@@ -257,7 +257,8 @@ function CartView() {
                     <Link to={`/product/${r.item.productId}`} className="w-20 shrink-0 overflow-hidden rounded-sm border border-line">
                       <ProductImage src={r.image} alt={r.title} size="sm" className="w-full" />
                     </Link>
-                    <div className="min-w-0 flex-1 md:grid md:grid-cols-[1fr_120px_140px_110px_50px] md:items-center md:gap-4">
+                    {/* 桌機一列五欄：xl 以上固定欄寬像表格；768～1279（右側還有浮動軌、lg 起右欄又有 320 的摘要卡）欄寬依內容，名稱欄才不會被擠扁（工單 C3） */}
+                    <div className="min-w-0 flex-1 md:grid md:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] md:items-center md:gap-3 xl:grid-cols-[1fr_120px_140px_110px_50px] xl:gap-4">
                       <div className="min-w-0">
                         <p className="line-clamp-2 text-sm">{r.title}</p>
                         <p className="mt-1 w-fit rounded-sm bg-canvas px-1.5 text-xs text-muted">規格：{r.variantName}</p>
