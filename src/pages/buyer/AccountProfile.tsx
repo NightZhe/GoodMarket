@@ -8,11 +8,11 @@ import { useToast } from '../../components/Toast';
 import Identity from '../../components/account/Identity';
 import { useRelogin, useRestoreFormDraft } from '../../components/account/useFormDraft';
 import { Bone, FieldError, SubHeader, SubPage, Spinner, bigBtn, fieldCls, savingBtn, helpCls, labelCls, sectionTitleCls } from '../../components/account/ui';
-import { nicknameDirty } from '../../lib/account/nickname';
+import { DISPLAY_NAME_ERROR, nicknameDirty } from '../../lib/account/nickname';
 import { fetchNickname, saveNickname } from '../../lib/account/profile';
 import { toAccountError } from '../../lib/account/errors';
 import { loginProviderOf, providerLabel } from '../../lib/auth/identity';
-import { NICKNAME_ERROR, maskNickname, validateNickname } from '../../lib/reviews/nickname';
+import { maskNickname, validateNickname } from '../../lib/reviews/nickname';
 import { NICKNAME_MAX, NICKNAME_MIN } from '../../lib/reviews/types';
 import { useOnline } from '../../lib/useOnline';
 
@@ -73,7 +73,7 @@ function ProfileView() {
 
   const check = validateNickname(input);
   const hasText = input.trim() !== '';
-  const fieldError = (touched && hasText && !check.ok) || serverInvalid ? NICKNAME_ERROR : null;
+  const fieldError = (touched && hasText && !check.ok) || serverInvalid ? DISPLAY_NAME_ERROR : null;
   const dirty = nicknameDirty(input, saved);
   const readOnly = saving || !online;
   const canSave = dirty && online && !saving && load === 'ready';

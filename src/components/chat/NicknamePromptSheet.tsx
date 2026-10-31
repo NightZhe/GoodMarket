@@ -3,24 +3,28 @@ import SheetShell from '../SheetShell';
 import { btnOutline, btnPrimary } from '../import/ui';
 import { FieldError, Spinner, bigBtn, fieldCls, helpCls, savingBtn } from '../account/ui';
 import { toAccountError } from '../../lib/account/errors';
+import { DISPLAY_NAME_ERROR } from '../../lib/account/nickname';
 import { saveNickname } from '../../lib/account/profile';
 import { NICKNAME_PROMPT_DESC, NICKNAME_PROMPT_TITLE } from '../../lib/chat/nicknamePrompt';
-import { NICKNAME_ERROR, maskNickname, validateNickname } from '../../lib/reviews/nickname';
+import { maskNickname, validateNickname } from '../../lib/reviews/nickname';
 import { NICKNAME_MAX, NICKNAME_MIN } from '../../lib/reviews/types';
 
 interface Props {
   /** 儲存成功（值已存進 profiles.nickname） */
   onSaved: (nickname: string) => void;
-  /** 略過、Esc、點遮罩：呼叫端記住「不再問」並關閉 */
+  /** 按「略過」：呼叫端記住「不再問」並關閉 */
   onSkip: () => void;
+  /** Esc、點遮罩：只關閉，不記住（下次對別家店送第一則還會再問一次） */
+  onClose: () => void;
 }
 
 /**
  * 顯示名稱邀請（D11、spec B5）：買家在聊聊送出第一則訊息成功後、還沒有顯示名稱時彈一次。
  * 標題「設個顯示名稱，賣家才認得你」＋說明＋輸入（規則同個人檔案的暱稱：validateNickname）＋「儲存」／「略過」。
- * 儲存走 set_my_nickname（同個人檔案頁）；規則不合由伺服器回 NICKNAME_INVALID 時顯示同一句錯誤。外殼是 SheetShell（手機抽屜／桌機置中對話框）
+ * 儲存走 set_my_nickname（同個人檔案頁）；規則不合由伺服器回 NICKNAME_INVALID 時顯示同一句錯誤。外殼是 SheetShell（手機抽屜／桌機置中對話框）。
+ * 只有按「略過」才記住不再問；Esc／點遮罩只是關閉（規格 B5 只寫「略過後」不再彈）
  */
-export default function NicknamePromptSheet({ onSaved, onSkip }: Props) {
+export default function NicknamePromptSheet({ onSaved, onSkip, onClose }: Props) {
   const titleId = useId();
   const descId = useId();
   const inputId = useId();
@@ -34,7 +38,7 @@ export default function NicknamePromptSheet({ onSaved, onSkip }: Props) {
 
   const check = validateNickname(input);
   const hasText = input.trim() !== '';
-  const fieldError = (touched && hasText && !check.ok) || serverInvalid ? NICKNAME_ERROR : null;
+  const fieldError = (touched && hasText && !check.ok) || serverInvalid ? DISPLAY_NAME_ERROR : null;
   const canSave = hasText && check.ok && !saving;
 
   const change = (v: string) => {
@@ -66,7 +70,7 @@ export default function NicknamePromptSheet({ onSaved, onSkip }: Props) {
   };
 
   return (
-    <SheetShell titleId={titleId} descId={descId} titleRef={titleRef} onClose={onSkip}>
+    <SheetShell titleId={titleId} descId={descId} titleRef={titleRef} onClose={onClose}>
       <form noValidate onSubmit={e => { e.preventDefault(); void submit(); }} className="px-5 pb-4 pt-5">
         <h2 id={titleId} ref={titleRef} tabIndex={-1} className="text-headline font-semibold text-ink outline-none">{NICKNAME_PROMPT_TITLE}</h2>
         <p id={descId} className="mt-1 text-footnote text-muted">{NICKNAME_PROMPT_DESC}</p>

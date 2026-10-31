@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ActionSheet, { type SheetAction } from './ActionSheet';
 import ConversationScreen, { type ScreenHandlers, type ScreenModel } from './ConversationScreen';
 import NicknamePromptSheet from './NicknamePromptSheet';
@@ -10,7 +10,9 @@ import { useOnline } from '../../lib/useOnline';
 import { useConversation } from '../../lib/chat/useConversation';
 import { useSignedUrls } from '../../lib/chat/useSignedUrls';
 import { browserStore, dismissRules, rulesDismissed, rulesVisible } from '../../lib/chat/rules';
-import { dismissNicknamePrompt, nicknamePromptDismissed, shouldPromptNickname } from '../../lib/chat/nicknamePrompt';
+import {
+  clearNicknamePromptPending, dismissNicknamePrompt, markNicknamePromptPending, nicknamePromptDismissed, sessionStore, shouldPromptNickname, takeNicknamePromptPending,
+} from '../../lib/chat/nicknamePrompt';
 import { fetchNickname } from '../../lib/account/profile';
 import type { OpenTarget } from '../../lib/chat/outbox';
 import type { ChatCard, ChatSide } from '../../lib/chat/types';
@@ -45,14 +47,35 @@ type Dialog = null | 'menu' | 'confirm-block';
  */
 export default function ConversationView(p: Props) {
   const [nickPrompt, setNickPrompt] = useState(false);
-  // 買家送出第一則成功後（D11）：沒略過過才去查一次顯示名稱；沒有名稱就彈面板。查不到（離線、逾時）就不彈，不打擾送訊息
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  /** 查一次顯示名稱；沒有就彈面板並清掉待邀請旗標。查不到（離線、逾時）就不彈、旗標留著（還在有效期內的下一次掛載會再試） */
+  const checkNickname = useCallback(async () => {
+    let nickname: string | null;
+    try {
+      nickname = await fetchNickname();
+    } catch {
+      return;
+    }
+    if (!mounted.current) return;
+    clearNicknamePromptPending(sessionStore());
+    if (shouldPromptNickname({ side: p.side, dismissed: nicknamePromptDismissed(browserStore()), nickname })) setNickPrompt(true);
+  }, [p.side]);
+  // 買家送出第一則成功後（D11）：沒略過過才去查顯示名稱。先記「待邀請」再查——第一則若同時建立了對話，
+  // onCreated 會把網址換成 /chat/:id，這個元件會被卸載重掛，查詢回來時已經沒人收；重掛後的元件在下面的 effect 接手
   const onFirstSent = useCallback(() => {
     if (!shouldPromptNickname({ side: p.side, dismissed: nicknamePromptDismissed(browserStore()), nickname: undefined })) return;
-    void fetchNickname().then(
-      nickname => { if (shouldPromptNickname({ side: p.side, dismissed: false, nickname })) setNickPrompt(true); },
-      () => undefined,
-    );
-  }, [p.side]);
+    markNicknamePromptPending(sessionStore(), Date.now());
+    void checkNickname();
+  }, [p.side, checkNickname]);
+  useEffect(() => {
+    if (p.side !== 'buyer' || !takeNicknamePromptPending(sessionStore(), Date.now())) return;
+    if (nicknamePromptDismissed(browserStore())) return;
+    void checkNickname();
+  }, [p.side, checkNickname]);
   const convo = useConversation(p.side, p.target, p.onCreated, onFirstSent);
   const online = useOnline();
   const toast = useToast();
@@ -156,6 +179,7 @@ export default function ConversationView(p: Props) {
             <NicknamePromptSheet
               onSaved={() => { setNickPrompt(false); toast('已儲存顯示名稱', 'info'); }}
               onSkip={() => { dismissNicknamePrompt(browserStore()); setNickPrompt(false); }}
+              onClose={() => setNickPrompt(false)}
             />
           )}
           {viewer && (

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { NICKNAME_PROMPT_KEY, dismissNicknamePrompt, nicknamePromptDismissed, shouldPromptNickname } from './nicknamePrompt';
+import {
+  NICKNAME_PROMPT_KEY, NICKNAME_PROMPT_PENDING_KEY, PENDING_TTL_MS, clearNicknamePromptPending, dismissNicknamePrompt, markNicknamePromptPending,
+  nicknamePromptDismissed, shouldPromptNickname, takeNicknamePromptPending,
+} from './nicknamePrompt';
 import type { StorageLike } from '../auth/pending';
 
 const mem = (init: Record<string, string> = {}): StorageLike & { data: Record<string, string> } => {
@@ -41,5 +44,35 @@ describe('要不要彈', () => {
     expect(shouldPromptNickname({ side: 'buyer', dismissed: false, nickname: undefined })).toBe(true);
     expect(shouldPromptNickname({ side: 'buyer', dismissed: true, nickname: undefined })).toBe(false);
     expect(shouldPromptNickname({ side: 'shop', dismissed: false, nickname: undefined })).toBe(false);
+  });
+});
+
+describe('待邀請旗標：第一則建立對話後網址會換、元件重掛，旗標要撐過重掛', () => {
+  it('mark 後 take 一次拿到 true 並移除；再 take 是 false', () => {
+    const s = mem();
+    expect(markNicknamePromptPending(s, 1000)).toBe(true);
+    expect(s.data[NICKNAME_PROMPT_PENDING_KEY]).toBe('1000');
+    expect(takeNicknamePromptPending(s, 1500)).toBe(true);
+    expect(s.data[NICKNAME_PROMPT_PENDING_KEY]).toBeUndefined();
+    expect(takeNicknamePromptPending(s, 1600)).toBe(false);
+  });
+  it('超過有效期（60 秒）或時間倒退的旗標：take 回 false 但一樣移除；壞值也是 false', () => {
+    const s = mem();
+    markNicknamePromptPending(s, 1000);
+    expect(takeNicknamePromptPending(s, 1000 + PENDING_TTL_MS + 1)).toBe(false);
+    expect(s.data[NICKNAME_PROMPT_PENDING_KEY]).toBeUndefined();
+    markNicknamePromptPending(s, 5000);
+    expect(takeNicknamePromptPending(s, 4000)).toBe(false);
+    expect(takeNicknamePromptPending(mem({ [NICKNAME_PROMPT_PENDING_KEY]: 'abc' }), 1)).toBe(false);
+  });
+  it('clear 會移除；沒有 storage 或 storage 壞掉時全部安靜地回 false', () => {
+    const s = mem({ [NICKNAME_PROMPT_PENDING_KEY]: '1' });
+    clearNicknamePromptPending(s);
+    expect(s.data[NICKNAME_PROMPT_PENDING_KEY]).toBeUndefined();
+    expect(markNicknamePromptPending(null, 1)).toBe(false);
+    expect(takeNicknamePromptPending(null, 1)).toBe(false);
+    expect(markNicknamePromptPending(broken, 1)).toBe(false);
+    expect(takeNicknamePromptPending(broken, 1)).toBe(false);
+    expect(() => clearNicknamePromptPending(broken)).not.toThrow();
   });
 });

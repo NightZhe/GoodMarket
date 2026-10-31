@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import NicknamePromptSheet from './NicknamePromptSheet';
 
 const noop = () => undefined;
-const html = () => renderToStaticMarkup(<NicknamePromptSheet onSaved={noop} onSkip={noop} />);
+const html = () => renderToStaticMarkup(<NicknamePromptSheet onSaved={noop} onSkip={noop} onClose={noop} />);
 
 describe('顯示名稱邀請面板（D11、spec B5）', () => {
   it('標題、說明、輸入框、儲存與略過都在；是 dialog 且有 aria-describedby', () => {
