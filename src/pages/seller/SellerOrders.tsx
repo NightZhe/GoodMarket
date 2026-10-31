@@ -364,7 +364,7 @@ export default function SellerOrders() {
             const requested = isRequested(o);
             const pv = o.payment === 'ecpay_card' ? payoutView({ orderStatus: o.status, hidePayout: rv.hidePayout, row: payouts.rows.get(o.id), platformOn }, { today }) : null;
             return (
-            <li key={o.id} id={orderCardDomId(o.id)} className={`scroll-mt-20 overflow-hidden rounded-lg bg-white transition-shadow duration-700 ${highlightId === o.id ? 'ring-2 ring-brand' : ''}`}>
+            <li key={o.id} id={orderCardDomId(o.id)} className={`overflow-hidden rounded-lg bg-white transition-shadow duration-700 ${highlightId === o.id ? 'ring-2 ring-brand' : ''}`}>
               <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-[#fafafa] px-4 py-2.5 text-xs text-muted">
                 <span>訂單編號 <span className="font-mono text-ink">{o.orderNo}</span></span>
                 <span>{dateText(o.createdAt)}</span>

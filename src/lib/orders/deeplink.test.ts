@@ -59,7 +59,7 @@ describe('網址寫回', () => {
   });
 });
 
-describe('scrollBlockFor：卡片比視窗高就對齊頂端，否則置中', () => {
-  it('一般卡置中', () => { expect(scrollBlockFor(300, 812)).toBe('center'); });
-  it('展開後比視窗高的卡對齊頂端', () => { expect(scrollBlockFor(900, 812)).toBe('start'); });
+describe('scrollBlockFor：卡片超過視窗七成高就對齊頂端，否則置中', () => {
+  it('一般卡置中', () => { expect(scrollBlockFor(300, 812)).toBe('center'); expect(scrollBlockFor(560, 812)).toBe('center'); });
+  it('展開後很高的卡對齊頂端（置中會切掉頂端或壓到底部膠囊）', () => { expect(scrollBlockFor(600, 812)).toBe('start'); expect(scrollBlockFor(900, 812)).toBe('start'); });
 });

@@ -31,6 +31,9 @@ export function afterLocate(params: URLSearchParams, tab: string | null): URLSea
   return next;
 }
 
-/** 捲到那張卡時對齊哪裡：卡片比視窗矮就置中；展開運送進度後比視窗高的卡置中會切掉頂端，改對齊頂端（配合 scroll-margin 避開釘住的分頁列） */
+/**
+ * 捲到那張卡時對齊哪裡：卡片不到視窗七成高就置中（置中後下緣離視窗底還有 15% 以上，手機底部膠囊連同安全區不會蓋到）；
+ * 展開運送進度後更高的卡置中會切掉頂端，改對齊頂端（配合 scroll-margin-top 避開釘住的分頁列）
+ */
 export const scrollBlockFor = (cardHeight: number, viewportHeight: number): ScrollLogicalPosition =>
-  cardHeight > viewportHeight * 0.8 ? 'start' : 'center';
+  cardHeight > viewportHeight * 0.7 ? 'start' : 'center';

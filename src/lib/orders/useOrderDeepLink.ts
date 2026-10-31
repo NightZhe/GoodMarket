@@ -10,8 +10,14 @@ const HIGHLIGHT_MS = 2000;
 /** 平滑捲動到位的確認時間（平滑捲動最長約一秒） */
 const SCROLL_CHECK_MS = 1000;
 
-const scrollToCard = (el: HTMLElement, smooth: boolean) =>
-  el.scrollIntoView({ block: scrollBlockFor(el.getBoundingClientRect().height, window.innerHeight), behavior: smooth ? 'smooth' : 'auto' });
+/** 對齊頂端時避開釘住的分頁列；置中時不留（scroll-margin 會把置中的卡往下推，壓到手機底部膠囊） */
+const TOP_CLEARANCE = '5rem';
+
+const scrollToCard = (el: HTMLElement, smooth: boolean) => {
+  const block = scrollBlockFor(el.getBoundingClientRect().height, window.innerHeight);
+  el.style.scrollMarginTop = block === 'start' ? TOP_CLEARANCE : '';
+  el.scrollIntoView({ block, behavior: smooth ? 'smooth' : 'auto' });
+};
 
 /** 卡片有沒有捲到位：頂端在視窗上半部（置中或對齊頂端都成立） */
 const cardInView = (el: HTMLElement): boolean => {
