@@ -102,3 +102,27 @@ describe('聊聊列表的每一列', () => {
     expect(html({ rows: [row()], hasMore: true, moreFailed: true })).toContain('載入失敗，點此重試');
   });
 });
+
+describe('脈絡列（D10、spec B3）：名稱下方、摘要上方一行小字', () => {
+  const orderCard = { type: 'order' as const, id: 'o1', title: 'Switch 寶可夢', order_no: '261028SRPA9T6C' };
+  const productCard = { type: 'product' as const, id: 'p1', title: '【Jy】Switch 任天堂 NS 咚奇剛', order_no: null };
+  it('訂單卡：「訂單 #末 6 碼 · 商品名」；朗讀整列也含這一句', () => {
+    const h = html({ side: 'shop', rows: [row({ counterpart: { kind: 'buyer', deleted: false, nickname: null, short_code: '31B3' }, last_card: orderCard })] });
+    expect(h).toContain('訂單 #PA9T6C · Switch 寶可夢');
+    expect(h).toContain('aria-label="買家 31B3，訂單 #PA9T6C · Switch 寶可夢，最後訊息：有的，兩件，09:02"');
+  });
+  it('商品卡：只有商品名；買家列表看店家時也顯示', () => {
+    const h = html({ rows: [row({ last_card: productCard })] });
+    expect(h).toContain('【Jy】Switch 任天堂 NS 咚奇剛');
+    expect(h).toMatch(/好物小舖[\s\S]*【Jy】Switch 任天堂 NS 咚奇剛[\s\S]*有的，兩件/);
+  });
+  it('單行截斷：脈絡列是 truncate 的小字（text-xs text-muted）', () => {
+    expect(html({ rows: [row({ last_card: productCard })] })).toContain('class="block truncate text-xs text-muted"');
+  });
+  it('沒有卡（null）或舊資料庫沒這個鍵（undefined）：不渲染那一行，版面與原本相同', () => {
+    const withNull = html({ rows: [row({ last_card: null })] });
+    const withoutKey = html({ rows: [row()] });
+    expect(withNull).not.toContain('text-xs text-muted');
+    expect(withNull).toBe(withoutKey);
+  });
+});

@@ -16,7 +16,7 @@ import { NICKNAME_ERROR, maskNickname, validateNickname } from '../../lib/review
 import { NICKNAME_MAX, NICKNAME_MIN } from '../../lib/reviews/types';
 import { useOnline } from '../../lib/useOnline';
 
-/** 個人檔案 #/account/profile（S-12）。sticky：登入在填寫途中過期時，頁面不被換掉，輸入不消失（R-A16） */
+/** 個人檔案 #/account/profile（S-12）。暱稱欄位對使用者叫「顯示名稱」（D12：賣家在聊聊看全名、評價頁遮罩）。sticky：登入在填寫途中過期時，頁面不被換掉，輸入不消失（R-A16） */
 export default function AccountProfile() {
   return (
     <LoginRequired kind="account" sticky>
@@ -108,7 +108,7 @@ function ProfileView() {
       setInput(next ?? '');
       edited.current = false;
       setTouched(false);
-      toast(next ? '已儲存暱稱' : '已清除暱稱');
+      toast(next ? '已儲存顯示名稱' : '已清除顯示名稱');
     } catch (e) {
       const err = toAccountError(e);
       if (err.kind === 'auth') relogin({ kind: 'profile', nickname: input });
@@ -136,7 +136,7 @@ function ProfileView() {
       {reauth && (
         <div className="mt-2 md:mt-3">
           <Banner kind="info" role="status" title="已重新登入" actions={<button type="button" className={btnOutline} onClick={() => setReauth(false)}>知道了</button>}>
-            你填的暱稱還在，請再按一次儲存。
+            你填的顯示名稱還在，請再按一次儲存。
           </Banner>
         </div>
       )}
@@ -163,7 +163,7 @@ function ProfileView() {
 
         {load === 'error' && (
           <Banner
-            kind="error" title="讀不到你的暱稱"
+            kind="error" title="讀不到你的顯示名稱"
             actions={<button type="button" className={btnOutline} aria-disabled={retrying || undefined} onClick={() => { if (!retrying) void retryRead(); }}>{retrying ? '重試中…' : '重試'}</button>}
           >
             請檢查網路後再試一次。
@@ -174,12 +174,12 @@ function ProfileView() {
           <form noValidate onSubmit={e => { e.preventDefault(); void submit(); }}>
             {!online && (
               <div className="mb-4">
-                <Banner kind="warning" role="status" title="目前沒有網路">連上網路後才能修改暱稱。</Banner>
+                <Banner kind="warning" role="status" title="目前沒有網路">連上網路後才能修改顯示名稱。</Banner>
               </div>
             )}
-            <label htmlFor="nick" className={labelCls}>暱稱<span className="font-normal text-muted">（選填）</span></label>
+            <label htmlFor="nick" className={labelCls}>顯示名稱<span className="font-normal text-muted">（選填）</span></label>
             <p id="nick-help" className={helpCls}>
-              {NICKNAME_MIN}–{NICKNAME_MAX} 個字，可用中英文、數字、_ 和 -。寫評價時會先幫你填好；這裡的暱稱不會公開顯示。
+              {NICKNAME_MIN}–{NICKNAME_MAX} 個字，可用中英文、數字、_ 和 -。賣家在聊聊會看到這個名稱；評價頁會遮罩顯示。寫評價時也會先幫你填好。
             </p>
             <div className="relative mt-2">
               <input
@@ -193,7 +193,7 @@ function ProfileView() {
               />
               {input !== '' && !readOnly && (
                 <button
-                  type="button" aria-label="清空暱稱" onClick={clear}
+                  type="button" aria-label="清空顯示名稱" onClick={clear}
                   className="absolute right-0 top-0 flex h-12 w-12 items-center justify-center text-muted focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand"
                 >
                   <CircleX size={20} aria-hidden="true" />
@@ -210,11 +210,11 @@ function ProfileView() {
 
             {saveFailed && (
               <div className="mt-4">
-                <Banner kind="error" title="沒有儲存成功">請檢查網路後再試一次，你填的暱稱還在。</Banner>
+                <Banner kind="error" title="沒有儲存成功">請檢查網路後再試一次，你填的顯示名稱還在。</Banner>
               </div>
             )}
 
-            <p role="status" className="sr-only">{saving ? '正在儲存暱稱' : ''}</p>
+            <p role="status" className="sr-only">{saving ? '正在儲存顯示名稱' : ''}</p>
             <button
               type="submit" aria-disabled={!canSave || undefined} aria-busy={saving || undefined}
               className={`mt-4 ${saving ? savingBtn : canSave ? btnPrimary : btnOutline} ${bigBtn}`}

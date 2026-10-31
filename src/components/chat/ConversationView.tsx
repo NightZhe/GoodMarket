@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import ActionSheet, { type SheetAction } from './ActionSheet';
 import ConversationScreen, { type ScreenHandlers, type ScreenModel } from './ConversationScreen';
+import NicknamePromptSheet from './NicknamePromptSheet';
 import LeaveDialog from '../import/LeaveDialog';
 import PhotoLightbox from '../reviews/PhotoLightbox';
 import { useToast } from '../Toast';
@@ -9,6 +10,8 @@ import { useOnline } from '../../lib/useOnline';
 import { useConversation } from '../../lib/chat/useConversation';
 import { useSignedUrls } from '../../lib/chat/useSignedUrls';
 import { browserStore, dismissRules, rulesDismissed, rulesVisible } from '../../lib/chat/rules';
+import { dismissNicknamePrompt, nicknamePromptDismissed, shouldPromptNickname } from '../../lib/chat/nicknamePrompt';
+import { fetchNickname } from '../../lib/account/profile';
 import type { OpenTarget } from '../../lib/chat/outbox';
 import type { ChatCard, ChatSide } from '../../lib/chat/types';
 import type { DisplayMessage } from '../../lib/chat/outbox';
@@ -41,7 +44,16 @@ type Dialog = null | 'menu' | 'confirm-block';
  * 這裡負責把兩者接起來，加上選單、封鎖確認、全螢幕看圖、規則提示的本機記憶與各種 toast。
  */
 export default function ConversationView(p: Props) {
-  const convo = useConversation(p.side, p.target, p.onCreated);
+  const [nickPrompt, setNickPrompt] = useState(false);
+  // 買家送出第一則成功後（D11）：沒略過過才去查一次顯示名稱；沒有名稱就彈面板。查不到（離線、逾時）就不彈，不打擾送訊息
+  const onFirstSent = useCallback(() => {
+    if (!shouldPromptNickname({ side: p.side, dismissed: nicknamePromptDismissed(browserStore()), nickname: undefined })) return;
+    void fetchNickname().then(
+      nickname => { if (shouldPromptNickname({ side: p.side, dismissed: false, nickname })) setNickPrompt(true); },
+      () => undefined,
+    );
+  }, [p.side]);
+  const convo = useConversation(p.side, p.target, p.onCreated, onFirstSent);
   const online = useOnline();
   const toast = useToast();
   const { openLogin } = useAuth();
@@ -138,6 +150,12 @@ export default function ConversationView(p: Props) {
               description="封鎖後，你和對方都無法在這個對話傳送訊息。既有的訂單不受影響，隨時可以解除封鎖。"
               stayLabel="取消" leaveLabel="封鎖" busy={busy} busyLabel="封鎖中…"
               onStay={closeDialog} onLeave={() => { void confirmBlock(); }}
+            />
+          )}
+          {nickPrompt && (
+            <NicknamePromptSheet
+              onSaved={() => { setNickPrompt(false); toast('已儲存顯示名稱', 'info'); }}
+              onSkip={() => { dismissNicknamePrompt(browserStore()); setNickPrompt(false); }}
             />
           )}
           {viewer && (

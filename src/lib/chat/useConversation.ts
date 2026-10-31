@@ -26,7 +26,7 @@ export interface OutgoingPhoto { blob: Blob; previewUrl: string }
  * 送出（本機先顯示「傳送中」，client id 冪等，失敗可重送）→ 封鎖／隱藏。
  * 呼叫端用 key={target} 讓換對話時整個重來，所以 side／target 在這個 hook 的生命週期內不變
  */
-export function useConversation(side: ChatSide, target: OpenTarget, onCreated?: (conversationId: string) => void) {
+export function useConversation(side: ChatSide, target: OpenTarget, onCreated?: (conversationId: string) => void, onFirstSent?: () => void) {
   const { user, authReady } = useStore();
   // 用 id 當依賴：token 更新（例如回前景）會換 user 物件，但不需要重讀整條對話（B2）
   const userId = user?.id ?? null;
@@ -35,6 +35,10 @@ export function useConversation(side: ChatSide, target: OpenTarget, onCreated?: 
   const targetRef = useRef(target);
   const onCreatedRef = useRef(onCreated);
   onCreatedRef.current = onCreated;
+  const onFirstSentRef = useRef(onFirstSent);
+  onFirstSentRef.current = onFirstSent;
+  /** 「我在這條對話的第一則」已經通知過（一條對話只通知一次；顯示名稱邀請 D11 用） */
+  const firstSentNotified = useRef(false);
   /** 這次是由第一則訊息建立的對話，網址還停在「新對話」 */
   const createdHere = useRef(false);
   const mounted = useRef(true);
@@ -275,6 +279,8 @@ export function useConversation(side: ChatSide, target: OpenTarget, onCreated?: 
         uploaded.current.set(entry.clientId, slots);
         await Promise.all(slots.map((s, i) => uploadChatImage(s.path, files[i])));
       }
+      // 送出前這條對話還沒有任何一則自己的訊息 → 這一則是我的第一則（已載入的最新一頁沒有，就當沒有）
+      const firstOwn = !serverRef.current.some(x => x.mine);
       const msg = await chatSend({ ...entry.args, ...(files.length > 0 && slots ? { p_photos: slots.map(s => s.path) } : {}) });
       if (!convIdRef.current) {
         applyConvId(msg.conversation_id);
@@ -285,6 +291,10 @@ export function useConversation(side: ChatSide, target: OpenTarget, onCreated?: 
       blobs.current.delete(entry.clientId);
       uploaded.current.delete(entry.clientId);
       entries.current.delete(entry.clientId);
+      if (firstOwn && !firstSentNotified.current && mounted.current) {
+        firstSentNotified.current = true;
+        onFirstSentRef.current?.();
+      }
       // 第一則建立了對話：全部送完（沒有排隊中或失敗待重送的）再把網址換成這條對話，重新整理才不會又長出待送出卡片；
       // 還有沒送完的就等它們，免得換頁重載把傳送中／失敗的狀態弄丟
       if (createdHere.current && entries.current.size === 0 && mounted.current) {

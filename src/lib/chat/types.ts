@@ -57,6 +57,14 @@ export interface LastMessage {
   at: string;
 }
 
+/** 列表每列的「最近一張卡」摘要（脈絡列用，D10）：只有畫面要的四個鍵；商品卡的 order_no 是 null */
+export interface LastCard {
+  type: CardType;
+  id: string;
+  title: string;
+  order_no: string | null;
+}
+
 export interface ConversationRow {
   conversation_id: string;
   counterpart: Counterpart;
@@ -64,6 +72,8 @@ export interface ConversationRow {
   last_message_at: string;
   unread_count: number;
   blocked_by_me: boolean;
+  /** 這條對話最近一則帶卡片訊息的卡；沒有卡片是 null。舊資料庫（沒套 20261101120000_chat_last_card）不回這個鍵＝undefined，前端一律當 null */
+  last_card?: LastCard | null;
 }
 
 export interface ListCursor { at: string; id: string }
