@@ -3,7 +3,7 @@
 從 `CLAUDE.md` 搬來（2026-10-25）。新功能上線後更新本檔，不要寫回 `CLAUDE.md`。
 各功能的決策、規格、驗收報告、上線紀錄都在 `.work/<功能>/`（不進版控）。
 
-## 目前狀態（2026-10-31 更新）
+## 目前狀態（2026-11-01 更新）
 
 已上線：商品評價（含照片、賣家回覆）；買家已取貨自動完成＋訂單狀態鎖定；**買家帳號**（遊客只能瀏覽，
 加購物車／下單／訂單／評價都要 Google 或 Apple 登入；購物車與訂單綁帳號；舊訂單憑證機制已移除）；
@@ -110,6 +110,13 @@ Edge Functions `payment-*`（11 支）與 `payout-reconcile` 改由 secret `ECPA
 正式站**沒有綠界 secrets、`payment-*`／`payout-reconcile` 函式未部署**：店主有撥款帳號的店在結帳頁會出現「線上付款」，但按下去會失敗；`payment_auths` 目前 0 列。止血一個指令 `tools/switch-off.sql`（關掉後新結帳不能線上付款、待付款單 30 分鐘逾時作廢、已付款與退款不受影響）。
 紀錄 `prod-apply-log.md`；手冊 `prod-runbook.md`（§7 secrets、§8 部署函式、§9 前置表與開關、§10 每日查詢、§11 還原含 `tools/rollback.sql`）；每日看 `tools/collect-outstanding.sql`（代收未撥，撥款的輸入）、`tools/metrics/c-m6`／`c-m7.sql`、`tools/switch-status.sql`；驗收 `qa-report.md`，隔離實例整合測試 `t-local-tests-output.txt`（64 PASS）。
 待辦：刪帳號／刪店工具不認綠界 migration 的外鍵（既有，本 migration 沒加新表或新外鍵，不用改，但舊問題仍在）；`.work/account-payment-methods/decisions.md` 可加一行指向 `platform-collect/decisions.md`。
+
+**合夥人回饋 10/31 三張工單**（`.work/partner-feedback-1031/`：合夥人原話與拍板 `decisions.md` D1～D16、規格 `spec.md`；三個平行子 session，各自 worktree 與 PR，依 A → C → B 合併，**2026-11-01 全部上線**）：
+- **A 聊聊訂單卡片直達訂單**（PR #31，merge `56452a2`）：聊聊裡的訂單卡改帶訂單 id（買家 `/orders?order=<id>`、賣家 `/seller/orders?order=<id>`），訂單頁分頁與網址同步（`?tab=` 認所有分頁），進頁時切到該筆**目前**狀態的分頁、捲到並展開、短暫高亮；找不到就留在預設分頁＋Toast。合夥人踩到的「出貨後點卡片落在空白的待出貨」消失。
+- **C 買家導覽統一**（PR #30，merge `14e6d44`）：桌機（≥768、非 App）右側固定浮動軌六格「首頁／逛逛／購物車／訂單／聊聊／我的」（聊聊未讀、購物車件數角標；結帳／付款／綁卡／銀行流程頁不顯示），頂部右上只剩「賣家中心」（未登入「登入」），大頁首購物車圓鈕拿掉，Logo 全站是回首頁的連結；手機底部五格改「首頁／購物車／訂單／聊聊／我的」（逛逛拿掉、搜尋頁從首頁搜尋框進），購物車頁顯示底部膠囊。
+- **B 聊聊身分**（PR #32，merge `fa92d13`，含 migration）：拍板**不露帳號**（D4）。`chat_list` 多回 `last_card`（最近一張卡的 type／id／商品名／order_no），列表每列與對話頁標題下多一行脈絡列「訂單 #末 6 碼 · 商品名」／「商品名」（D10）；買家送出第一則訊息成功後、沒有顯示名稱時彈一次面板邀請設定，略過寫 `localStorage['goodmarket.nicknamePromptDismissed']`（D11）；暱稱改稱「顯示名稱」：聊聊對店家全名、評價頁遮罩（兩處行為不變），個人檔案頁與隱私政策文案改正、資料庫 comment 改正（D12），隱私政策生效日改 2026/11/01。
+  正式站已套 `20261101120000_chat_last_card.sql`（precheck 全 true、verify all_ok，紀錄 `prod-apply-log.md`；手冊 `prod-runbook-B.md`、還原 `tools/rollback-B.sql`）。小q 三輪驗收 `qa-report-B.md`（第一輪抓到「新對話送第一則後換網址、面板消失」的 bug，已修）。
+  已知未做（候補）：「此買家的訂單 N 筆」（D4 第 3 點）、單筆訂單詳情頁、我的訂單不顯示收件地址（D2）；全站買賣雙方流暢度走查另開一批由小u 做（D1）。
 
 下一個該做的：完成 §9 前置 P-1～P-9 → 照 `prod-runbook.md` §7 設 secrets（先決定 `ECPAY_ACCOUNT_TYPE`）→ §8 部署 12 支函式與排程 → P-7 實刷（自己的卡、兩店各一筆、再退款）。之後是對帳第二刀（本站商店編號的撥款對帳，OUT-9）。
 
