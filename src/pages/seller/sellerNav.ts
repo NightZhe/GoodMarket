@@ -53,7 +53,7 @@ export function sellerTabRoutes(pathname: string): SellerTabRoute[] {
 
 /**
  * 自己有 SubHeader「‹ 上一層」返回的賣家頁（物流兩張表單、收款帳戶）。頂部懸浮的「‹ 首頁」在這幾頁不出現（C2＝a），
- * 否則同畫面兩個返回；右上四顆照常。日後新增有 SubHeader 的賣家頁要加進來。
+ * 否則同畫面兩個返回；右上那組圖示照常。日後新增有 SubHeader 的賣家頁要加進來。
  */
 export const hasOwnBackHeader = (pathname: string): boolean =>
   /^\/seller\/logistics\/(stores|address)(\/|$)/.test(pathname) || /^\/seller\/payout\/?$/.test(pathname);
