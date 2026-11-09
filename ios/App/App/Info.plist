@@ -39,6 +39,10 @@
 	<false/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>好物集會讀取你在聊聊裡選擇的照片，傳給店家或買家。不會存取其他照片。</string>
+	<key>NSCameraUsageDescription</key>
+	<string>好物集目前不會開啟相機；此說明為聊聊的照片選擇元件所需。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>好物集目前不會把照片存進你的相簿；此說明為聊聊的照片選擇元件所需。</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
