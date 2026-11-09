@@ -78,7 +78,7 @@ App 內 Google／Apple 登入走系統瀏覽器視圖＋自訂 scheme 回跳（`
 封存／上傳流程：worktree 切最新 main → `npm run build && npx cap sync` → `xcodebuild archive`（Release、Team F7WL42HXND、`-allowProvisioningUpdates`）→ `-exportArchive`（method app-store-connect、destination upload、`manageAppVersionAndBuildNumber=true`）。
 **2026-11-09 起改跑 `scripts/archive-ios.sh`**（同一套流程寫成腳本：擋 `.env.local`、要求 `.env` 是正式站、`npm run build && npx cap sync`、還原 symlink worktree 被 cap sync 改掉的 Package.swift／settings.gradle 路徑、驗 bundle 無 `127.0.0.1:54321`／有正式站網域與 sitekey／外掛含 camera、`xcodebuild archive`；`--upload` 才 `-exportArchive`，產物在 `ios/App/output/<時間>/`，附 `source-commit.txt`）。
 Xcode 專案補了共用 scheme `App.xcscheme`（之前只有 Xcode 開過才有使用者 scheme，乾淨 worktree 跑 `xcodebuild -scheme App` 會找不到）。
-**TestFlight build 6 待封存**（main 自 build 5 的來源 67fbfe3 之後多 69 個 commit：聊聊 PR #23、賣家中心頂部 #25、銀行帳號 #26、平台收款 #28、合夥人回饋 #30～#32、頂欄銀行入口 #34；第一次帶入 `@capacitor/camera`）。
+**TestFlight build 6 已上傳**（2026-11-09，封存自 main `57d6f5c`，worktree 內 `scripts/archive-ios.sh --upload` 一次跑完建置、驗證、封存、上傳，ASC 自動配號 6；含 build 5 來源 67fbfe3 之後 71 個 commit：聊聊 PR #23、賣家中心頂部 #25、銀行帳號 #26、平台收款 #28、合夥人回饋 #30～#32、頂欄銀行入口 #34、封存腳本與 camera 用途說明 #35；**第一次帶入 `@capacitor/camera`**；上傳前腳本已驗 bundle 只含正式站網域與 Turnstile 正式 sitekey、無本機位址、外掛清單含 camera）。**封存前要手動補 sitekey**：正式 `VITE_TURNSTILE_SITEKEY` 只在 GitHub secret（CI／deploy 注入），主 checkout 的 `.env` 沒有，複製到 worktree 後腳本會停在「.env 缺 VITE_TURNSTILE_SITEKEY」；值是公開的，從正式站 bundle（`curl -s https://nightzhe.github.io/GoodMarket/` 找到 assets js 再 grep `0x4[A-Za-z0-9_-]\{20,\}`）或 Cloudflare 儀表板 → Turnstile 拿，`echo 'VITE_TURNSTILE_SITEKEY=<值>' >> .env` 再跑。真機待驗：聊聊相簿選圖與權限提示文字、底部五格導覽（首頁／購物車／訂單／聊聊／我的）、銀行帳號頁、結帳的線上付款判斷、Apple 登入（`@capacitor-community/apple-sign-in` 7.1.0 在 Capacitor 8 下 cap sync 有警告，build 5 起同組合）。
 Info.plist 補 `NSCameraUsageDescription`／`NSPhotoLibraryAddUsageDescription`（App 只用相簿選擇器，但 camera 外掛的二進位有呼叫 `AVCaptureDevice`，缺鍵 ASC 上傳會回 ITMS-90683）。真機要驗：聊聊相簿選圖與權限提示文字、以及 build 5 之後所有上線功能在 App 內的表現。
 Xcode 的 Apple ID 階段過期時上傳會回 DVTPortalServiceErrorDomain 1100，使用者在 Xcode Settings → Apple Accounts 重新登入即可。夥伴測試由使用者在 App Store Connect 加內部測試者。
 **原生整合第一批**（2026-10-26，分支 `claude/app-native-batch1`，`decisions.md` 末節「2026-10-26 原生整合第一批」）：iOS 的 Apple 登入改走原生 Sign in with Apple（`@capacitor-community/apple-sign-in` 7.1.0 → `signInWithIdToken`，`src/lib/native/auth.ts`／`appleSignIn.ts`；Xcode 專案加 `App.entitlements`；Google 與 Android 仍走瀏覽器視圖）、
@@ -94,7 +94,7 @@ Supabase Realtime **Broadcast from Database** 私有頻道 `conversation:<id>`�
 伺服器端雙向封鎖（被封鎖方只看到「無法傳送」、拿不到封鎖狀態）、買家隱藏對話；**不做**檢舉、站外聯絡方式過濾、推播、Email、已讀回條、回覆率、相機（使用者決策 D20／D27，Apple 1.2 風險已知）。新前端對未升級資料庫降級（聊聊頁「暫時無法使用」、入口鈕隱藏）。
 新增 `@capacitor/camera`（App 內相簿選擇器、`NSPhotoLibraryUsageDescription`），`ios/`／`android/` 有變更，下一個 TestFlight build 才帶入。隱私政策新增「7. 聊聊」、第 5 節補句、生效日常數 `PRIVACY_EFFECTIVE` 寫死 2026/10/29（**merge 當天若不是這天要先改**）。
 規格 `spec.md` v0.4、決策 `decisions.md` D1～D30＋N1～N3、介面 `interface-chat.md`、設計 `design-chat.md`、隔離實例整合測試 `t-local-tests.*`（345 PASS）、小q `qa-report.md`（47 項 43 PASS、擋上線 0）、`prod-runbook.md`（30 步＋回滾，第 13 節 10 項要使用者在後台確認）、`tools/metrics/ch-m1～m3.sql`＋`ops-check.sql`。
-上線後待做：下一個 TestFlight 帶入 camera 外掛；`metrics-log.md` 第 1 週回看。
+上線後待做：~~下一個 TestFlight 帶入 camera 外掛~~（build 6 已帶入，2026-11-09）；`metrics-log.md` 第 1 週回看。
 已知待辦：刪帳號／刪店工具不認綠界 migration 的外鍵（既有，與聊聊無關，另開工單，要在有人送刪帳號申請前修好）；遊客登入回來自動進對話（AC-M1）本機無法驗，待真機；真機 VoiceOver／兩支真機對聊待使用者。
 
 **賣家中心頂部改版**（2026-10-30 上線，PR #25）：拿掉白色頂欄，改安全區色帶＋懸浮「‹ 首頁」與右上玻璃膠囊；登出改二次確認、只登出這台裝置。
