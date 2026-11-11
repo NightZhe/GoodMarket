@@ -13,6 +13,7 @@ import Photo from '../../components/Photo';
 import PricePill from '../../components/PricePill';
 import SectionHeader from '../../components/SectionHeader';
 import Shelf from '../../components/Shelf';
+import { SectionBoundary } from '../../components/ErrorBoundary';
 import { pillButton } from '../../components/pillButton';
 import { RevealFooter } from '../../components/RevealFooter';
 import { useInfiniteReveal } from '../../components/useInfiniteReveal';
@@ -93,11 +94,13 @@ export default function Home() {
       <SectionHeader title="全部商品" />
       {/* 欄數跟著內容寬走（H11 避免斷點）：iPhone 2、外螢幕直 2／橫 3、內螢幕直 3／橫 4、桌機 1280 6 欄。
           容器查詢要掛在父層：格子本身窄於 15rem（200% 縮放）時改單欄，價格才放得下 */}
-      <div className="@container">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-x-3 gap-y-5 px-5 @max-[15rem]:grid-cols-1">
-          {reveal.visible.map(p => <ProductCard key={p.id} product={p} />)}
+      <SectionBoundary name="HomeGrid">
+        <div className="@container">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-x-3 gap-y-5 px-5 @max-[15rem]:grid-cols-1">
+            {reveal.visible.map(p => <ProductCard key={p.id} product={p} />)}
+          </div>
         </div>
-      </div>
+      </SectionBoundary>
       <RevealFooter reveal={reveal} />
     </div>
   );

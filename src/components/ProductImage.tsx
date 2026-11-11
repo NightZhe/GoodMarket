@@ -10,6 +10,10 @@ const emojiSize = { sm: 'text-2xl', md: 'text-6xl', lg: 'text-[9rem]' };
 
 /** 支援一般圖片網址／data URL，以及示範資料用的 "art:emoji:from:to" 插圖 */
 export default function ProductImage({ src, alt, className = '', size = 'md', onError }: Props) {
+  // 沒有圖片（空陣列取第一張會是 undefined）：只留灰底占位，不讀字串方法
+  if (typeof src !== 'string' || src === '') {
+    return <div role="img" aria-label={alt} className={`aspect-square bg-canvas ${className}`} />;
+  }
   if (src.startsWith('art:')) {
     const [, emoji, from, to] = src.split(':');
     return (
@@ -23,5 +27,5 @@ export default function ProductImage({ src, alt, className = '', size = 'md', on
       </div>
     );
   }
-  return <img src={src} alt={alt} loading="lazy" onError={onError} className={`aspect-square object-cover ${className}`} />;
+  return <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={onError} className={`aspect-square object-cover ${className}`} />;
 }
