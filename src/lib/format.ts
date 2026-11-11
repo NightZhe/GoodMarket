@@ -20,8 +20,8 @@ export const dayText = (iso: string) =>
   new Date(iso).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
 
 /** 一件商品對外顯示的「最低價那個規格」：卡片價格與折扣都以它為準 */
-export const cheapestVariant = <T extends { price: number }>(variants: T[]) =>
-  variants.reduce((min, v) => (v.price < min.price ? v : min), variants[0]);
+export const cheapestVariant = <T extends { price: number }>(variants: T[]): T | undefined =>
+  variants.length === 0 ? undefined : variants.reduce((min, v) => (v.price < min.price ? v : min), variants[0]);
 
 /** 規格的折扣百分比；沒有原價或原價不合理就回 0 */
 export const discountOf = (v?: { price: number; originalPrice?: number }) =>

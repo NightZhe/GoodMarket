@@ -18,6 +18,8 @@ import { settleReload } from './reloadPolicy';
 import { afterStaleRead, nextShopOrdersState, type ShopOrdersEvent } from './shopOrdersState';
 import { useAccountOrders, type OrdersState } from './useAccountOrders';
 import type { AccountErrorKind } from '../lib/account/errors';
+import { parseProductRows, parseVariants } from '../lib/products/parseRow';
+import { buildProductRow } from '../lib/products/buildRow';
 import { ImportCallError, toCallError } from '../lib/import/errors';
 import { UPLOAD_TIMEOUT_MS, abortError, withTimeout } from '../lib/import/images';
 import type { ImportApi } from '../lib/import/runner';
@@ -42,13 +44,6 @@ export const shippingFor = (subtotal: number, products: (Product | undefined)[])
 const toShop = (r: ShopRow): Shop => ({
   id: r.id, name: r.name, avatar: r.avatar, description: r.description,
   location: r.location, rating: Number(r.rating), joinedAt: r.created_at, ownerId: r.owner_id,
-});
-
-const toProduct = (r: ProductRow): Product => ({
-  id: r.id, shopId: r.shop_id, title: r.title, description: r.description,
-  categoryId: r.category_id as Product['categoryId'], images: r.images, variants: r.variants,
-  sold: r.sold, rating: Number(r.rating),
-  location: r.location, freeShipping: r.free_shipping, status: r.status, createdAt: r.created_at,
 });
 
 export interface CheckoutInput {
@@ -270,7 +265,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     setLoadError(null);
     setShops((shopRes.data as ShopRow[]).map(toShop));
-    setProducts((productRes.data as ProductRow[]).map(toProduct));
+    setProducts(parseProductRows(productRes.data as unknown[]));
     setLoading(false);
   }, []);
 
@@ -433,12 +428,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveProduct = useCallback(async (product: Product) => {
     if (!myShop) throw new Error('請先建立商店');
-    const row = {
-      shop_id: myShop.id, title: product.title, description: product.description,
-      category_id: product.categoryId, images: product.images, variants: product.variants,
-      free_shipping: product.freeShipping,
-      location: myShop.location, status: product.status,
-    };
+    const row = buildProductRow(product, myShop);
     // 新商品的 id 是前端暫時產生的，交給資料庫發 uuid
     const isNew = !products.some(p => p.id === product.id);
     const { error } = isNew
@@ -455,7 +445,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const syncProductSnapshot = useCallback((productId: string, variants: Product['variants'], status: Product['status']) => {
-    setProducts(prev => prev.map(p => (p.id === productId ? { ...p, variants, status } : p)));
+    const checked = parseVariants(variants);
+    if (!checked) {
+      console.warn('商品規格形狀不符，未更新畫面資料', productId);
+      return;
+    }
+    setProducts(prev => prev.map(p => (p.id === productId ? { ...p, variants: checked, status } : p)));
   }, []);
 
   const productsRef = useRef(products);
@@ -483,8 +478,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       result = settleConflict(result, changes, prevStatus) ?? result;
     }
     if (result.outcome === 'ok') {
-      const ok = result;
-      setProducts(prev => prev.map(p => (p.id === productId ? { ...p, variants: ok.variants, status: ok.status } : p)));
+      const checked = parseVariants(result.variants);
+      const status = result.status;
+      if (checked) setProducts(prev => prev.map(p => (p.id === productId ? { ...p, variants: checked, status } : p)));
+      else console.warn('商品規格形狀不符，未更新畫面資料', productId);
     }
     return result;
   }, [handleAuthLost]);

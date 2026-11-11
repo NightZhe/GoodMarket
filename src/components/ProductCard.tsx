@@ -6,6 +6,7 @@ import { money, soldText } from '../lib/format';
 import { ratingText } from '../lib/reviews/format';
 import { useReviews } from '../store/ReviewsContext';
 import { useProductView } from './useProductView';
+import { ItemBoundary } from './ErrorBoundary';
 
 type Variant = 'grid' | 'shelf';
 
@@ -24,7 +25,12 @@ const photoPress =
 const origShowAt = (text: string) =>
   text.length <= 6 ? '@min-[3.5rem]:inline' : text.length === 7 ? '@min-[3.75rem]:inline' : '@min-[4.25rem]:inline';
 
-export default function ProductCard({ product, variant = 'grid' }: { product: Product; variant?: Variant }) {
+/** 單張卡片外包一層：這張的資料有問題只會少這一張，不影響同列其他卡片 */
+export default function ProductCard(props: { product: Product; variant?: Variant }) {
+  return <ItemBoundary name="ProductCard"><ProductCardInner {...props} /></ItemBoundary>;
+}
+
+function ProductCardInner({ product, variant = 'grid' }: { product: Product; variant?: Variant }) {
   const { price, originalPrice, soldOut, label, shopLine } = useProductView(product);
   // 評分來自真實評價；沒有評價（或還沒載入）就不顯示星星，不會閃一個假的分數
   const stat = useReviews().productStat(product.id);

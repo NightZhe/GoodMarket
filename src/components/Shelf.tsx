@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { SectionBoundary } from './ErrorBoundary';
 
 interface Props {
   children: ReactNode;
@@ -12,6 +13,7 @@ interface Props {
  */
 export default function Shelf({ children, ariaLabel, className = '' }: Props) {
   return (
+    <SectionBoundary name="Shelf">
     <div
       role={ariaLabel ? 'region' : undefined}
       aria-label={ariaLabel}
@@ -19,5 +21,6 @@ export default function Shelf({ children, ariaLabel, className = '' }: Props) {
     >
       {children}
     </div>
+    </SectionBoundary>
   );
 }

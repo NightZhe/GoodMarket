@@ -5,6 +5,7 @@ import { useStore } from '../../store/StoreContext';
 import ChatEntryButton from '../../components/chat/ChatEntryButton';
 import { newChatPath } from '../../lib/chat/nav';
 import ProductCard from '../../components/ProductCard';
+import { SectionBoundary } from '../../components/ErrorBoundary';
 import EmptyState from '../../components/EmptyState';
 import { pillButton } from '../../components/pillButton';
 import LetterAvatar from '../../components/LetterAvatar';
@@ -87,11 +88,13 @@ function ShopView({ shop }: { shop: Shop }) {
       ) : list.length === 0 ? (
         <EmptyState title="這家店還沒有上架商品" />
       ) : (
-        <div className="@container">
-          <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 @max-[15rem]:grid-cols-1 md:grid-cols-4 md:px-0 lg:grid-cols-5">
-            {list.map(p => <ProductCard key={p.id} product={p} />)}
+        <SectionBoundary name="ShopGrid">
+          <div className="@container">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-5 pb-4 @max-[15rem]:grid-cols-1 md:grid-cols-4 md:px-0 lg:grid-cols-5">
+              {list.map(p => <ProductCard key={p.id} product={p} />)}
+            </div>
           </div>
-        </div>
+        </SectionBoundary>
       )}
       {report.sheet}
       {blockActions.dialog}

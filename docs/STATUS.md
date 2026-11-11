@@ -3,7 +3,7 @@
 從 `CLAUDE.md` 搬來（2026-10-25）。新功能上線後更新本檔，不要寫回 `CLAUDE.md`。
 各功能的決策、規格、驗收報告、上線紀錄都在 `.work/<功能>/`（不進版控）。
 
-## 目前狀態（2026-11-01 更新）
+## 目前狀態（2026-11-12 更新）
 
 已上線：商品評價（含照片、賣家回覆）；買家已取貨自動完成＋訂單狀態鎖定；**買家帳號**（遊客只能瀏覽，
 加購物車／下單／訂單／評價都要 Google 或 Apple 登入；購物車與訂單綁帳號；舊訂單憑證機制已移除）；
@@ -12,6 +12,7 @@
 庫存全 0 自動下架、留 `product_change_log` 異動紀錄；列表斷點改 1024；上下架改只寫 status）。
 **快改補貨自動上架**（2026-10-23，`list-quick-edit/spec-auto-relist.md`、D-5 修訂與 D-11～D-14）：只有被快改自動下架（`products.auto_hidden=true`，由觸發器維護，status 經任何途徑變動就清掉）的商品，快改把任一規格從 0 改成 > 0 時同交易自動上架，回傳 `autoRelisted`，提示「已更新，已重新上架」；手動下架補貨不上架；編輯頁「儲存但不上架」不清旗標（D-14）。
 正式站**已套** `20261023130000_quick_edit_auto_relist.sql`（2026-10-23，precheck／v1／v2 all_ok，`prod-apply-log.md` 第 9～12 步）；前端在 PR #4，merge 後部署。runbook `prod-runbook-auto-relist.md`，驗收 `qa-report-auto-relist.md`。
+**products 寫入欄位收斂與資料形狀檢查**（2026-11-12，`products-write-hardening/`，PR #37）：正式站**已套** `20261111120000_products_write_hardening.sql`（precheck 0 筆、verify 四項皆 true，輸出在 `apply-2026-11-12/`）。前端經由一般角色只能寫九欄（shop_id、title、description、category_id、images、variants、free_shipping、location、status）＋刪除，其餘欄位由資料庫函式維護；新增五條 CHECK（images／variants 形狀、description ≤ 10000、location ≤ 20、category_id ≤ 30；庫存的資料庫上限是 integer 上限，不是表單的 999,999）。前端加商品資料防禦性解析（`src/lib/products/parseRow.ts`）與 Error Boundary。runbook `prod-runbook.md`（含 rollback），驗收 `qa-report.md`，待決事項 `decisions.md`。
 每個功能的決策、規格、驗收報告、上線紀錄都在 `.work/<功能>/`（不進版控）：
 `product-reviews/`、`picked-up-complete/`、`buyer-auth/`、`list-quick-edit/`（含 `prod-runbook.md`、`prod-apply-log.md`、`tools/metrics/` 成功指標查詢）。
 **帳號頁「我的帳戶」＋個人檔案（暱稱，預填評價）＋地址簿**（2026-10-18 晚間上線，`account-payment-methods/`：縣市／鄉鎮市區下拉＋郵遞區號自動帶出、每帳號最多 10 筆、唯一預設；

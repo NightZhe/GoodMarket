@@ -4,9 +4,14 @@ import type { Product } from '../types';
 import Photo from './Photo';
 import PricePill from './PricePill';
 import { useProductView } from './useProductView';
+import { ItemBoundary, SectionBoundary } from './ErrorBoundary';
 
 /** 列表列：縮圖＋標題＋「店名・地點」＋價格膠囊。放在 ProductRowList 裡 */
-export default function ProductRow({ product }: { product: Product }) {
+export default function ProductRow(props: { product: Product }) {
+  return <ItemBoundary name="ProductRow"><ProductRowInner {...props} /></ItemBoundary>;
+}
+
+function ProductRowInner({ product }: { product: Product }) {
   const { price, soldOut, label, shopLine } = useProductView(product);
 
   return (
@@ -37,5 +42,5 @@ export default function ProductRow({ product }: { product: Product }) {
 
 /** 列表列的 `<ul>` 外框；左 padding 20，列右側貼齊螢幕邊 */
 export function ProductRowList({ children }: { children: ReactNode }) {
-  return <ul className="pl-5">{children}</ul>;
+  return <SectionBoundary name="ProductRowList"><ul className="pl-5">{children}</ul></SectionBoundary>;
 }

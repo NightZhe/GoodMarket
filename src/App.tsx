@@ -8,6 +8,7 @@ import AuthBoot from './components/auth/AuthBoot';
 import PendingRunner from './components/auth/PendingRunner';
 import { isConfigured } from './lib/supabase';
 import SetupNotice from './pages/SetupNotice';
+import { CrashScreen } from './components/ErrorBoundary';
 import { ToastProvider } from './components/Toast';
 import ScrollToTop from './components/ScrollToTop';
 import BuyerLayout from './pages/buyer/BuyerLayout';
@@ -79,7 +80,8 @@ function PageLoading() {
 // GitHub Pages 是純靜態主機，沒有 SPA fallback，所以用 hash（網址會是 /#/product/p001）
 // 路由器要等登入回跳處理完才建立（見 AuthBoot）：它建立時才讀網址的 hash，那時 hash 已經是要回去的那一頁
 const createRouter = () => createHashRouter(createRoutesFromElements(
-  <Route element={<Root />}>
+  // errorElement：data router 會自己接住路由內的 render 例外，不設的話會顯示英文預設畫面
+  <Route element={<Root />} errorElement={<CrashScreen />}>
     {/* 買家前台 */}
     <Route element={<BuyerLayout />}>
       <Route index element={<Home />} />

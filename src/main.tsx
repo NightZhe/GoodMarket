@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { RootBoundary } from './components/ErrorBoundary';
 import './index.css';
 import './native.css';
 import { isNative } from './lib/native/platform';
@@ -13,6 +14,8 @@ document.addEventListener('touchstart', () => {}, { passive: true });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <RootBoundary>
+      <App />
+    </RootBoundary>
   </StrictMode>,
 );
