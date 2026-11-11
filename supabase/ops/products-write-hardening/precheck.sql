@@ -52,17 +52,17 @@ issues(id, shop_id, reason) as (
   union all
   select id, shop_id, 'variant_price_invalid' from ve
    where is_obj and not case when jsonb_typeof(eo->'price') = 'number'
-            then (eo->>'price')::numeric = trunc((eo->>'price')::numeric) and (eo->>'price')::numeric between 1 and 499999
+            then (eo->>'price') ~ '^[0-9]{1,10}$' and (eo->>'price')::numeric between 1 and 499999
             else false end
   union all
   select id, shop_id, 'variant_stock_invalid' from ve
    where is_obj and not case when jsonb_typeof(eo->'stock') = 'number'
-            then (eo->>'stock')::numeric = trunc((eo->>'stock')::numeric) and (eo->>'stock')::numeric between 0 and 2147483647
+            then (eo->>'stock') ~ '^[0-9]{1,10}$' and (eo->>'stock')::numeric between 0 and 2147483647
             else false end
   union all
   select id, shop_id, 'variant_original_price_invalid' from ve
    where is_obj and eo ? 'originalPrice' and not case when jsonb_typeof(eo->'originalPrice') = 'number'
-            then (eo->>'originalPrice')::numeric = trunc((eo->>'originalPrice')::numeric) and (eo->>'originalPrice')::numeric between 0 and 499999
+            then (eo->>'originalPrice') ~ '^[0-9]{1,10}$' and (eo->>'originalPrice')::numeric between 0 and 499999
             else false end
   union all
   select id, shop_id, 'variant_source_id_invalid' from ve

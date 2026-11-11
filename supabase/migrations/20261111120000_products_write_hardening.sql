@@ -11,7 +11,9 @@
 --          各欄型別與範圍固定，同一商品內 id 不重複
 --        · products_images_valid(jsonb)：陣列、0–9 個元素、每個元素是 1–2048 字、以 https:// http:// 或 art: 開頭的字串（取代 products_images_max_check）
 --        · description ≤ 10,000 字、location ≤ 20 字、category_id ≤ 30 字
---      所有寫入者（含 SECURITY DEFINER 函式）都受 CHECK 約束，所以上限取「所有合法寫入者中最寬的」。
+--      所有寫入者（含 SECURITY DEFINER 函式）都受 CHECK 約束，所以上限取「所有合法寫入者中最寬的」：
+--        規格數與規格名稱長度，表單與匯入都沒有上限，這裡取 200（正式站現有最大值 16 個、31 字）；
+--        庫存取匯入允許的 2,147,483,647（表單的 999,999 是輸入框上限）；originalPrice 下限 0，因為快改會原樣保留既有的值。
 --   3. 約束先以 NOT VALID 加上（立刻管住新寫入與被修改的列），再嘗試 VALIDATE；
 --      VALIDATE 失敗（既有列不合）只發 WARNING，不讓整支回滾，權限收斂照樣生效。
 --      哪一條還沒 validated：supabase/ops/products-write-hardening/verify.sql；哪些列不合：同目錄 precheck.sql。
@@ -29,13 +31,12 @@ set local lock_timeout = '10s';
 -- immutable、search_path 固定、對任何 jsonb 輸入（含 null、純量、巢狀、超大數字、非數字字串）都只回 boolean，不丟例外。
 -- 型別判斷一律用 CASE 包住取值，避免依賴 SQL 的求值順序。
 
--- 是 JSON 數字、為整數、落在 [lo, hi]
+-- 是 JSON 數字、文字形式是純數字（不帶小數點、不帶負號；10.0 不算，因為其他函式用 ::integer 讀它）、落在 [lo, hi]
 create or replace function public.products_jsonb_int_between(p_val jsonb, p_lo numeric, p_hi numeric)
 returns boolean language sql immutable set search_path = '' as $$
   select case
-    when p_val is not null and jsonb_typeof(p_val) = 'number'
-      then (p_val #>> '{}')::numeric = trunc((p_val #>> '{}')::numeric)
-           and (p_val #>> '{}')::numeric between p_lo and p_hi
+    when p_val is not null and jsonb_typeof(p_val) = 'number' and (p_val #>> '{}') ~ '^[0-9]{1,10}$'
+      then (p_val #>> '{}')::numeric between p_lo and p_hi
     else false
   end;
 $$;

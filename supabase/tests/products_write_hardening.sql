@@ -164,6 +164,9 @@ insert into pwh_t.cases values
   ('price 0', 'variants', $$'[{"id":"a","name":"n","price":0,"stock":1}]'::jsonb$$, '23514'),
   ('price 負數', 'variants', $$'[{"id":"a","name":"n","price":-5,"stock":1}]'::jsonb$$, '23514'),
   ('price 小數', 'variants', $$'[{"id":"a","name":"n","price":1.5,"stock":1}]'::jsonb$$, '23514'),
+  ('price 10.0', 'variants', $$'[{"id":"a","name":"n","price":10.0,"stock":1}]'::jsonb$$, '23514'),
+  ('stock 10.0', 'variants', $$'[{"id":"a","name":"n","price":1,"stock":10.0}]'::jsonb$$, '23514'),
+  ('originalPrice 10.0', 'variants', $$'[{"id":"a","name":"n","price":1,"stock":1,"originalPrice":10.0}]'::jsonb$$, '23514'),
   ('price 字串', 'variants', $$'[{"id":"a","name":"n","price":"100","stock":1}]'::jsonb$$, '23514'),
   ('price null', 'variants', $$'[{"id":"a","name":"n","price":null,"stock":1}]'::jsonb$$, '23514'),
   ('price 500000', 'variants', $$'[{"id":"a","name":"n","price":500000,"stock":1}]'::jsonb$$, '23514'),
@@ -202,7 +205,6 @@ insert into pwh_t.cases values
    $$'[{"id":"a","name":"n","price":1,"stock":0,"originalPrice":0},{"id":"b","name":"n2","price":499999,"stock":2147483647,"originalPrice":499999,"sourceId":"123","image":"https://example.test/i.jpg"}]'::jsonb$$, 'ok'),
   ('variants 邊界：200 個規格、id 64 字、name 200 字', 'variants',
    $$(select jsonb_agg(jsonb_build_object('id', case when i = 1 then repeat('a', 64) else 'v' || i end, 'name', repeat('字', 200), 'price', 1, 'stock', 1)) from generate_series(1, 200) i)$$, 'ok'),
-  ('variants 邊界：整數寫成 5.0', 'variants', $$'[{"id":"a","name":"n","price":5.0,"stock":1.0}]'::jsonb$$, 'ok'),
   -- images：非法
   ('images 是物件', 'images', $$'{}'::jsonb$$, '23514'),
   ('images 是字串', 'images', $$'"https://x"'::jsonb$$, '23514'),
