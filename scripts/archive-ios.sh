@@ -42,7 +42,7 @@ command -v npm >/dev/null || fail "找不到 npm"
 [ -f .env ] || fail "缺 .env（正式站 VITE_SUPABASE_URL／VITE_SUPABASE_ANON_KEY／VITE_TURNSTILE_SITEKEY）"
 grep -q "VITE_SUPABASE_URL=https://$PROD_SUPABASE_HOST" .env || fail ".env 的 VITE_SUPABASE_URL 不是正式站 $PROD_SUPABASE_HOST"
 SITEKEY="$(sed -n 's/^VITE_TURNSTILE_SITEKEY=//p' .env | tr -d '"\r')"
-[ -n "$SITEKEY" ] || fail ".env 缺 VITE_TURNSTILE_SITEKEY"
+[ -n "$SITEKEY" ] || fail ".env 缺 VITE_TURNSTILE_SITEKEY（正式值只在 GitHub secret，主 checkout 的 .env 沒有；公開值，從正式站 bundle 或 Cloudflare → Turnstile 拿，echo VITE_TURNSTILE_SITEKEY=<值> >> .env）"
 ok "環境變數：正式站 Supabase、Turnstile sitekey ${SITEKEY:0:6}…"
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
