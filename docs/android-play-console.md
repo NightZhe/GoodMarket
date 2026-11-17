@@ -18,7 +18,7 @@
 ## App access（功能受限的登入方式）
 
 選「全部或部分功能需要登入」，提供：
-1. 示範賣家帳號（Email＋密碜，由 `scripts/seed-review-account.mts` 建；帳密不進 repo）。
+1. 示範賣家帳號（Email＋密碼，由 `scripts/seed-review-account.mts` 建；帳密不進 repo）。
 2. 怎麼到登入頁：在裝置上先裝好 App，用 Chrome 開 `https://nightzhe.github.io/GoodMarket/review-login.html` 點「打開 App 的審查員登入頁」；
    或 `adb shell am start -a android.intent.action.VIEW -d io.github.nightzhe.goodmarket://review-login io.github.nightzhe.goodmarket`。
    App 內沒有任何連結能到這一頁（`#/review-login`）。
