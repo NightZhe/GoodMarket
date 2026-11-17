@@ -29,6 +29,9 @@
 - **App 殼封存（TestFlight）不要在主 checkout 做**：Vite 以 `.env.local`（本機 Supabase `127.0.0.1:54321`）蓋過 `.env`，會把本機網址打包進 App
   （2026-10-28 build 3 因此作廢）。在沒有 `.env.local` 的 worktree 封存，用 `scripts/archive-ios.sh`（會擋 `.env.local`、驗 bundle 只含正式站網域、再 `xcodebuild archive`；加 `--upload` 直接上傳）。
   手動驗時查 `grep -c 127.0.0.1:54321 ios/App/App/public/assets/*.js` 必須是 0；只查 `127.0.0.1` 會誤判，supabase-js 2.117 自己內嵌 `localhost`／`127.0.0.1` 常數。
+- **Android App 殼建置**用 `scripts/archive-android.sh`（macOS／Linux 都行，不需要 Android Studio；要 JDK 21 與 Android SDK，腳本會自動偵測或印出安裝指令）。
+  預設出簽章的 AAB＋APK（需要 `android/keystore.properties`，已 gitignore；上傳金鑰與密碼**絕不 commit**），`--debug` 出 debug APK 給手機測試。
+  同樣的 `.env.local` 規則適用。CI 的 `android.yml` 每個 PR 都會出 debug APK artifact，沒有本機 SDK 也拿得到可裝的 APK。
 - CI（`.github/workflows/ci.yml`）在乾淨環境跑 lint／測試／build，會抓到「本機能跑、乾淨環境不能跑」的問題。
 
 ## 資料庫（2026-10-16 起）
