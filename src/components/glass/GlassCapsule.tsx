@@ -2,6 +2,7 @@ import { Children, useEffect, useId, useLayoutEffect, useRef, useState, type Rea
 import { matchPath, useLocation } from 'react-router-dom';
 import { ChevronUp } from 'lucide-react';
 import { usePosture } from '../../lib/layout/posture';
+import { useNativeBack } from '../../lib/native/useNativeBack';
 import { TabCell, useTabLabels, type TabItem } from './tabs';
 import { RAIL_CAP_W } from './railGeometry';
 import { RAIL_GAP, pickRailLevel } from './railLevel';
@@ -90,6 +91,8 @@ function TabsBody({ label, tabs }: { label: string; tabs: TabItem[] }) {
   const expanded = level === 'L2' && openAt === pathname;
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // Android 返回鍵＝Esc：展開時只收合膠囊
+  useNativeBack(() => { setOpenAt(null); triggerRef.current?.focus(); }, expanded);
   useEffect(() => {
     if (!expanded) return;
     const onPointerDown = (e: PointerEvent) => {

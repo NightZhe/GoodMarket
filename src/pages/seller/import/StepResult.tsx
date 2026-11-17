@@ -6,6 +6,7 @@ import KPI from '../../../components/import/KPI';
 import { btnOutline, btnPrimaryLg } from '../../../components/import/ui';
 import { XLSX_MIME, ZIP_MIME, downloadBytes, failureZipName } from '../../../lib/import/download';
 import type { ShopeeImportLib } from '../../../lib/import/loader';
+import { isNative } from '../../../lib/native/platform';
 import type { RunnerOutcome } from '../../../lib/import/runner';
 import { buildZip } from '../../../lib/import/zip';
 import type { FailureFile } from '../../../lib/shopee-import/failure';
@@ -143,18 +144,25 @@ export default function StepResult({ lib, analysis, outcome, skipped, localFaile
           {outcome.failures.length > LIST_LIMIT && (
             <p className="text-xs text-muted">只列出前 {LIST_LIMIT} 件，其餘請看失敗原因檔。</p>
           )}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <button type="button" className={btnPrimaryLg} onClick={downloadZip}>
-              <Download size={18} aria-hidden="true" />下載失敗原因檔（.zip）
-            </button>
-          </div>
-          <p className="text-xs text-muted">內含 3 個 .xlsx，只有這幾件商品的資料列，「失敗原因」欄已填好。修正後三個檔一起丟回步驟 1 就能補匯。</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted">或單獨下載：</span>
-            {KIND_ORDER.map((k) => (
-              <button key={k} type="button" className={btnOutline} onClick={() => downloadOne(k)}>{KIND_LABEL_SHORT[k]}</button>
-            ))}
-          </div>
+          {isNative() ? (
+            // App 的 WebView 沒有檔案下載（Android 沒掛 DownloadListener、iOS WKWebView 也不存 blob），按了沒反應：改請到網頁版下載
+            <p className="text-sm text-muted">失敗原因檔（.zip，內含 3 個 .xlsx）請到網頁版的匯入結果頁下載；App 內無法下載檔案。</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button type="button" className={btnPrimaryLg} onClick={downloadZip}>
+                  <Download size={18} aria-hidden="true" />下載失敗原因檔（.zip）
+                </button>
+              </div>
+              <p className="text-xs text-muted">內含 3 個 .xlsx，只有這幾件商品的資料列，「失敗原因」欄已填好。修正後三個檔一起丟回步驟 1 就能補匯。</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-muted">或單獨下載：</span>
+                {KIND_ORDER.map((k) => (
+                  <button key={k} type="button" className={btnOutline} onClick={() => downloadOne(k)}>{KIND_LABEL_SHORT[k]}</button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 

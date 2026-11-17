@@ -32,7 +32,9 @@ async function onUrlOpen(url: string) {
   if (url === lastUrl) return;
   lastUrl = url;
   handled = true;
-  await Browser.close().catch(() => { /* Android 的 Custom Tab 可能已經自己關了 */ });
+  // 關瀏覽器視圖只在 iOS：Android 的回跳 intent 以 singleTask 重新帶起 MainActivity，Custom Tab 已被清掉；
+  // 這時再呼叫 Browser.close() 會再開一個透明的 BrowserControllerActivity 蓋在 App 上（外掛只在 onNewIntent 處理 close），畫面看起來像當掉
+  if (nativePlatform() === 'ios') await Browser.close().catch(() => { /* 視圖可能已經自己關了 */ });
   if (cb.failure) { emit(cb.failure); return; }
   if (!cb.code) { emit('failed'); return; }
   try {

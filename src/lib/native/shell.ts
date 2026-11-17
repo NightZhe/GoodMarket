@@ -3,6 +3,7 @@ import { nativePlatform } from './platform';
 import { initNativeAuth } from './auth';
 import { initNativeDeepLinks } from './deeplink';
 import { NATIVE_BACK_EVENT } from './callback';
+import { consumeNativeBack } from './backStack';
 import { refreshPosture, startPosture } from '../layout/posture';
 import { SELLER_LAYOUT_MARK, needsShellInset } from './shellInset';
 
@@ -10,7 +11,8 @@ import { SELLER_LAYOUT_MARK, needsShellInset } from './shellInset';
 //   - <html> 加 class native／native-ios／native-android，殼專用樣式（native.css，由 main.tsx 靜態載入）靠它生效
 //   - 側邊姿態判定（data-bars）：載入、旋轉、回前景都重判（lib/layout/posture.ts）
 //   - 狀態列文字深色（白底 App）
-//   - Android 實體返回鍵：先問畫面（登入面板開著就只關面板），再來 hash 路由能回就回，回到底就離開 App
+//   - Android 實體返回鍵：先問開著的覆蓋層（backStack：抽屜／對話框／浮層用 useNativeBack 登記，等同 Esc），再問畫面事件（登入面板），
+//     再來 hash 路由能回就回，回到底就離開 App。監聽要在任何 await 之前登記，否則啟動頭幾百毫秒按返回鍵沒反應
 //   - 登入回跳與瀏覽器視圖的監聽；一般深連結（審查員登入頁 ://review-login）
 
 export async function initNativeShell(): Promise<void> {
@@ -22,6 +24,14 @@ export async function initNativeShell(): Promise<void> {
   // 狀態列文字顏色（D-7d）：App 只有白底，時間／電量要深色。capacitor.config.ts 的 plugins.StatusBar.style 讓第一幀就對，
   // 這裡再設一次是保險。Capacitor 的命名：Style.Light＝淺色背景配深色文字（不是淺色文字）。
   void import('@capacitor/status-bar').then(({ StatusBar, Style }) => StatusBar.setStyle({ style: Style.Light })).catch(() => { /* 外掛不在就算了 */ });
+  await App.addListener('resume', refreshPosture);
+  await App.addListener('backButton', ({ canGoBack }) => {
+    if (consumeNativeBack()) return;
+    const consumed = !window.dispatchEvent(new CustomEvent(NATIVE_BACK_EVENT, { cancelable: true }));
+    if (consumed) return;
+    if (canGoBack) window.history.back();
+    else void App.exitApp();
+  });
   await initNativeAuth();
   await initNativeDeepLinks();
   // 狀態列安全區：買家前台（安全區色帶＋sticky top-[env(...)] 頂欄）與賣家中心（SellerLayout 自己的安全區色帶與懸浮控制列）都自己處理，殼不插手；
@@ -33,11 +43,4 @@ export async function initNativeShell(): Promise<void> {
   };
   new MutationObserver(syncStickyClass).observe(document.body, { childList: true, subtree: true });
   syncStickyClass();
-  await App.addListener('resume', refreshPosture);
-  await App.addListener('backButton', ({ canGoBack }) => {
-    const consumed = !window.dispatchEvent(new CustomEvent(NATIVE_BACK_EVENT, { cancelable: true }));
-    if (consumed) return;
-    if (canGoBack) window.history.back();
-    else void App.exitApp();
-  });
 }

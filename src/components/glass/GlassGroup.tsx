@@ -5,6 +5,7 @@ import { GlassButton } from './GlassButton';
 import { groupWidth, shouldCollapse } from './glassGroupFit';
 import { popoverAt, syncPopover } from './popoverState';
 import { useElementWidth } from './useElementWidth';
+import { useNativeBack } from '../../lib/native/useNativeBack';
 
 export type GlassGroupItem = {
   key: string;
@@ -81,6 +82,8 @@ export function GlassGroup({ label, items, collapseLabel = '更多', forceCollap
   }, [collapsed]);
   useEffect(() => { wasOpen.current = open; }, [open]);
 
+  // Android 返回鍵＝Esc：浮層開著就只關浮層
+  useNativeBack(() => { setPop(p => popoverAt(p.path)); triggerRef.current?.focus(); }, open);
   useEffect(() => {
     if (!open) return;
     popRef.current?.querySelector<HTMLElement>('a,button')?.focus();

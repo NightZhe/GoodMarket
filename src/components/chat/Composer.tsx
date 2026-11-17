@@ -5,7 +5,7 @@ import { usePhotoDraft } from './usePhotoDraft';
 import { pendingCardKicker, pendingCardSpoken } from '../../lib/chat/cards';
 import { MAX_TEXT, canSubmit, textLength } from '../../lib/chat/outbox';
 import { pickPhotosNative } from '../../lib/native/photos';
-import { isNative } from '../../lib/native/platform';
+import { isNative, nativePlatform } from '../../lib/native/platform';
 import type { OutgoingPhoto } from '../../lib/chat/useConversation';
 import type { ChatCard } from '../../lib/chat/types';
 import { money } from '../../lib/format';
@@ -82,7 +82,8 @@ export default function Composer({
     if (!isNative()) { fileRef.current?.click(); return; }
     const r = await pickPhotosNative(5 - draft.photos.length);
     if (r.kind === 'picked') draft.add(r.files);
-    else if (r.kind === 'failed') draft.setError('無法開啟相簿，請到『設定 › 好物集 › 照片』允許存取');
+    // iOS 的失敗幾乎都是相簿權限（設定路徑是 iOS 的）；Android 用系統相簿選擇器不需要權限，失敗就是選擇器本身出錯，請再試
+    else if (r.kind === 'failed') draft.setError(nativePlatform() === 'android' ? '無法開啟相簿，請再試一次' : '無法開啟相簿，請到『設定 › 好物集 › 照片』允許存取');
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
