@@ -22,6 +22,8 @@ out/
 # Gradle files
 .gradle/
 build/
+# Kotlin 編譯器的 session 目錄（AGP 8.13 建置時產生）
+.kotlin/
 
 # Local configuration file (sdk path, etc)
 local.properties
