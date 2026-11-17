@@ -16,7 +16,7 @@ import { SELLER_LAYOUT_MARK, needsShellInset } from './shellInset';
 //   - 深連結只登記一個 appUrlOpen 監聽，同一個網址同時交給登入回跳（auth.ts，只認 ://auth）與一般路由（deeplink.ts，審查員登入頁 ://review-login）：
 //     Capacitor Android 把「監聽登記前就送到、暫存的」事件只交給第一個登記的監聽者，分開登記時 ://review-login 會被 auth.ts 吃掉。
 //     冷啟動由網址喚起時事件可能已經送過，所以再查一次 getLaunchUrl（Android 回的是建立 Activity 的那個 intent、之後不會更新，只在啟動時查這一次）；
-//     兩邊各自對同一個網址去重（auth 用 lastUrl：code 只能換一次；deeplink 看目前 hash）
+//     兩邊各自對同一個網址去重（auth 用 lastUrl＋localStorage 記已換過的 code：code 只能換一次，WebView 重載後 getLaunchUrl 會再給同一個網址；deeplink 看目前 hash）
 
 export async function initNativeShell(): Promise<void> {
   const platform = nativePlatform();

@@ -52,6 +52,8 @@ jobs:
           grep -q '"minWebViewVersion"' android/app/src/main/assets/capacitor.config.json || { echo "capacitor.config.json 沒有 minWebViewVersion" >&2; exit 1; }
           grep -q '"errorPath"' android/app/src/main/assets/capacitor.config.json || { echo "capacitor.config.json 沒有 errorPath" >&2; exit 1; }
           test -f android/app/src/main/assets/public/webview-outdated.html || { echo "App 內沒有 webview-outdated.html" >&2; exit 1; }
+          MINWV="$(sed -n 's/.*"minWebViewVersion": *\([0-9][0-9]*\).*/\1/p' android/app/src/main/assets/capacitor.config.json)"
+          grep -q "var MIN = $MINWV;" android/app/src/main/assets/public/webview-outdated.html || { echo "webview-outdated.html 的 MIN 與 minWebViewVersion（$MINWV）不同步" >&2; exit 1; }
       - name: gradle assembleDebug
         working-directory: android
         run: |
@@ -75,10 +77,21 @@ jobs:
           fetch-depth: 0
       - name: 檢查上傳金鑰 secrets
         id: signing
+        # 四個都要在：build.gradle 只要缺一個就「不簽章但建置成功」，artifact 會是 Play 拒收的未簽章 AAB，而這裡會是綠的
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KSP: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KA: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KP: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -n "$KS" ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::沒有 ANDROID_KEYSTORE_BASE64 secret，略過正式版建置"; fi
+          if [ -z "$KS" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::沒有 ANDROID_KEYSTORE_BASE64 secret，略過正式版建置"
+          elif [ -z "$KSP" ] || [ -z "$KA" ] || [ -z "$KP" ]; then
+            missing=""; [ -n "$KSP" ] || missing="$missing ANDROID_KEYSTORE_PASSWORD"; [ -n "$KA" ] || missing="$missing ANDROID_KEY_ALIAS"; [ -n "$KP" ] || missing="$missing ANDROID_KEY_PASSWORD"
+            echo "::error::ANDROID_KEYSTORE_BASE64 已設但缺$missing：正式版會變成未簽章，請補齊 secrets（名稱要完全一樣）"; exit 1
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
       - if: steps.signing.outputs.present == 'true'
         uses: actions/setup-node@v4
         with:
@@ -114,6 +127,8 @@ jobs:
           grep -q '"minWebViewVersion"' android/app/src/main/assets/capacitor.config.json || { echo "capacitor.config.json 沒有 minWebViewVersion" >&2; exit 1; }
           grep -q '"errorPath"' android/app/src/main/assets/capacitor.config.json || { echo "capacitor.config.json 沒有 errorPath" >&2; exit 1; }
           test -f android/app/src/main/assets/public/webview-outdated.html || { echo "App 內沒有 webview-outdated.html" >&2; exit 1; }
+          MINWV="$(sed -n 's/.*"minWebViewVersion": *\([0-9][0-9]*\).*/\1/p' android/app/src/main/assets/capacitor.config.json)"
+          grep -q "var MIN = $MINWV;" android/app/src/main/assets/public/webview-outdated.html || { echo "webview-outdated.html 的 MIN 與 minWebViewVersion（$MINWV）不同步" >&2; exit 1; }
       - if: steps.signing.outputs.present == 'true'
         name: gradle bundleRelease assembleRelease
         working-directory: android
@@ -132,6 +147,21 @@ jobs:
       - if: always()
         name: 清掉解出來的金鑰檔
         run: rm -f "$RUNNER_TEMP/upload.jks"
+      - if: steps.signing.outputs.present == 'true'
+        name: 產物必須有簽章、16 KB 對齊（比照 scripts/archive-android.sh）
+        working-directory: android
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          # 簽章設定不全時 Gradle 不會失敗，只是出 app-release-unsigned.apk 與同名但未簽章的 AAB
+          test -f "$APK" || { echo "release 未簽章（Gradle 出的是 app-release-unsigned.apk）：ANDROID_KEYSTORE_PASSWORD／ANDROID_KEY_ALIAS／ANDROID_KEY_PASSWORD 不全或錯誤" >&2; exit 1; }
+          test -f "$AAB" || { echo "release AAB 沒有產生" >&2; exit 1; }
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/*/ 2>/dev/null | sort -V | tail -1 || true)"
+          [ -n "$BT" ] && [ -x "$BT/apksigner" ] || { echo "找不到 build-tools 的 apksigner（ANDROID_HOME=$ANDROID_HOME）" >&2; exit 1; }
+          "$BT/apksigner" verify --print-certs "$APK" | grep -E "Signer #1 certificate DN"
+          jarsigner -verify "$AAB" | grep -q "jar verified" || { echo "release AAB 沒有簽章" >&2; exit 1; }
+          "$BT/zipalign" -c -P 16 -v 4 "$APK" | tail -1 | grep -q "Verification succes" || { echo "release APK 的原生程式庫沒有 16 KB 對齊（Play 2027-02-01 起拒收更新）" >&2; exit 1; }
+          "$BT/aapt2" dump badging "$APK" | grep -E "^package:|targetSdkVersion|uses-permission"
       - if: steps.signing.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:

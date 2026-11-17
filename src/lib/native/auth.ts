@@ -18,6 +18,18 @@ let handled = false;
 let listening = false;
 /** 冷啟動時 appUrlOpen 與 getLaunchUrl 會給同一個網址：同一個回跳只處理一次（一個 code 換兩次第二次必失敗） */
 let lastUrl: string | null = null;
+/**
+ * 已經換過 session 的 code 另外記在 localStorage：WebView 重新載入（iOS 內容程序掛掉後 Capacitor reload、Android Activity 重建或程序被殺後還原）
+ * 時 getLaunchUrl 會再給同一個回跳網址，而模組變數 lastUrl 已經跟著 JS 一起消失；再換一次 PKCE verifier 已被刪，
+ * 會在已登入的畫面上蓋一個「登入沒有完成」。只記 code（一次性），同一個錯誤回跳還是每次都回報。
+ */
+const CONSUMED_CODE_KEY = 'goodmarket_native_auth_consumed_code';
+function consumedCode(): string | null {
+  try { return localStorage.getItem(CONSUMED_CODE_KEY); } catch { return null; }
+}
+function rememberConsumedCode(code: string): void {
+  try { localStorage.setItem(CONSUMED_CODE_KEY, code); } catch { /* localStorage 被擋就只靠 lastUrl */ }
+}
 /** 瀏覽器視圖關掉後等多久沒有回跳才算取消：Android 的回跳 intent 以 singleTask 重新帶起 Activity，browserFinished 一定比 appUrlOpen 早到且間隔不定，放寬 */
 const cancelGraceMs = () => (nativePlatform() === 'android' ? 1500 : 600);
 
@@ -39,6 +51,9 @@ export async function handleNativeAuthUrl(url: string): Promise<void> {
   if (nativePlatform() === 'ios') await Browser.close().catch(() => { /* 視圖可能已經自己關了 */ });
   if (cb.failure) { emit(cb.failure); return; }
   if (!cb.code) { emit('failed'); return; }
+  // WebView 重載後重播的舊回跳：session 早就換好了（supabase-js 會從儲存讀回），什麼都不做、也不報失敗
+  if (cb.code === consumedCode()) { inFlight = false; return; }
+  rememberConsumedCode(cb.code);
   try {
     const { error } = await supabase.auth.exchangeCodeForSession(cb.code);
     emit(error ? 'failed' : 'signed_in');

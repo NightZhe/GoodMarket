@@ -3,6 +3,7 @@
 從程式碼整理出來的答案（2026-11-17，Android 殼第三批讀碼）。Play 政策條文在那次 session 的網路限制下沒能直接讀官方頁，
 標「待核對」的請在填表時對照 Play Console 當下的說明；程式碼事實（路由、資料表、權限）都查過。
 不含任何帳密與店家資料；審查用示範帳號的帳密只放 Play Console 的審查備註。
+文中 `.work/<功能>/` 路徑是維護者本機的工作資料夾，不進版控（公開 repo 裡找不到；見 `docs/STATUS.md` 開頭）。
 
 ## 兩個網址
 
@@ -39,7 +40,7 @@ WebView 載的是我們自己的網頁，網頁送出去的資料在 Play 的定
 | 裝置或其他 ID | Cloudflare Turnstile 收 IP／瀏覽器特徵做防機器人 | 二選一：不另填（服務供應商、僅安全用途）或填「裝置或其他 ID／防詐欺與安全」（待核對） | 否 | — | 防詐欺、安全 |
 
 不收集：位置（商品的「所在地」是賣家手打文字，沒有定位權限）、聯絡人、行事曆、健康、音訊、檔案、瀏覽紀錄、已安裝 App、廣告 ID（manifest 沒有 AD_ID，沒有廣告／分析 SDK）。
-安全：傳輸全程 https＝是；提供刪除要求機制＝是（上面的網址）；帳號刪除後保留部分資料＝是（訂單依法規期間、刪除申請紀錄、去識別化的檢舉紀錄——隱私政策第 5 節已寫）。
+安全：傳輸全程 https＝是；提供刪除要求機制＝是（上面的網址）；帳號刪除後保留部分資料＝是（訂單依法規期間、刪除申請紀錄、去識別化的檢舉紀錄——隱私政策第 4 節「保存多久」已寫；第 5 節另寫聊聊對話不隨帳號刪除）。
 第三方處理者：Supabase（資料庫／登入／儲存）、Google／Apple（登入）、MAAC Go／三竹（簡訊，伺服器端）、Cloudflare Turnstile、綠界（付款）。付款開關在正式站是開的，綠界相關項目要填（即使函式尚未部署）。
 
 ## 其他 App content 宣告
@@ -49,11 +50,11 @@ WebView 載的是我們自己的網頁，網頁送出去的資料在 Play 的定
 - **目標對象**：18+（能開店、綁卡、綁銀行帳號；選未滿 18 會拉進家庭政策）。
 - **金融功能**：購物結帳一般選「沒有金融功能」，但本站是**平台代收再撥款給賣家**（`.work/platform-collect/` spec §9 P-1 律師意見未完成）——律師說不是支付服務才選「沒有」，否則依類別附文件。使用者決定。
 - **政府／健康／新聞 App**：否。
-- **權限宣告**：merged manifest 只有 INTERNET、ACCESS_NETWORK_STATE、VIBRATE；沒有 CAMERA／READ_MEDIA_*（相簿用系統 Photo Picker），不觸發照片影片權限宣告。日後若加相機拍照要加 CAMERA 並更新 Data safety。
+- **權限宣告**：merged manifest 的系統權限只有 INTERNET、ACCESS_NETWORK_STATE、VIBRATE；另有 androidx.core 自動加的 App 私有 signature 權限 `<applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`（`aapt2 dump badging` 會列出第四行 uses-permission，不是 Play 要宣告的權限）。沒有 CAMERA／READ_MEDIA_*（相簿用系統 Photo Picker），不觸發照片影片權限宣告。日後若加相機拍照要加 CAMERA 並更新 Data safety。
 
 ## 刪帳號能力要跟宣告一致
 
-申請送出只是寫一筆 `account_deletion_requests`，執行是人工（`.work/phone-otp-auth/tools/account-tool-phone.mjs`）。STATUS 記錄該工具**不認綠界 migration 的外鍵**、銀行帳號白名單的 SQL 未演練，
+申請送出只是寫一筆 `account_deletion_requests`，執行是人工（`.work/phone-otp-auth/tools/account-tool-phone.mjs`，`.work/` 不進版控，見 `docs/STATUS.md` 維運提醒）。STATUS 記錄該工具**不認綠界 migration 的外鍵**、銀行帳號白名單的 SQL 未演練，
 而隱私政策承諾「刪帳號時先請綠界刪卡」、文案承諾完成會寄信（目前沒有流程寄信）。上架前要：(1) 修工具認 `payment_methods`／`payment_auths`／`bank_accounts` 外鍵並在本機重置的資料庫演練；
 (2) 決定完成通知是人工寄信（寫進 runbook）還是把 `src/lib/deletion/copy.ts` 那句拿掉；(3) 7 個工作天的 SLA 寫進 runbook。
 

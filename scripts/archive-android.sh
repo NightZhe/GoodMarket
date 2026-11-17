@@ -115,11 +115,13 @@ if [ "$MODE" = release ]; then
     KS_REL="$(sed -n 's/^storeFile=//p' android/keystore.properties | tr -d '"\r')"
     case "$KS_REL" in /*) KS_PATH="$KS_REL" ;; *) KS_PATH="android/$KS_REL" ;; esac
     [ -f "$KS_PATH" ] || fail "keystore.properties 的 storeFile 指到不存在的檔案：$KS_PATH"
-    # git check-ignore -q 一次只收一個路徑；repo 外的絕對路徑不可能被 commit，不用查
+    # git check-ignore -q 一次只收一個路徑；repo 外的檔案不可能被 commit，不用查（git 對 repo 外的路徑會直接 fatal）。
+    # 先把路徑化成實體絕對路徑再分類：storeFile=../../keys/upload.jks 這種用 .. 走出 repo 的相對路徑才不會被誤判成「在 repo 內」
     git check-ignore -q -- android/keystore.properties || fail "android/keystore.properties 沒被 gitignore，會進公開 repo"
-    case "$KS_PATH" in
-      "$ROOT"/*|android/*) git check-ignore -q -- "$KS_PATH" || fail "金鑰沒被 gitignore，會進公開 repo：$KS_PATH" ;;
-      *) ok "金鑰在 repo 外：$KS_PATH" ;;
+    KS_ABS="$(cd "$(dirname "$KS_PATH")" && pwd -P)/$(basename "$KS_PATH")"
+    case "$KS_ABS" in
+      "$(pwd -P)"/*) git check-ignore -q -- "$KS_ABS" || fail "金鑰沒被 gitignore，會進公開 repo：$KS_ABS" ;;
+      *) ok "金鑰在 repo 外：$KS_ABS" ;;
     esac
   fi
   ok "簽章設定存在"
@@ -149,7 +151,9 @@ grep -q 'com.capacitorjs.plugins.camera.CameraPlugin' android/app/src/main/asset
 grep -q '"minWebViewVersion"' android/app/src/main/assets/capacitor.config.json || fail "capacitor.config.json 沒有 minWebViewVersion"
 grep -q '"errorPath"' android/app/src/main/assets/capacitor.config.json || fail "capacitor.config.json 沒有 errorPath"
 [ -f android/app/src/main/assets/public/webview-outdated.html ] || fail "App 內沒有 webview-outdated.html（public/ 沒進 dist？）"
-ok "bundle 驗證：只有正式站網域、有 sitekey、無本機位址；外掛清單含 camera；WebView 底線與錯誤頁都在"
+MINWV="$(sed -n 's/.*"minWebViewVersion": *\([0-9][0-9]*\).*/\1/p' android/app/src/main/assets/capacitor.config.json)"
+grep -q "var MIN = $MINWV;" android/app/src/main/assets/public/webview-outdated.html || fail "webview-outdated.html 的 MIN 與 capacitor.config 的 minWebViewVersion（$MINWV）不同步"
+ok "bundle 驗證：只有正式站網域、有 sitekey、無本機位址；外掛清單含 camera；WebView 底線（$MINWV）與錯誤頁都在且一致"
 
 # ---- Gradle ---------------------------------------------------------------
 mkdir -p "$OUT"
@@ -161,7 +165,9 @@ GRADLE_LOG="$OUT/gradle.log"
 run_gradle() {
   echo "▶ gradle $*（完整紀錄 $GRADLE_LOG）"
   if ! (cd android && ./gradlew --no-daemon "$@") > "$GRADLE_LOG" 2>&1; then
-    grep -E -A3 "error:|FAILURE|What went wrong" "$GRADLE_LOG" | head -40 >&2
+    # 摘要放在 if 條件裡：沒有任何一行符合（例如離線時 gradle wrapper 下載失敗、daemon 被 OOM 殺掉）時 grep 回 1，
+    # 放在外面會被 set -e 直接結束、連下面的 fail 都印不出來；這時改印最後 20 行
+    if ! grep -E -A3 "error:|FAILURE|What went wrong" "$GRADLE_LOG" | head -40 >&2; then tail -20 "$GRADLE_LOG" >&2; fi
     fail "gradle $* 失敗，完整紀錄：$GRADLE_LOG"
   fi
   grep -E "BUILD|warning:" "$GRADLE_LOG" || true
@@ -180,14 +186,20 @@ else
   [ -f "$APK" ] || fail "release APK 沒有產生"
   cp "$AAB" "$OUT/goodmarket-release.aab"
   cp "$APK" "$OUT/goodmarket-release.apk"
-  # 簽章與 manifest 驗證：build-tools 的 apksigner／aapt2（AGP 會補下載，版本取現有最新）
-  BT="$(ls -d "$ANDROID_HOME"/build-tools/*/ 2>/dev/null | sort -V | tail -1)"
+  # AAB 的簽章用 JDK 的 jarsigner 驗（AAB 是 jar 簽章，apksigner 不收）
+  "$JAVA_HOME/bin/jarsigner" -verify "$AAB" | grep -q "jar verified" || fail "release AAB 簽章驗證失敗"
+  # APK 簽章與 manifest 驗證：build-tools 的 apksigner／aapt2（AGP 會補下載，版本取現有最新）。
+  # ls 沒有符合的目錄會回非 0，要 || true 否則 set -e 會在這裡悄悄結束（Gradle 可能用 android/local.properties 的 sdk.dir，不是這個 ANDROID_HOME）
+  BT="$(ls -d "$ANDROID_HOME"/build-tools/*/ 2>/dev/null | sort -V | tail -1 || true)"
   if [ -n "$BT" ] && [ -x "$BT/apksigner" ]; then
     "$BT/apksigner" verify --print-certs "$APK" | grep -E "Signer #1 certificate DN|Verifies" || fail "release APK 簽章驗證失敗"
-    "$BT/aapt2" dump badging "$APK" | grep -E "^package:|targetSdkVersion" || true
+    # uses-permission 預期四行：INTERNET、ACCESS_NETWORK_STATE、VIBRATE，加 androidx.core 自動加的 App 私有 DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+    "$BT/aapt2" dump badging "$APK" | grep -E "^package:|targetSdkVersion|uses-permission" || true
     # Play 2027-02-01 起更新必須支援 16 KB 記憶體分頁：camera 外掛帶進 CameraX 的 .so，要對齊 16 KB
     "$BT/zipalign" -c -P 16 -v 4 "$APK" | tail -1 | grep -q "Verification succes" || fail "release APK 的原生程式庫沒有 16 KB 對齊（Play 2027-02-01 起拒收更新）"
-    ok "簽章、manifest、16 KB 對齊都驗過"
+    ok "AAB／APK 簽章、manifest、16 KB 對齊都驗過"
+  else
+    echo "⚠ $ANDROID_HOME 下沒有 build-tools，略過 APK 簽章／16 KB 對齊驗證（AAB 簽章已驗）；上傳前請用 apksigner／zipalign 補驗" >&2
   fi
   ok "release AAB：$OUT/goodmarket-release.aab（上傳 Play Console）；同簽章 APK：$OUT/goodmarket-release.apk（真機測試）"
 fi

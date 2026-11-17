@@ -6,7 +6,10 @@
     <meta name="robots" content="noindex" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'" />
     <title>無法載入好物集</title>
-    <!-- App 殼（Capacitor）的錯誤頁（capacitor.config.ts server.errorPath）：Android 的 WebView 版本低於 android.minWebViewVersion、或網頁載入失敗時顯示。
+    <!-- App 殼（Capacitor）的錯誤頁（capacitor.config.ts server.errorPath）。Capacitor Android 在兩種情況載入它：
+         WebView 版本低於 android.minWebViewVersion（Bridge.loadWebView）、以及主框架載入或 HTTP 錯誤（BridgeWebViewClient.onReceivedError／onReceivedHttpError）；
+         iOS 是網頁載入失敗時。網址上沒有標記是哪一種，所以用 UA 的 Chrome/<版本> 判斷：低於底線才說「版本太舊」，夠新就說載入失敗。
+         Android 7～9（API 24～25 的 Capacitor 檢查）看的是 com.android.chrome 的版本而不是實際供應 WebView 的套件，Chrome 被停用或太舊也會到這裡，文案要提。
          這一頁拿不到 Capacitor 外掛、也不能靠 bundle：只能是純 HTML、行內 CSS、ES5。Vite 會把 public/ 原樣放進 dist，所以正式站也有同一頁（無害）。 -->
     <style>
       html { color-scheme: light; background: #fff; }
@@ -24,13 +27,18 @@
   </head>
   <body>
     <h1>無法載入好物集</h1>
-    <div id="android">
-      <p>這台裝置的「Android System WebView」版本太舊，好物集 App 需要 111 以上才能正常顯示。</p>
+    <div id="android-old">
+      <p>這台裝置的「Android System WebView」版本太舊（目前 <span id="ver-old">不明</span>），好物集 App 需要 <span class="min">111</span> 以上才能正常顯示。</p>
       <p>請先到 Google Play 更新 Android System WebView，更新完再重新開啟好物集。</p>
       <a class="btn" href="market://details?id=com.google.android.webview">到 Google Play 更新 Android System WebView</a>
-      <p class="muted">Android 7～9 的 WebView 由 Chrome 提供，請改更新 Chrome：</p>
-      <a class="btn secondary" href="market://details?id=com.android.chrome">到 Google Play 更新 Chrome</a>
+      <p class="muted">Android 7～9 的 WebView 由 Chrome 提供，App 檢查的是 Chrome 的版本：Chrome 要是「已啟用」並更新到最新（被停用的話，Play 商店會先顯示「啟用」）：</p>
+      <a class="btn secondary" href="market://details?id=com.android.chrome">到 Google Play 啟用／更新 Chrome</a>
       <p class="muted">按鈕沒有反應時，請自己打開 Play 商店，搜尋「Android System WebView」並更新。</p>
+    </div>
+    <div id="android-fresh" class="hidden">
+      <p>網頁內容暫時載入不了。請關閉好物集後重新開啟；如果一直這樣，請確認網路連線或更新 App。</p>
+      <p class="muted">這台裝置的 WebView 版本（<span id="ver-fresh"></span>）已經夠新。若是 Android 7～9，App 檢查的是 Chrome 的版本：Chrome 被停用或太舊也會看到這一頁，請啟用並更新 Chrome 後再開一次：</p>
+      <a class="btn secondary" href="market://details?id=com.android.chrome">到 Google Play 啟用／更新 Chrome</a>
     </div>
     <div id="other" class="hidden">
       <p>網頁內容暫時載入不了。請關閉好物集後重新開啟；如果一直這樣，請確認網路連線或更新 App。</p>
@@ -39,10 +47,21 @@
     <script>
       // 只有 ES5：這一頁就是給舊版 WebView 看的
       (function () {
+        var MIN = 111; // 與 capacitor.config.ts 的 android.minWebViewVersion 同步（scripts/archive-android.sh 與 CI 會比對）
         var ua = navigator.userAgent || '';
-        if (!/Android/i.test(ua)) {
-          document.getElementById('android').className = 'hidden';
-          document.getElementById('other').className = '';
+        var android = /Android/i.test(ua);
+        var m = /Chrome\/(\d+)/.exec(ua);
+        var major = m ? parseInt(m[1], 10) : 0;
+        var show = !android ? 'other' : (major >= MIN ? 'android-fresh' : 'android-old');
+        var ids = ['android-old', 'android-fresh', 'other'];
+        for (var i = 0; i < ids.length; i++) {
+          document.getElementById(ids[i]).className = ids[i] === show ? '' : 'hidden';
+        }
+        var mins = document.getElementsByClassName('min');
+        for (var j = 0; j < mins.length; j++) mins[j].textContent = String(MIN);
+        if (major > 0) {
+          document.getElementById('ver-old').textContent = String(major);
+          document.getElementById('ver-fresh').textContent = String(major);
         }
       })();
     </script>

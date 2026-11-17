@@ -45,7 +45,7 @@
 | 新增 / 編輯商品 | `/seller/products/new`、`/:id/edit` | 上傳照片（瀏覽器端壓縮）或貼網址、多規格價格庫存、原價、免運 |
 | 訂單管理 | `/seller/orders` | 安排出貨、取消訂單、聯絡買家 |
 | 物流設定 | `/seller/logistics` | 退貨門市與退貨地址 |
-| 匯入 | `/seller/import` | 從 Shopee 匯出的 xlsx 批次建商品 |
+| 匯入 | `/seller/products/import` | 從 Shopee 匯出的 xlsx 批次建商品 |
 
 ## 設計系統
 
