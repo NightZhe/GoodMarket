@@ -15,7 +15,8 @@ export interface TurnstileRenderOptions {
   execution: 'render' | 'execute';
   'response-field': boolean;
   callback: (token: string) => void;
-  'error-callback': () => void;
+  /** Cloudflare 會帶錯誤碼字串（例如 600010 疑似機器人、110200 網域不在允許清單）；舊版可能不帶 */
+  'error-callback': (code?: string) => void;
   'expired-callback': () => void;
   'timeout-callback': () => void;
   'before-interactive-callback': () => void;

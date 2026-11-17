@@ -7,7 +7,7 @@
 
 已上線：商品評價（含照片、賣家回覆）；買家已取貨自動完成＋訂單狀態鎖定；**買家帳號**（遊客只能瀏覽，
 加購物車／下單／訂單／評價都要 Google 或 Apple 登入；購物車與訂單綁帳號；舊訂單憑證機制已移除）；
-**商品表單上限**（售價／原價 499,999、庫存 999,999，`src/lib/products/variants.ts`）；帳號頁拿掉「刪除帳號」區塊（申請方式只在隱私政策頁）；
+**商品表單上限**（售價／原價 499,999、庫存 999,999，`src/lib/products/variants.ts`）；帳號頁有「刪除帳號」入口（2026-10-26 起走申請制：`#/account/delete`、三支 RPC、migration `20261025120000_account_deletion_requests`，登出狀態也能開、會請人先登入；受理後人工處理，見維運提醒）；
 **我的商品列表快改**（點價格／庫存格就地改、多規格展開、手機底部面板；走資料庫函式 `quick_edit_product`：只寫被改的值、比對舊值回衝突、
 庫存全 0 自動下架、留 `product_change_log` 異動紀錄；列表斷點改 1024；上下架改只寫 status）。
 **快改補貨自動上架**（2026-10-23，`list-quick-edit/spec-auto-relist.md`、D-5 修訂與 D-11～D-14）：只有被快改自動下架（`products.auto_hidden=true`，由觸發器維護，status 經任何途徑變動就清掉）的商品，快改把任一規格從 0 改成 > 0 時同交易自動上架，回傳 `autoRelisted`，提示「已更新，已重新上架」；手動下架補貨不上架；編輯頁「儲存但不上架」不清旗標（D-14）。
@@ -64,7 +64,7 @@ Cloudflare Turnstile Captcha 開（sitekey 由 GitHub secret `VITE_TURNSTILE_SIT
 **App 殼（iOS／Android App，Capacitor 8）**（2026-10-25 合併 PR #5，`.work/app-shell/`：選型與決策 `decisions.md`、上架門檻一手條文 `store-requirements.md`、使用者前置清單 `prereqs-user.md`、
 tracer 結果 `tracer-report.md`、小q 驗收 `qa-report-tracer.md`、正式站設定紀錄 `prod-apply-log.md`）：一套程式碼三平台，`ios/`、`android/` 原生專案進版控，
 bundle id／application id `io.github.nightzhe.goodmarket`。App 的更新流程：`npm run build` → `npx cap sync` → Xcode（`ios/App/App.xcodeproj`，SPM）或 Gradle（`android/`，**需 JDK 21**，
-`export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`；Gradle 會自動補 SDK，不需 Android Studio）。
+`export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`；要先有 Android SDK 根目錄且 licenses 已接受——最小集合用 command line tools 裝，指令見 `scripts/archive-android.sh` 開頭的 need_sdk()，之後缺的元件 AGP 會自己補下載；不需要 Android Studio）。
 App 內 Google／Apple 登入走系統瀏覽器視圖＋自訂 scheme 回跳（`src/lib/native/`；Supabase Redirect URLs 已加 `io.github.nightzhe.goodmarket://auth`），原生外掛只在 App 內動態載入，網頁 bundle 不受影響。
 殼專用樣式 `src/native.css` 只在 `html.native` 生效：買家前台改版後自己處理安全區，殼只補賣家中心（`header.sticky.top-0`）與賣家登入頁。
 **審查員登入深連結**（PR #11，2026-10-26 合併）：`io.github.nightzhe.goodmarket://review-login` 冷啟動直達 `#/review-login`（`src/lib/native/deeplink.ts`，一般 `://<路由>` 都接、`://auth` 留給登入回跳）。
@@ -82,10 +82,45 @@ Xcode 專案補了共用 scheme `App.xcscheme`（之前只有 Xcode 開過才有
 **TestFlight build 6 已上傳**（2026-11-09，封存自 main `57d6f5c`，worktree 內 `scripts/archive-ios.sh --upload` 一次跑完建置、驗證、封存、上傳，ASC 自動配號 6；含 build 5 來源 67fbfe3 之後 71 個 commit：聊聊 PR #23、賣家中心頂部 #25、銀行帳號 #26、平台收款 #28、合夥人回饋 #30～#32、頂欄銀行入口 #34、封存腳本與 camera 用途說明 #35；**第一次帶入 `@capacitor/camera`**；上傳前腳本已驗 bundle 只含正式站網域與 Turnstile 正式 sitekey、無本機位址、外掛清單含 camera）。**封存前要手動補 sitekey**：正式 `VITE_TURNSTILE_SITEKEY` 只在 GitHub secret（CI／deploy 注入），主 checkout 的 `.env` 沒有，複製到 worktree 後腳本會停在「.env 缺 VITE_TURNSTILE_SITEKEY」；值是公開的，從正式站 bundle（`curl -s https://nightzhe.github.io/GoodMarket/` 找到 assets js 再 grep `0x4[A-Za-z0-9_-]\{20,\}`）或 Cloudflare 儀表板 → Turnstile 拿，`echo 'VITE_TURNSTILE_SITEKEY=<值>' >> .env` 再跑。真機待驗：聊聊相簿選圖與權限提示文字、底部五格導覽（首頁／購物車／訂單／聊聊／我的）、銀行帳號頁、結帳的線上付款判斷、Apple 登入（`@capacitor-community/apple-sign-in` 7.1.0 在 Capacitor 8 下 cap sync 有警告，build 5 起同組合）。
 Info.plist 補 `NSCameraUsageDescription`／`NSPhotoLibraryAddUsageDescription`（App 只用相簿選擇器，但 camera 外掛的二進位有呼叫 `AVCaptureDevice`，缺鍵 ASC 上傳會回 ITMS-90683）。真機要驗：聊聊相簿選圖與權限提示文字、以及 build 5 之後所有上線功能在 App 內的表現。
 Xcode 的 Apple ID 階段過期時上傳會回 DVTPortalServiceErrorDomain 1100，使用者在 Xcode Settings → Apple Accounts 重新登入即可。夥伴測試由使用者在 App Store Connect 加內部測試者。
+**App 與網頁同步的查法**（2026-11-17 記）：網頁＝`main` 自動部署；App＝最後一個 TestFlight build 的來源 commit（上面各行有記）。
+`git log --oneline <來源 commit>..main -- src public index.html package.json` 有輸出就代表 App 落後；資料庫 migration 只做相容新增時舊 App 不會壞，只是少功能。
+**目前落差**：build 6 來源 `57d6f5c`，之後 `main` 多了 PR #36／#37（products 寫入欄位收斂、前端商品資料防禦性解析與 Error Boundary，commit `3d0722a`），App 內還沒有；下次封存會帶入。
+**封存只能在 Mac 做，雲端 session 做不到**：雲端 session 沒有 Xcode，兩條路——(1) 在 Mac 的 Claude 桌面 App Settings → Claude Code → Remote Control 把封存用的 worktree（沒有 `.env.local`）分享出來，雲端 session 接上後跑 `scripts/archive-ios.sh --upload`；
+(2) 直接在那個 worktree 開本機 session 跑同一指令。上傳最後一步 Apple ID 若過期（1100），只有使用者能在 Xcode 重新登入。
+
+**Android App 殼可建置了**（2026-11-17，PR #38，分支 `claude/happy-rubin-9jxo0u`；`.work/` 沒有對應資料夾，決策與驗收都在 PR 與本段）。
+三批修正來自整份專案的 Android 讀碼（15 個讀碼／追查代理）：
+- **原生專案**：白底主題（`Theme.AppCompat.Light`，不跟系統深色）、系統列固定深色圖示（`plugins.SystemBars.style=LIGHT`＋`initialViewportFitValueHint=cover`）、`EdgeToEdge.enable`（Android 10～14 也 edge-to-edge，安全區 env() 才有值）、`allowBackup=false`、
+  圖示背景滿版、WebView 渲染程序掛掉時 `recreate()` 而不是整個 App 消失（`MainActivity.java`；只有 Chromium 真的當掉才算連掛、30 秒內連當四次就結束，系統低記憶體回收不算；重建後回同一個 hash 路由，每次重建都重設根 intent 的資料，舊的深連結／登入回跳不重播）、
+  `android.minWebViewVersion=111`（Vite 8／Tailwind 4 的底線）＋錯誤頁 `public/webview-outdated.html`（低於 111 的 Android System WebView 原本白屏沒訊息）。
+- **網頁側的 Android 分支**：實體返回鍵先問開著的覆蓋層（`src/lib/native/backStack.ts`＋`useNativeBack`，抽屜／對話框／浮層都登記，等同 Esc），再問登入面板，再 hash 回上頁，到底就離開 App；
+  `Browser.close()` 只在 iOS（Android 呼叫會蓋一層透明 Activity）；側邊姿態（Duo 直立軌）只在 iOS；深連結只登記一個 `appUrlOpen` 監聽同時餵 auth 與 deeplink（Android 把暫存事件只給第一個監聽者，原本 `://review-login` 會被吃掉）；
+  deeplink 改看目前 hash 去重（審查員離開後再點同一連結能再進來）；隱私連結在 App 內開系統瀏覽器看正式站；相簿失敗文案與匯入結果頁下載按鈕分平台；鍵盤打開時聚焦欄位多捲過托盤＋膠囊（Android 的 WebView 會縮小，固定列浮到鍵盤上）。
+- **建置**：`scripts/archive-android.sh`（比照 archive-ios.sh：擋 `.env.local`、驗 bundle、`--debug` 出 debug APK、預設出簽章 AAB＋APK、驗 apksigner／16 KB 對齊／WebView 底線設定，產物在 `android/output/<時間>/` 附 `source-commit.txt` 與 `gradle.log`）；
+  `android/app/build.gradle` 從 `android/keystore.properties` 或 `ANDROID_KEYSTORE_*` 環境變數讀簽章、`ANDROID_VERSION_CODE`（預設 `git rev-list --count HEAD`，**正式版只從 main 建**）／`ANDROID_VERSION_NAME`（預設 1.0）；
+  CI `.github/workflows/android.yml`：每個 PR／push 出 debug APK artifact `goodmarket-debug-apk-<sha>`（用 repo 的 VITE_* secrets 建，接正式站；**手機測試拿這個**，Actions → Android → Artifacts），
+  main 另出正式版 artifact `goodmarket-release-<sha>`，但要先設四個 secrets（`ANDROID_KEYSTORE_BASE64`＝`base64 -i upload.jks`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`）才會建。
+  雲端 Linux 容器（無 Android Studio）已驗：debug APK 與用拋棄式金鑰簽的 AAB／APK 都建得出來，`.so`（camera 外掛帶進的 CameraX）16 KB 對齊、targetSdk 36 合 Play 2026-08-31 起的規定、merged manifest 的系統權限只有 INTERNET／ACCESS_NETWORK_STATE／VIBRATE（另有 androidx.core 自動加的 App 私有 `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`，`aapt2 dump badging` 會列四行；相簿走系統選擇器，不要相機／媒體權限）。
+  **還沒有任何 Android build 上傳 Play、也還沒在真機跑過**（容器沒有模擬器）。
+- **使用者側前置（Play）**：(1) Play 開發者帳號（個人帳號 2023-11-13 後建立的要先做 12 位測試者連續 14 天的封閉測試才能申請正式發布；組織帳號免）；
+  (2) 在 Mac 產上傳金鑰 `keytool -genkeypair -v -keystore android/upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000`、寫 `android/keystore.properties`（兩個檔都已 gitignore，`git check-ignore -v` 確認；**離線備份、絕不 commit、絕不貼到對話**），
+  建 App 時用 Play App Signing（Google 持正式金鑰，這把只是上傳金鑰，遺失可重設）；要讓 CI 簽就把四個 secrets 加到 repo；(3) 第一次上傳用 `scripts/archive-android.sh` 在 main 的乾淨 worktree 建（跟 iOS 一樣要手動補 `VITE_TURNSTILE_SITEKEY` 到 `.env`）或 CI 的 release artifact；
+  (4) 商店圖文：512×512 icon（從 `assets/icon-only.png` 縮）、1024×500 feature graphic、≥2 張手機截圖；(5) App content：Data safety、隱私政策網址 `https://nightzhe.github.io/GoodMarket/#/privacy`、
+  刪帳號網址 `https://nightzhe.github.io/GoodMarket/#/account/delete`、內容分級、App access（審查員登入入口 `https://nightzhe.github.io/GoodMarket/review-login.html`＋示範帳密）——逐項答案見 `docs/android-play-console.md`。
+- **真機驗收清單（拿 CI 的 debug APK）**：登入面板 Google／Apple（Custom Tab 回跳）、手機簡訊登入的 Turnstile（模擬器曾回 600010，console 現在會印錯誤碼）、`review-login.html` 冷啟動／暫停／殺掉程序後都進得到 `#/review-login`、
+  返回鍵（商品抽屜、快改面板、登出確認、相片燈箱、玻璃膠囊展開、聊聊）、聊聊相簿選圖＋「不保留活動」開著時回來、分享到 LINE、賣家商品表單與結帳表單下半部欄位在鍵盤打開時看得到、系統深色模式下狀態列／手勢列圖示是深色、
+  系統字型最大時版面、橫向、Shopee xlsx 匯入（從下載資料夾選三個檔）、線上付款的綁卡（見下方待決）。
+- **待使用者拍板**：(a) 綠界綁卡 3D 驗證會離開 WebView 到系統瀏覽器且回不到 App（iOS 也一樣；目前正式站 payment 函式未部署所以還碰不到）——App 內隱藏「新增信用卡」，或走 `@capacitor/browser`＋scheme 回跳（要改 `payment-bind-result` 的 303）；
+  (b) 系統選擇器（相簿／分享／Custom Tab）在前面時 App 程序被殺，回來會落在首頁且聊聊選的照片會丟（`@capacitor/camera` 不保留呼叫，網頁層救不回）——要不要做「記最後路由到 localStorage、冷啟動還原」；
+  (c) minSdk 維持 24 或提到 26（Capacitor 在 API 24～25 查的是 com.android.chrome 的版本而不是實際的 WebView 套件，Chrome 被停用的 Android 7 會被 `minWebViewVersion` 誤擋，錯誤頁有寫「啟用並更新 Chrome」；提到 26 才完全沒有這個誤判）；(d) 要不要開 pinch-zoom（`android.zoomEnabled`，目前 iOS／Android 都關）；(e) 本機 Supabase 要測 Android OAuth 得在 `supabase/config.toml` 加 `io.github.nightzhe.goodmarket://auth`（目前約定不改）。
+- **已知限制（不擋上線）**：Android 沒有簡訊驗證碼自動填入（WebView 不支援 WebOTP；要做得加 SMS User Consent 外掛）；程序被殺後 sessionStorage 的草稿（評價、表單）會掉；夜間模式的 splash PNG 是黑底但沒有東西會顯示它（可整批刪）。
+- **第四批（對抗式審查後修正，同一 PR）**：5 個面向的審查員找 14 項、每項 3 個角度各自反駁，13 項成立（1 項 Play 政策數字經查官方頁無誤）。已修：`MainActivity` 每次重建都重設根 intent 的 data／action（否則上一次塞的路由或冷啟動的 `://auth`／`://review-login` 會重播）、只有 `didCrash` 才算連掛（系統回收不再把 App 從最近工作移掉）；
+  `src/lib/native/auth.ts` 把換過的 code 記進 localStorage（WebView 重載後 `getLaunchUrl` 重播同一個回跳，原本會在已登入畫面上蓋「登入沒有完成」，iOS 也有）；錯誤頁改用 UA 的 Chrome 版本分辨「太舊」與「載入失敗」並寫明 Android 7～9 看的是 Chrome、CI 與腳本比對頁內 MIN 與 `minWebViewVersion`；
+  CI 正式版要四個 secrets 齊全才建、缺一就紅（原本只看 keystore、Gradle 會「成功」出未簽章 AAB）並在上傳前驗 apksigner／jarsigner／16 KB；腳本：gradle 失敗訊息不再被 `set -e` 吞掉、沒有 build-tools 不再悄悄結束、`storeFile` 用 `..` 走出 repo 不再誤判成會進版控；文件：README 匯入路由 `/seller/products/import`、權限第四行 `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`、隱私政策第 4 節、`.work/` 不進版控註記。
 **原生整合第一批**（2026-10-26，分支 `claude/app-native-batch1`，`decisions.md` 末節「2026-10-26 原生整合第一批」）：iOS 的 Apple 登入改走原生 Sign in with Apple（`@capacitor-community/apple-sign-in` 7.1.0 → `signInWithIdToken`，`src/lib/native/auth.ts`／`appleSignIn.ts`；Xcode 專案加 `App.entitlements`；Google 與 Android 仍走瀏覽器視圖）、
 商品頁＋店家頁分享鈕在 App 內走 `@capacitor/share`（分享正式站網址，`src/lib/share/publicUrl.ts`）、觸覺回饋 `@capacitor/haptics`（加入購物車／快改儲存成功、下單失敗）、狀態列深色文字 `@capacitor/status-bar`（`capacitor.config.ts` `style:'LIGHT'`）。外掛只在 App 內動態載入。
 **尚未上架**，第一版還要做（見 `decisions.md` D-7～D-11）：原生 Sign in with Apple 真機實登（程式已在上述分支）、App icon／啟動畫面（PR #13 已做）、
-**帳號刪除 App 內入口（Apple 5.1.1(v) 硬門檻，10/18 拿掉的區塊要加回，可人工處理但不能只叫人寄信）**、檢舉／封鎖（Apple 1.2，待拍板）、審查用賣家示範帳號（待拍板）、App Privacy／Data safety 填寫。
+~~帳號刪除 App 內入口~~（已做，2026-10-26，`#/account/delete`）、檢舉／封鎖（Apple 1.2，待拍板）、審查用賣家示範帳號（待拍板）、App Privacy／Data safety 填寫（Android 版的答案整理在 `docs/android-play-console.md`）。
 使用者側前置（Google Play 帳號、App ID、Play 簽章、商店圖文）見 `prereqs-user.md`。
 
 **聊聊（買家↔店家一對一訊息）**（`.work/chat/`，PR #23，**2026-10-29 上線完成**：資料庫、前端、Realtime 授權都驗過，紀錄 `prod-apply-log.md`）：

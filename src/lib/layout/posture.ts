@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { isNative } from '../native/platform';
+import { nativePlatform } from '../native/platform';
 
 // 姿態判定（iPhone Duo 適配，decisions 四-1、design-spec §2.1）。
 // 系統欄在左右側直立時（外蓋、展開橫向、書本、Split View），左右安全區「不對稱」：
@@ -135,7 +135,9 @@ let store: PostureStore | null = null;
  */
 export function startPosture(): PostureStore | null {
   if (store) return store;
-  if (!isNative()) return null;
+  // 只在 iOS：側邊姿態是 iPhone Duo 的設計。Android 橫向時三鍵導覽列或打孔鏡頭的單邊 inset 也會超過門檻，
+  // 會誤判成側邊姿態把底部分頁列換成直立軌；Android 一律維持底部姿態
+  if (nativePlatform() !== 'ios') return null;
   let created: PostureStore | null = null;
   const refresh = () => {
     created?.refresh();

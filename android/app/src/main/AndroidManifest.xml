@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- allowBackup=false：App 本身沒有需要還原的資料（都在伺服器），而 WebView localStorage 在安全儲存降級時會放登入 session，
+         開著會被 Google 雲端備份／換機還原到別台裝置，違反「登出＝撤銷、session 綁裝置」（iOS Keychain 也不跨裝置）。 -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

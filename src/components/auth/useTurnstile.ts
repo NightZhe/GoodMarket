@@ -80,7 +80,8 @@ export function useTurnstile({ enabled, lazy = false }: { enabled: boolean; lazy
         // 用 callback 取 token，不要 widget 在 DOM 裡塞隱藏欄位
         'response-field': false,
         callback: t => { tokenRef.current = t; fire({ type: 'token' }); },
-        'error-callback': () => { tokenRef.current = null; fire({ type: 'error' }); },
+        // 錯誤碼只進 console（不是 token，不違反 R-7）：Android 真機驗收才分得出 600010（疑似機器人）、110200（網域不在允許清單）或網路問題
+        'error-callback': code => { if (code) console.warn('[turnstile] error-callback', code); tokenRef.current = null; fire({ type: 'error' }); },
         'expired-callback': () => { tokenRef.current = null; fire({ type: 'expired' }); api.reset(widgetRef.current); },
         'timeout-callback': () => { tokenRef.current = null; fire({ type: 'timeout' }); },
         'before-interactive-callback': () => fire({ type: 'interactive' }),

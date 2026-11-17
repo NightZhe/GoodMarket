@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ImageOff, LoaderCircle, X } from 'lucide-react';
 import { reviewPhotoUrl } from '../../lib/reviews/api';
 import { reduceMotion } from '../../lib/ui/scroll';
+import { useNativeBack } from '../../lib/native/useNativeBack';
 
 interface Props {
   paths: string[];
@@ -65,6 +66,7 @@ export default function PhotoLightbox({ paths, urlFor = reviewPhotoUrl, onReload
     });
   };
 
+  useNativeBack(onClose); // Android 返回鍵＝Esc：關燈箱，不回上一頁
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
     if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(index - 1); return; }

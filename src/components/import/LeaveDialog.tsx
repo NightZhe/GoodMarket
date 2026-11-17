@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { btnDangerText, btnOutline, btnPrimary } from './ui';
+import { useNativeBack } from '../../lib/native/useNativeBack';
 
 interface Props {
   title: ReactNode;
@@ -54,6 +55,7 @@ export default function LeaveDialog({
     return () => previous?.focus();
   }, []);
 
+  useNativeBack(() => { if (!busy) onStay(); }); // Android 返回鍵＝Esc＝留下
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') { e.stopPropagation(); if (!busy) onStay(); return; }
     if (e.key !== 'Tab') return;

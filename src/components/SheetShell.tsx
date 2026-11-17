@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { useNativeBack } from '../lib/native/useNativeBack';
 
 const FOCUSABLE = 'a[href],button:not([aria-disabled="true"]),input:not([disabled]),select:not([disabled]),textarea,[tabindex]:not([tabindex="-1"])';
 
@@ -37,6 +38,8 @@ export default function SheetShell({ titleId, descId, titleRef, onClose, childre
   // Esc 與焦點陷阱掛在 document：焦點掉到 body 時（Safari 點按鈕不會讓按鈕取得焦點、按鈕被換掉）面板內的 onKeyDown 收不到
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  // Android 實體返回鍵＝Esc：只關這個抽屜，不回上一頁
+  useNativeBack(() => onCloseRef.current());
   useEffect(() => {
     let backwards = false;
     const items = () => [...(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];

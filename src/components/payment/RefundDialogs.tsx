@@ -3,6 +3,7 @@ import { CircleAlert, LoaderCircle } from 'lucide-react';
 import LeaveDialog from '../import/LeaveDialog';
 import { btnDangerText, btnOutline, btnPrimary } from '../import/ui';
 import { useOnline } from '../../lib/useOnline';
+import { useNativeBack } from '../../lib/native/useNativeBack';
 import { money } from '../../lib/format';
 import {
   BUYER_CANCEL_REASONS, CANCEL_RESPOND_HOURS, NOTE_MAX, SELLER_CANCEL_REASONS, cardLine, reasonText,
@@ -33,6 +34,7 @@ function FormDialogShell({ title, busy, busyLabel, notice, footer, onClose, chil
     return () => previous?.focus();
   }, []);
 
+  useNativeBack(() => { if (!busy) onClose(); }); // Android 返回鍵＝Esc；送出中接手但不關
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { e.stopPropagation(); if (!busy) onClose(); return; }
     if (e.key !== 'Tab') return;

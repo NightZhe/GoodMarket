@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { tabWrapTarget } from '../../components/import/LeaveDialog';
 import { SIGN_OUT_COPY } from './signOutFlow';
+import { useNativeBack } from '../../lib/native/useNativeBack';
 
 type Props = {
   /** 按下「登出」：呼叫端跑登出流程（signOutFlow.performSignOut），回傳是否成功；失敗時面板自己關（呼叫端已提示） */
@@ -37,6 +38,7 @@ export default function SignOutSheet({ onConfirm, onClose, restoreFocus }: Props
     if (!ok) onClose(); // 成功時整頁會換掉（SellerGate 回登入頁），不必再動 state
   };
   const cancel = () => { if (!busy) onClose(); };
+  useNativeBack(cancel); // Android 返回鍵＝Esc
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') { e.stopPropagation(); cancel(); return; }

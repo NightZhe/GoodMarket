@@ -8,6 +8,7 @@ import {
   type EditLinkTarget,
 } from './QuickEditParts';
 import { inputId, useQuickEdit, type UseQuickEditArgs } from './useQuickEdit';
+import { useNativeBack } from '../../lib/native/useNativeBack';
 
 const BOTH: QuickField[] = ['price', 'stock'];
 
@@ -54,6 +55,12 @@ interface Props extends Omit<UseQuickEditArgs, 'fields'> {
 export default function QuickEditSheet({ edit, ...args }: Props) {
   const { product } = args;
   const qe = useQuickEdit({ ...args, fields: BOTH });
+  // Android 實體返回鍵與 Esc 同義：大幅改價確認時退回修改，其餘取消；送出中接手但不動
+  useNativeBack(() => {
+    if (qe.busy) return;
+    if (qe.phase.kind === 'confirm') qe.backToEdit();
+    else qe.cancel();
+  });
   const { rows, drafts, errors, phase, busy, slow, announce, changedIds, conflictIds, unsaved } = qe;
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
