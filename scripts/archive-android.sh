@@ -29,14 +29,15 @@
 #   上傳金鑰遺失可向 Google 申請重設，但金鑰與密碼要離線備份、絕不 commit。
 #
 # 版號：versionCode 預設取 git rev-list --count HEAD（main 每個 commit 都變大，Play 要求每次上傳遞增），
-#   可用 ANDROID_VERSION_CODE 覆蓋；versionName 預設 1.0（對齊 iOS MARKETING_VERSION），可用 ANDROID_VERSION_NAME 覆蓋。
+#   所以正式版只從 main 建（分支的 commit 數會跟 main 撞號或倒退）；要從別處建請自己指定 ANDROID_VERSION_CODE（大於 Play 上一次的值）。
+#   versionName 預設 1.0（對齊 iOS MARKETING_VERSION），可用 ANDROID_VERSION_NAME 覆蓋。上傳後把 versionCode 與來源 commit 記進 docs/STATUS.md。
 set -euo pipefail
 
 MODE=release
 for arg in "$@"; do
   case "$arg" in
     --debug) MODE=debug ;;
-    -h|--help) sed -n 2,34p "$0"; exit 0 ;;
+    -h|--help) sed -n 2,33p "$0"; exit 0 ;;
     *) echo "未知參數：$arg" >&2; exit 2 ;;
   esac
 done
@@ -99,6 +100,9 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 fi
 GIT_SHA="$(git rev-parse --short HEAD)"
 GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$MODE" = release ] && [ -z "${ANDROID_VERSION_CODE:-}" ] && [ "$GIT_BRANCH" != main ]; then
+  fail "正式版只從 main 建：versionCode 取 commit 數，分支會跟 main 撞號或倒退，Play 會拒收。要從分支建請設 ANDROID_VERSION_CODE=<大於 Play 上一次的值>"
+fi
 export ANDROID_VERSION_CODE="${ANDROID_VERSION_CODE:-$(git rev-list --count HEAD)}"
 export ANDROID_VERSION_NAME="${ANDROID_VERSION_NAME:-1.0}"
 ok "建置來源：$GIT_BRANCH $GIT_SHA；versionCode $ANDROID_VERSION_CODE、versionName $ANDROID_VERSION_NAME"
@@ -111,7 +115,12 @@ if [ "$MODE" = release ]; then
     KS_REL="$(sed -n 's/^storeFile=//p' android/keystore.properties | tr -d '"\r')"
     case "$KS_REL" in /*) KS_PATH="$KS_REL" ;; *) KS_PATH="android/$KS_REL" ;; esac
     [ -f "$KS_PATH" ] || fail "keystore.properties 的 storeFile 指到不存在的檔案：$KS_PATH"
-    git check-ignore -q "$KS_PATH" android/keystore.properties || fail "金鑰或 keystore.properties 沒被 gitignore，會進公開 repo：$KS_PATH"
+    # git check-ignore -q 一次只收一個路徑；repo 外的絕對路徑不可能被 commit，不用查
+    git check-ignore -q -- android/keystore.properties || fail "android/keystore.properties 沒被 gitignore，會進公開 repo"
+    case "$KS_PATH" in
+      "$ROOT"/*|android/*) git check-ignore -q -- "$KS_PATH" || fail "金鑰沒被 gitignore，會進公開 repo：$KS_PATH" ;;
+      *) ok "金鑰在 repo 外：$KS_PATH" ;;
+    esac
   fi
   ok "簽章設定存在"
 fi
@@ -136,22 +145,35 @@ fi
 grep -l "$PROD_SUPABASE_HOST" "$ASSETS"/*.js >/dev/null || fail "bundle 沒有正式站 Supabase 網域"
 grep -l "$SITEKEY" "$ASSETS"/*.js >/dev/null || fail "bundle 沒有 Turnstile sitekey"
 grep -q 'com.capacitorjs.plugins.camera.CameraPlugin' android/app/src/main/assets/capacitor.plugins.json || fail "capacitor.plugins.json 沒有 camera 外掛"
-ok "bundle 驗證：只有正式站網域、有 sitekey、無本機位址；外掛清單含 camera"
+# WebView 版本底線與錯誤頁（capacitor.config.ts android.minWebViewVersion／server.errorPath）要有同步進 App，否則舊 WebView 白屏沒訊息
+grep -q '"minWebViewVersion"' android/app/src/main/assets/capacitor.config.json || fail "capacitor.config.json 沒有 minWebViewVersion"
+grep -q '"errorPath"' android/app/src/main/assets/capacitor.config.json || fail "capacitor.config.json 沒有 errorPath"
+[ -f android/app/src/main/assets/public/webview-outdated.html ] || fail "App 內沒有 webview-outdated.html（public/ 沒進 dist？）"
+ok "bundle 驗證：只有正式站網域、有 sitekey、無本機位址；外掛清單含 camera；WebView 底線與錯誤頁都在"
 
 # ---- Gradle ---------------------------------------------------------------
 mkdir -p "$OUT"
 printf '%s %s versionCode=%s versionName=%s\n' "$GIT_BRANCH" "$GIT_SHA" "$ANDROID_VERSION_CODE" "$ANDROID_VERSION_NAME" > "$OUT/source-commit.txt"
 chmod +x android/gradlew
+# 清掉上次的產物：Gradle 失敗時下面的「檔案存在」檢查才不會拿舊檔冒充這次
+rm -rf android/app/build/outputs/apk android/app/build/outputs/bundle
+GRADLE_LOG="$OUT/gradle.log"
+run_gradle() {
+  echo "▶ gradle $*（完整紀錄 $GRADLE_LOG）"
+  if ! (cd android && ./gradlew --no-daemon "$@") > "$GRADLE_LOG" 2>&1; then
+    grep -E -A3 "error:|FAILURE|What went wrong" "$GRADLE_LOG" | head -40 >&2
+    fail "gradle $* 失敗，完整紀錄：$GRADLE_LOG"
+  fi
+  grep -E "BUILD|warning:" "$GRADLE_LOG" || true
+}
 if [ "$MODE" = debug ]; then
-  echo "▶ gradle assembleDebug"
-  (cd android && ./gradlew --no-daemon assembleDebug) | grep -E "BUILD|warning:|error:|FAILURE|> Task :app:(package|assemble)" || true
+  run_gradle assembleDebug
   APK=android/app/build/outputs/apk/debug/app-debug.apk
   [ -f "$APK" ] || fail "debug APK 沒有產生"
   cp "$APK" "$OUT/goodmarket-debug.apk"
   ok "debug APK：$OUT/goodmarket-debug.apk（adb install -r 或傳到手機安裝；未簽正式金鑰，不能上傳 Play）"
 else
-  echo "▶ gradle bundleRelease assembleRelease"
-  (cd android && ./gradlew --no-daemon bundleRelease assembleRelease) | grep -E "BUILD|warning:|error:|FAILURE|> Task :app:(package|bundle|assemble)" || true
+  run_gradle bundleRelease assembleRelease
   AAB=android/app/build/outputs/bundle/release/app-release.aab
   APK=android/app/build/outputs/apk/release/app-release.apk
   [ -f "$AAB" ] || fail "release AAB 沒有產生"
@@ -163,6 +185,9 @@ else
   if [ -n "$BT" ] && [ -x "$BT/apksigner" ]; then
     "$BT/apksigner" verify --print-certs "$APK" | grep -E "Signer #1 certificate DN|Verifies" || fail "release APK 簽章驗證失敗"
     "$BT/aapt2" dump badging "$APK" | grep -E "^package:|targetSdkVersion" || true
+    # Play 2027-02-01 起更新必須支援 16 KB 記憶體分頁：camera 外掛帶進 CameraX 的 .so，要對齊 16 KB
+    "$BT/zipalign" -c -P 16 -v 4 "$APK" | tail -1 | grep -q "Verification succes" || fail "release APK 的原生程式庫沒有 16 KB 對齊（Play 2027-02-01 起拒收更新）"
+    ok "簽章、manifest、16 KB 對齊都驗過"
   fi
   ok "release AAB：$OUT/goodmarket-release.aab（上傳 Play Console）；同簽章 APK：$OUT/goodmarket-release.apk（真機測試）"
 fi

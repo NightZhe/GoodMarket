@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'" />
+    <title>好物集 App 審查員登入入口</title>
+    <!-- 給 App 商店審查員用：App 內沒有任何連結能到 #/review-login，只能從 App 外用自訂 scheme 打開。
+         iOS：Safari 網址列直接輸入 io.github.nightzhe.goodmarket://review-login 就行。
+         Android：Chrome 不會把手打的自訂 scheme 網址交給 App（只接受點擊的連結），所以提供這一頁的 intent:// 連結；
+         沒有瀏覽器也可以用 adb。這一頁不含任何帳號密碼（帳密只在商店後台的審查備註）。 -->
+    <style>
+      html { color-scheme: light; background: #fff; }
+      body { margin: 0; padding: 40px 24px; font-family: system-ui, -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; color: #1c1917; line-height: 1.6; max-width: 36rem; }
+      h1 { font-size: 22px; margin: 0 0 8px; }
+      h2 { font-size: 16px; margin: 24px 0 8px; }
+      p { margin: 0 0 10px; font-size: 15px; }
+      .muted { color: #6b6560; font-size: 14px; }
+      a.btn { display: block; box-sizing: border-box; width: 100%; margin: 12px 0; padding: 14px 16px; border-radius: 12px; background: #bf4419; color: #fff;
+              text-align: center; text-decoration: none; font-size: 16px; font-weight: 600; }
+      a.btn.secondary { background: #fff; color: #bf4419; border: 1px solid #bf4419; }
+      pre { white-space: pre-wrap; word-break: break-all; font-size: 13px; background: #f5f3f0; padding: 10px 12px; border-radius: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>好物集 App 審查員登入入口</h1>
+    <p class="muted">GoodMarket app — reviewer sign-in entry. Install the app on this device first, then tap a button below. Credentials are in the store review notes.</p>
+
+    <h2>Android</h2>
+    <p>先在這台裝置安裝好物集 App，再點下面的按鈕（Chrome）：</p>
+    <a class="btn" href="intent://review-login#Intent;scheme=io.github.nightzhe.goodmarket;package=io.github.nightzhe.goodmarket;S.browser_fallback_url=https%3A%2F%2Fnightzhe.github.io%2FGoodMarket%2Freview-login.html;end">打開 App 的審查員登入頁（Open reviewer sign-in in app）</a>
+    <p class="muted">沒有反應表示這台裝置沒有安裝好物集 App。其他瀏覽器或用 adb：</p>
+    <pre>adb shell am start -a android.intent.action.VIEW -d io.github.nightzhe.goodmarket://review-login io.github.nightzhe.goodmarket</pre>
+
+    <h2>iOS</h2>
+    <p>在 Safari 點下面的連結，或直接在網址列輸入 <code>io.github.nightzhe.goodmarket://review-login</code>：</p>
+    <a class="btn secondary" href="io.github.nightzhe.goodmarket://review-login">打開 App 的審查員登入頁（iOS）</a>
+
+    <p class="muted">審查員登入頁只接受審查用示範帳號（Email＋密碼），一般使用者請用 App 內的 Google／Apple／手機號碼登入。</p>
+  </body>
+</html>

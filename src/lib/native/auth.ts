@@ -1,4 +1,3 @@
-import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { supabase } from '../supabase';
 import type { OAuthProvider, OAuthStart } from '../auth/oauth';
@@ -19,6 +18,8 @@ let handled = false;
 let listening = false;
 /** 冷啟動時 appUrlOpen 與 getLaunchUrl 會給同一個網址：同一個回跳只處理一次（一個 code 換兩次第二次必失敗） */
 let lastUrl: string | null = null;
+/** 瀏覽器視圖關掉後等多久沒有回跳才算取消：Android 的回跳 intent 以 singleTask 重新帶起 Activity，browserFinished 一定比 appUrlOpen 早到且間隔不定，放寬 */
+const cancelGraceMs = () => (nativePlatform() === 'android' ? 1500 : 600);
 
 /** 結果先進 callback.ts 的信箱再發事件：冷啟動時 AuthContext 可能還沒掛載，掛載後會到信箱補收 */
 function emit(outcome: NativeAuthOutcome) {
@@ -26,7 +27,8 @@ function emit(outcome: NativeAuthOutcome) {
   postNativeAuthOutcome(outcome);
 }
 
-async function onUrlOpen(url: string) {
+/** 登入回跳網址進來（appUrlOpen 或 getLaunchUrl，由 shell.ts 統一餵）；不是 ://auth 的深連結直接略過 */
+export async function handleNativeAuthUrl(url: string): Promise<void> {
   const cb = parseNativeCallback(url);
   if (!cb) return;
   if (url === lastUrl) return;
@@ -45,19 +47,19 @@ async function onUrlOpen(url: string) {
   }
 }
 
-/** 註冊一次 deep link 與瀏覽器關閉的監聽；App 啟動時由 shell.ts 呼叫 */
+/**
+ * 註冊一次瀏覽器視圖關閉的監聽；App 啟動時由 shell.ts 呼叫。
+ * appUrlOpen 與 getLaunchUrl 不在這裡登記：shell.ts 只登記一個 appUrlOpen 監聽，同一個網址同時交給 handleNativeAuthUrl 與 deeplink.ts
+ * （Capacitor Android 把監聽登記前暫存的事件只給第一個監聽者，分開登記會吃掉對方的網址）。
+ */
 export async function initNativeAuth(): Promise<void> {
   if (listening) return;
   listening = true;
-  await App.addListener('appUrlOpen', e => { void onUrlOpen(e.url); });
-  // 使用者在瀏覽器視圖按「完成」／返回：沒有回跳就是取消。Android 上 browserFinished 可能比 appUrlOpen 早到，等一下再判斷
+  // 使用者在瀏覽器視圖按「完成」／返回：沒有回跳就是取消。Android 上 browserFinished 一定比 appUrlOpen 早到，等一下再判斷
   await Browser.addListener('browserFinished', () => {
     if (!inFlight) return;
-    setTimeout(() => { if (inFlight && !handled) emit('cancelled'); }, 600);
+    setTimeout(() => { if (inFlight && !handled) emit('cancelled'); }, cancelGraceMs());
   });
-  // 冷啟動是由回跳網址喚起時，appUrlOpen 可能在監聽註冊前就送過了，所以再查一次啟動網址（同一個網址靠 lastUrl 去重）
-  const launch = await App.getLaunchUrl().catch(() => null);
-  if (launch?.url) void onUrlOpen(launch.url);
 }
 
 export async function startNativeOAuth(provider: OAuthProvider): Promise<OAuthStart> {

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'" />
+    <title>無法載入好物集</title>
+    <!-- App 殼（Capacitor）的錯誤頁（capacitor.config.ts server.errorPath）：Android 的 WebView 版本低於 android.minWebViewVersion、或網頁載入失敗時顯示。
+         這一頁拿不到 Capacitor 外掛、也不能靠 bundle：只能是純 HTML、行內 CSS、ES5。Vite 會把 public/ 原樣放進 dist，所以正式站也有同一頁（無害）。 -->
+    <style>
+      html { color-scheme: light; background: #fff; }
+      body { margin: 0; padding: 48px 24px 32px; font-family: system-ui, -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; color: #1c1917; line-height: 1.6;
+             padding-top: calc(48px + env(safe-area-inset-top)); padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
+      h1 { font-size: 22px; margin: 0 0 12px; }
+      p { margin: 0 0 12px; font-size: 16px; }
+      .muted { color: #6b6560; font-size: 14px; }
+      a.btn { display: block; box-sizing: border-box; width: 100%; margin: 16px 0 8px; padding: 14px 16px; border-radius: 12px; background: #bf4419; color: #fff;
+              text-align: center; text-decoration: none; font-size: 16px; font-weight: 600; }
+      a.btn.secondary { background: #fff; color: #bf4419; border: 1px solid #bf4419; }
+      .hidden { display: none; }
+      code { font-size: 14px; background: #f5f3f0; padding: 2px 6px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>無法載入好物集</h1>
+    <div id="android">
+      <p>這台裝置的「Android System WebView」版本太舊，好物集 App 需要 111 以上才能正常顯示。</p>
+      <p>請先到 Google Play 更新 Android System WebView，更新完再重新開啟好物集。</p>
+      <a class="btn" href="market://details?id=com.google.android.webview">到 Google Play 更新 Android System WebView</a>
+      <p class="muted">Android 7～9 的 WebView 由 Chrome 提供，請改更新 Chrome：</p>
+      <a class="btn secondary" href="market://details?id=com.android.chrome">到 Google Play 更新 Chrome</a>
+      <p class="muted">按鈕沒有反應時，請自己打開 Play 商店，搜尋「Android System WebView」並更新。</p>
+    </div>
+    <div id="other" class="hidden">
+      <p>網頁內容暫時載入不了。請關閉好物集後重新開啟；如果一直這樣，請確認網路連線或更新 App。</p>
+    </div>
+    <p class="muted">也可以直接用瀏覽器開 <code>nightzhe.github.io/GoodMarket</code>。</p>
+    <script>
+      // 只有 ES5：這一頁就是給舊版 WebView 看的
+      (function () {
+        var ua = navigator.userAgent || '';
+        if (!/Android/i.test(ua)) {
+          document.getElementById('android').className = 'hidden';
+          document.getElementById('other').className = '';
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -32,7 +32,7 @@ function useCopy(url: string) {
   return { state, copy, copiedBefore: state !== 'failed' && state !== 'idle' };
 }
 
-function CopyBlock({ url, primary }: { url: string; primary: boolean }) {
+function CopyBlock({ url, primary, browser }: { url: string; primary: boolean; browser: string }) {
   const { state, copy } = useCopy(url);
   const [everCopied, setEverCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,7 +57,7 @@ function CopyBlock({ url, primary }: { url: string; primary: boolean }) {
         {state === 'copied' ? <Check size={18} className="text-success-text" aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
         {state === 'copied' ? '已複製連結' : '複製連結'}
       </button>
-      <p role="status" className="mt-1.5 text-sm text-success-text">{everCopied ? '已複製。打開 Safari，貼到網址列就能繼續。' : ''}</p>
+      <p role="status" className="mt-1.5 text-sm text-success-text">{everCopied ? `已複製。打開 ${browser}，貼到網址列就能繼續。` : ''}</p>
     </div>
   );
 }
@@ -70,6 +70,7 @@ function CopyBlock({ url, primary }: { url: string; primary: boolean }) {
  */
 export default function InAppBrowserNotice({ kind, trigger, withPhone = false }: { kind: InAppKind; trigger: PendingInput | null; withPhone?: boolean }) {
   const ios = isIOS(navigator.userAgent);
+  const browser = ios ? 'Safari' : '瀏覽器';
   const url = currentExternalUrl(kind, trigger);
   const done = trigger?.kind === 'buy_now' ? '登入完成就會直接前往結帳。' : '登入完成就會自動加入購物車。';
   const keeps = trigger && trigger.kind !== 'goto' && trigger.kind !== 'checkout';
@@ -84,9 +85,9 @@ export default function InAppBrowserNotice({ kind, trigger, withPhone = false }:
             <Compass size={20} aria-hidden="true" />{ios ? '用 Safari 開啟' : '用瀏覽器開啟'}
           </button>
           {/* 備案：使用者自己的 LINE 設定可能蓋掉外開參數（未查證），外開沒有反應時還有退路 */}
-          <CopyBlock url={url} primary={false} />
+          <CopyBlock url={url} primary={false} browser={browser} />
         </div>
-        {keeps && <p className="text-sm text-muted">用 {ios ? 'Safari' : '瀏覽器'} 開啟後，你剛剛的選擇會保留，{done}</p>}
+        {keeps && <p className="text-sm text-muted">用 {browser} 開啟後，你剛剛的選擇會保留，{done}</p>}
       </div>
     );
   }
@@ -101,8 +102,8 @@ export default function InAppBrowserNotice({ kind, trigger, withPhone = false }:
           </li>
         ))}
       </ol>
-      <p className="text-sm text-muted">或是複製連結，貼到 Safari 的網址列</p>
-      <CopyBlock url={url} primary={!withPhone} />
+      <p className="text-sm text-muted">或是複製連結，貼到{browser}的網址列</p>
+      <CopyBlock url={url} primary={!withPhone} browser={browser} />
       {keeps && <p className="text-sm text-muted">你剛剛的選擇會保留，{done}</p>}
     </div>
   );
