@@ -1,5 +1,29 @@
 apply plugin: 'com.android.application'
 
+// ---- 正式版簽章與版號（scripts/archive-android.sh 與 .github/workflows/android.yml 會設這些）----
+// 金鑰絕不進版控：讀 android/keystore.properties（已 gitignore）或環境變數；兩者都沒有就不設 signingConfig，
+// debug 版照常可建，release 版會是未簽章的 AAB／APK（Play 不收、手機裝不了），腳本會先擋下來。
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def releaseSigning = { String envName, String propName ->
+    def v = System.getenv(envName)
+    (v != null && !v.isEmpty()) ? v : keystoreProps.getProperty(propName)
+}
+def releaseStoreFile = releaseSigning('ANDROID_KEYSTORE_FILE', 'storeFile')
+def releaseStorePassword = releaseSigning('ANDROID_KEYSTORE_PASSWORD', 'storePassword')
+def releaseKeyAlias = releaseSigning('ANDROID_KEY_ALIAS', 'keyAlias')
+def releaseKeyPassword = releaseSigning('ANDROID_KEY_PASSWORD', 'keyPassword')
+def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
+// Google Play 要求 versionCode 每次上傳都要比上一次大。預設 1 給 Android Studio 直接開專案用；
+// 腳本與 CI 傳 ANDROID_VERSION_CODE（git rev-list --count HEAD，main 每個 commit 都會變大）。
+// versionName 對齊 iOS 的 MARKETING_VERSION（目前 1.0）。
+def appVersionCode = (System.getenv('ANDROID_VERSION_CODE') ?: '1').toInteger()
+def appVersionName = System.getenv('ANDROID_VERSION_NAME') ?: '1.0'
+
 android {
     namespace = "io.github.nightzhe.goodmarket"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +31,8 @@ android {
         applicationId "io.github.nightzhe.goodmarket"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +40,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
