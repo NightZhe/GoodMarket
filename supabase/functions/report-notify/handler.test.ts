@@ -142,7 +142,7 @@ describe('寄信成功', () => {
     const words = [...subject.matchAll(/=\?UTF-8\?B\?([A-Za-z0-9+/=]+)\?=/g)].map((w) => Buffer.from(w[1], 'base64').toString('utf8'));
     expect(words.join('')).toBe('[好物集] 新檢舉：商品 詐騙或不實資訊');
     expect(body).toContain(`檢舉編號：${RID}`);
-    expect(body).toContain(`https://nightzhe.github.io/GoodMarket/#/product/${PID}`);
+    expect(body).toContain(`https://goodmshop.com/#/product/${PID}`);
     expect(raw + body).not.toContain('aaaaaaaa-aaaa');
     expect(raw).not.toContain('app-password-xyz');
   });
