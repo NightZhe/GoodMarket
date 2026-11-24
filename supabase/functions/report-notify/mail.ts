@@ -15,7 +15,7 @@ export interface ReportRow {
   notify_attempts: number;
 }
 
-export const SITE_BASE = 'https://nightzhe.github.io/GoodMarket/#';
+export const SITE_BASE = 'https://goodmshop.com/#';
 export const BRAND = '好物集';
 
 export const TARGET_TYPE_LABEL: Record<string, string> = { product: '商品', review: '評價', shop: '店家' };

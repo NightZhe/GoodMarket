@@ -26,7 +26,7 @@ describe('主旨與內文（R-K8）', () => {
     expect(t).toContain('時間（台北）：2026-10-25 20:05:03');
     expect(t).toContain('目標類型：商品');
     expect(t).toContain('目標名稱：手工皂 禮盒');
-    expect(t).toContain(`目標連結：https://nightzhe.github.io/GoodMarket/#/product/${PID}`);
+    expect(t).toContain(`目標連結：https://goodmshop.com/#/product/${PID}`);
     expect(t).toContain('原因：詐騙或不實資訊');
     expect(t).toContain('價格與描述不符');
   });
@@ -56,14 +56,14 @@ describe('台北時間', () => {
 
 describe('目標連結', () => {
   it('商品、店家', () => {
-    expect(targetLink(base, null)).toBe(`https://nightzhe.github.io/GoodMarket/#/product/${PID}`);
-    expect(targetLink({ ...base, target_type: 'shop', target_id: SID }, null)).toBe(`https://nightzhe.github.io/GoodMarket/#/shop/${SID}`);
+    expect(targetLink(base, null)).toBe(`https://goodmshop.com/#/product/${PID}`);
+    expect(targetLink({ ...base, target_type: 'shop', target_id: SID }, null)).toBe(`https://goodmshop.com/#/shop/${SID}`);
   });
   it('評價 → 所屬商品的評價總覽；查不到商品 → 店家頁', () => {
     const r = { ...base, target_type: 'review', target_id: RID };
-    expect(targetLink(r, PID)).toBe(`https://nightzhe.github.io/GoodMarket/#/product/${PID}/reviews`);
-    expect(targetLink(r, null)).toBe(`https://nightzhe.github.io/GoodMarket/#/shop/${SID}`);
-    expect(targetLink(r, 'not-a-uuid')).toBe(`https://nightzhe.github.io/GoodMarket/#/shop/${SID}`);
+    expect(targetLink(r, PID)).toBe(`https://goodmshop.com/#/product/${PID}/reviews`);
+    expect(targetLink(r, null)).toBe(`https://goodmshop.com/#/shop/${SID}`);
+    expect(targetLink(r, 'not-a-uuid')).toBe(`https://goodmshop.com/#/shop/${SID}`);
   });
 });
 
